@@ -223,15 +223,15 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
-        <a href="/2026/01/05/6-s081-lab3/" target="_self">
-          6.s081-lab3
+        <a href="/2026/03/08/6-s081-lab3/" target="_self">
+          6.s081 Lab3 page tables 实现
         </a>
       </h2>
 
       
-      <a class="index-excerpt index-excerpt__noimg" href="/2026/01/05/6-s081-lab3/" target="_self">
+      <a class="index-excerpt index-excerpt__noimg" href="/2026/03/08/6-s081-lab3/" target="_self">
         <div>
-          UNFINISHEDQ: trampoline 在kernel中也不使用直接映射，而是两次映射问题在 xv6 的内核页表 (kernel_pagetable) 中：区域 映射方式 目的Trampoline 高位重映射 保证中断上下文切换平滑Kernel Stack 高位重映射 + Guard 防止内核栈溢出破坏数据UART, PLIC 直接映射 (VA&#x3D;PA) 访问硬件寄存器Kernel
+          6.s081 Lab3: page tables 实现页表是最流行的内存管理机制，操作系统通过页式管理可以为每个进程提供私有地址空间和内存，页表决定了内存地址的意义以及可访问的物理地址范围。 这样的机制使xv6能够隔离不同进程的地址空间和在简单物理内存中复用地址（虚拟地址相同物理地址不同）。 本次试验还会涉及到trampoline机制，这一部分我认为十分有趣。
         </div>
       </a>
 
@@ -239,41 +239,8 @@
         
           <div class="post-meta mr-3">
             <i class="iconfont icon-date"></i>
-            <time datetime="2026-01-05 23:30" pubdate>
-              2026-01-05
-            </time>
-          </div>
-        
-        
-        
-      </div>
-    </article>
-  </div>
-
-  <div class="row mx-auto index-card">
-    
-    
-    <article class="col-12 col-md-12 mx-auto index-info">
-      <h2 class="index-header">
-        
-        <a href="/2026/01/02/6-s081-lab2/" target="_self">
-          6.s081 Lab2:system calls 实现
-        </a>
-      </h2>
-
-      
-      <a class="index-excerpt index-excerpt__noimg" href="/2026/01/02/6-s081-lab2/" target="_self">
-        <div>
-          6.s081 Lab2:system calls 实现Lab2 实现了两个系统调用层面的功能，在开始写代码之前要求先读完 xv6-book 的 Chapter 2 and Sections 4.3 and 4.4 of Chapter 4，以及相关的源文件，花了两天不到的时间。 做完这次实验可以深入理解 OS 的用户态、内核态的隔离，以及系统调用。
-        </div>
-      </a>
-
-      <div class="index-btm post-metas">
-        
-          <div class="post-meta mr-3">
-            <i class="iconfont icon-date"></i>
-            <time datetime="2026-01-02 21:05" pubdate>
-              2026-01-02
+            <time datetime="2026-03-08 23:30" pubdate>
+              2026-03-08
             </time>
           </div>
         
@@ -288,7 +255,7 @@
     
       <span class="category-chain">
         
-  <a href="/categories/OS/" class="category-chain-item">OS</a>
+  <a href="/categories/MIT-courses/" class="category-chain-item">MIT courses</a>
   
   
 
@@ -321,15 +288,15 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
-        <a href="/2025/12/30/6-s081-lab1/" target="_self">
-          6.s081 Lab1:Xv6 and Unix utilities 实现
+        <a href="/2026/03/07/6-s081-lab2/" target="_self">
+          6.s081 Lab2:system calls 实现
         </a>
       </h2>
 
       
-      <a class="index-excerpt index-excerpt__noimg" href="/2025/12/30/6-s081-lab1/" target="_self">
+      <a class="index-excerpt index-excerpt__noimg" href="/2026/03/07/6-s081-lab2/" target="_self">
         <div>
-          6.s081 Lab1:Xv6 and Unix utilities 实现记录一下写 6.s081 Lab1 的过程，还有在这个实验中学到的新的知识。 这一次实验的内容为 Xv6 and Unix Utilities，实现一些基本 Unix 工具，通过这个过程了解 xv6 系统的结构，以及是如何运行的，建立对其的基本认识。
+          6.s081 lab2:system calls 实现Lab2 实现了两个系统调用层面的功能，在开始写代码之前要求先读完 xv6-book 的 Chapter 2 and Sections 4.3 and 4.4 of Chapter 4，以及相关的源文件，花了两天不到的时间。 做完这次实验可以深入理解 OS 的用户态、内核态的隔离，以及系统调用。
         </div>
       </a>
 
@@ -337,8 +304,8 @@
         
           <div class="post-meta mr-3">
             <i class="iconfont icon-date"></i>
-            <time datetime="2025-12-30 11:29" pubdate>
-              2025-12-30
+            <time datetime="2026-03-07 21:05" pubdate>
+              2026-03-07
             </time>
           </div>
         
@@ -353,7 +320,72 @@
     
       <span class="category-chain">
         
-  <a href="/categories/OS/" class="category-chain-item">OS</a>
+  <a href="/categories/MIT-courses/" class="category-chain-item">MIT courses</a>
+  
+  
+
+      </span>
+    
+  
+    
+  
+</span>
+
+          </div>
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/6-s081/">#6.s081</a>
+            
+              <a href="/tags/Labs/">#Labs</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+    <article class="col-12 col-md-12 mx-auto index-info">
+      <h2 class="index-header">
+        
+        <a href="/2026/03/06/6-s081-lab1/" target="_self">
+          6.s081 Lab1:Xv6 and Unix utilities 实现
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2026/03/06/6-s081-lab1/" target="_self">
+        <div>
+          6.s081 Lab1:Xv6 and Unix utilities 实现记录一下写 6.s081 Lab1 的过程，还有在这个实验中学到的新的知识。 这一次实验的内容为 Xv6 and Unix Utilities，实现一些基本 Unix 工具，通过这个过程了解 xv6 系统的结构，以及是如何运行的，建立对其的基本认识。
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2026-03-06 11:29" pubdate>
+              2026-03-06
+            </time>
+          </div>
+        
+        
+          <div class="post-meta mr-3 d-flex align-items-center">
+            <i class="iconfont icon-category"></i>
+            
+
+<span class="category-chains">
+  
+  
+    
+      <span class="category-chain">
+        
+  <a href="/categories/MIT-courses/" class="category-chain-item">MIT courses</a>
   
   
 
