@@ -1,0 +1,786 @@
+
+
+<!DOCTYPE html>
+<html lang="en" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
+  <link rel="icon" href="/img/fluid.png">
+  
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="Quan Zhou">
+  <meta name="keywords" content="">
+  
+    <meta name="description" content="6.s081 Lab5: Copy-on-Write Fork for xv6 实现在前几个lab中提到过COW（写时复制），比如fork一个进程后，子进程与父进程使用同样的指令和数据。如果每次都复制一份父进程的数据，在一些情况下子进程创建后调用exec，原本被复制的数据根本没有被使用过就被直接覆盖，在这种情况下就白白浪费了这次复制，并且复制也会有很大的开销，会拖慢系统执行的速度。 为了提高系统执">
+<meta property="og:type" content="article">
+<meta property="og:title" content="6.s081 Lab5 Copy-on-Write Fork for xv6 实现">
+<meta property="og:url" content="http://qizi706.github.io/2026/03/20/6-s081-lab5/index.html">
+<meta property="og:site_name" content="Quan Zhou 的 blog">
+<meta property="og:description" content="6.s081 Lab5: Copy-on-Write Fork for xv6 实现在前几个lab中提到过COW（写时复制），比如fork一个进程后，子进程与父进程使用同样的指令和数据。如果每次都复制一份父进程的数据，在一些情况下子进程创建后调用exec，原本被复制的数据根本没有被使用过就被直接覆盖，在这种情况下就白白浪费了这次复制，并且复制也会有很大的开销，会拖慢系统执行的速度。 为了提高系统执">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-03-20T12:00:00.000Z">
+<meta property="article:modified_time" content="2026-03-20T15:14:21.619Z">
+<meta property="article:author" content="Quan Zhou">
+<meta property="article:tag" content="6.s081">
+<meta property="article:tag" content="Labs">
+<meta name="twitter:card" content="summary_large_image">
+  
+  
+  
+  <title>6.s081 Lab5 Copy-on-Write Fork for xv6 实现 - Quan Zhou 的 blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/c/font_1749284_5i9bdhy70f8.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/c/font_1736178_k526ubmyhba.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"qizi706.github.io","root":"/","version":"1.9.8","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false},"umami":{"src":null,"website_id":null,"domains":null,"start_time":"2024-01-01T00:00:00.000Z","token":null,"api_server":null}},"search_path":"/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+
+  
+<meta name="generator" content="Hexo 8.1.1"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>Quan Zhou</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>Home</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>Archives</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>Categories</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>Tags</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>About</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/default.png') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="6.s081 Lab5 Copy-on-Write Fork for xv6 实现"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2026-03-20 20:00" pubdate>
+          March 20, 2026 pm
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          1.7k words
+        
+      </span>
+    
+
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header">6.s081 Lab5 Copy-on-Write Fork for xv6 实现</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <h2 id="6-s081-Lab5-Copy-on-Write-Fork-for-xv6-实现"><a href="#6-s081-Lab5-Copy-on-Write-Fork-for-xv6-实现" class="headerlink" title="6.s081 Lab5: Copy-on-Write Fork for xv6 实现"></a>6.s081 Lab5: Copy-on-Write Fork for xv6 实现</h2><p>在前几个lab中提到过COW（写时复制），比如fork一个进程后，子进程与父进程使用同样的指令和数据。如果每次都复制一份父进程的数据，在一些情况下子进程创建后调用exec，原本被复制的数据根本没有被使用过就被直接覆盖，在这种情况下就白白浪费了这次复制，并且复制也会有很大的开销，会拖慢系统执行的速度。</p>
+<p>为了提高系统执行效率，避免资源浪费，引入了COW（写时复制）机制，需要依赖缺页中断机制。当进行用户虚拟内存复制（uvmcopy）时，对相同的物理地址进行pte映射，使多个进程的pte指向同一片物理内存，并且这部分内容是只读的，如果有任何一个指向共享物理内存的进程需要对这部分内存进行写操作时，触发缺页中断，此时将需要进行写操作的页面进行真正的复制。</p>
+<h2 id="Lab5-Implement-copy-on-write-hard-实现"><a href="#Lab5-Implement-copy-on-write-hard-实现" class="headerlink" title="Lab5 Implement copy-on write(hard)实现"></a>Lab5 Implement copy-on write(<u style="color: #ff3300">hard</u>)实现</h2><p>要实现一个稳健的COW，必须串联起内核的四个核心模块：</p>
+<h3 id="1-引用计数"><a href="#1-引用计数" class="headerlink" title="1. 引用计数"></a>1. 引用计数</h3><p>物理内存是共享的，我们不能在kfree时直接回收。因此在kernel&#x2F;kalloc.c中引入了全局计数数组：</p>
+<ul>
+<li>ref_count结构体：保存一个全局数组，配备自旋锁（以后章节中会提到）。</li>
+<li>修改kinit,freerange,kfree,kalloc函数：kalloc分配物理页后初始化引用计数为1；kfree不再直接释放内存，添加检测引用计数机制；另外两个函数涉及初始化物理内存，也需要做一定修改来应用全局计数数组。</li>
+<li>kincref,kget_ref函数：为虚拟内存处理提供物理内存引用计数的信息。</li>
+</ul>
+<figure class="highlight c"><figcaption><span>kernel/kalloc.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>  <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">spinlock</span> <span class="hljs-title">lock</span>;</span><br>  <span class="hljs-type">int</span> count[PHYSTOP / PGSIZE];<br>&#125; ref_count;<br></code></pre></td></tr></table></figure>
+
+<p>这里使用了一个小trick：通过将ref_count.count数组全部设为1，在freerange中对每个物理页进行kfree，将所有页的引用计数初始化为0。</p>
+<figure class="highlight c"><figcaption><span>kernel/kalloc.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span><br><span class="hljs-title function_">kinit</span><span class="hljs-params">()</span><br>&#123;<br>  initlock(&amp;kmem.lock, <span class="hljs-string">&quot;kmem&quot;</span>);<br>  initlock(&amp;ref_count.lock, <span class="hljs-string">&quot;ref_count&quot;</span>);<br>  <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> i = <span class="hljs-number">0</span>; i &lt; PHYSTOP / PGSIZE; i++)<br>    ref_count.count[i] = <span class="hljs-number">1</span>;<br>  freerange(end, (<span class="hljs-type">void</span>*)PHYSTOP);<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<figure class="highlight c"><figcaption><span>kernel/kalloc.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span><br><span class="hljs-title function_">freerange</span><span class="hljs-params">(<span class="hljs-type">void</span> *pa_start, <span class="hljs-type">void</span> *pa_end)</span><br>&#123;<br>  <span class="hljs-type">char</span> *p;<br>  p = (<span class="hljs-type">char</span>*)PGROUNDUP((uint64)pa_start);<br>  <span class="hljs-keyword">for</span>(; p + PGSIZE &lt;= (<span class="hljs-type">char</span>*)pa_end; p += PGSIZE)<br>    kfree(p);<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<figure class="highlight c"><figcaption><span>kernel/kalloc.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span><br><span class="hljs-title function_">kfree</span><span class="hljs-params">(<span class="hljs-type">void</span> *pa)</span><br>&#123;<br>  <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">run</span> *<span class="hljs-title">r</span>;</span><br><br>  <span class="hljs-keyword">if</span>(((uint64)pa % PGSIZE) != <span class="hljs-number">0</span> || (<span class="hljs-type">char</span>*)pa &lt; end || (uint64)pa &gt;= PHYSTOP)<br>    panic(<span class="hljs-string">&quot;kfree&quot;</span>);<br><br>  uint64 i = (uint64)pa / PGSIZE;<br><br>  acquire(&amp;ref_count.lock);<br>  <span class="hljs-keyword">if</span> (ref_count.count[i] &lt; <span class="hljs-number">1</span>)<br>    panic(<span class="hljs-string">&quot;kfree: count &lt; 1&quot;</span>);<br><br>  ref_count.count[i]--;<br>  <span class="hljs-type">int</span> c = ref_count.count[i];<br>  release(&amp;ref_count.lock);<br><br>  <span class="hljs-keyword">if</span> (c == <span class="hljs-number">0</span>) &#123;<br>    <span class="hljs-comment">// Fill with junk to catch dangling refs.</span><br>    <span class="hljs-built_in">memset</span>(pa, <span class="hljs-number">1</span>, PGSIZE);<br><br>    r = (<span class="hljs-keyword">struct</span> run*)pa;<br><br>    acquire(&amp;kmem.lock);<br>    r-&gt;next = kmem.freelist;<br>    kmem.freelist = r;<br>    release(&amp;kmem.lock);<br>  &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<figure class="highlight c"><figcaption><span>kernel/kalloc.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span> *<br><span class="hljs-title function_">kalloc</span><span class="hljs-params">(<span class="hljs-type">void</span>)</span><br>&#123;<br>  <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">run</span> *<span class="hljs-title">r</span>;</span><br><br>  acquire(&amp;kmem.lock);<br>  r = kmem.freelist;<br>  <span class="hljs-keyword">if</span>(r)<br>    kmem.freelist = r-&gt;next;<br>  release(&amp;kmem.lock);<br><br>  <span class="hljs-keyword">if</span>(r) &#123;<br>    <span class="hljs-built_in">memset</span>((<span class="hljs-type">char</span>*)r, <span class="hljs-number">5</span>, PGSIZE); <span class="hljs-comment">// fill with junk</span><br><br>    uint64 i = (uint64)r / PGSIZE;<br><br>    acquire(&amp;ref_count.lock);<br>    ref_count.count[i] = <span class="hljs-number">1</span>;<br>    release(&amp;ref_count.lock);<br>  &#125;<br>  <span class="hljs-keyword">return</span> (<span class="hljs-type">void</span>*)r;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<figure class="highlight c"><figcaption><span>kernel/kalloc.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span><br><span class="hljs-title function_">kincref</span><span class="hljs-params">(<span class="hljs-type">void</span> *pa)</span><br>&#123;<br>  <span class="hljs-keyword">if</span>(((uint64)pa % PGSIZE) != <span class="hljs-number">0</span> || (<span class="hljs-type">char</span>*)pa &lt; end || (uint64)pa &gt;= PHYSTOP)<br>    panic(<span class="hljs-string">&quot;kincref&quot;</span>);<br><br>  uint64 i = (uint64)pa / PGSIZE;<br><br>  acquire(&amp;ref_count.lock);<br>  ref_count.count[i]++;<br>  release(&amp;ref_count.lock);<br>&#125;<br><br><span class="hljs-type">int</span><br><span class="hljs-title function_">kget_ref</span><span class="hljs-params">(<span class="hljs-type">void</span> *pa)</span><br>&#123;<br>  <span class="hljs-keyword">if</span>(((uint64)pa % PGSIZE) != <span class="hljs-number">0</span> || (<span class="hljs-type">char</span>*)pa &lt; end || (uint64)pa &gt;= PHYSTOP)<br>    panic(<span class="hljs-string">&quot;kget_ref&quot;</span>);<br>  <span class="hljs-type">int</span> c;<br>  acquire(&amp;ref_count.lock);<br>  c = ref_count.count[(uint64)pa / PGSIZE];<br>  release(&amp;ref_count.lock);<br>  <span class="hljs-keyword">return</span> c;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h3 id="2-页表管理（uvmcopy）"><a href="#2-页表管理（uvmcopy）" class="headerlink" title="2. 页表管理（uvmcopy）"></a>2. 页表管理（uvmcopy）</h3><p>修改uvmcopy，不再调用kalloc。</p>
+<ul>
+<li>清除PTE_W写权限。</li>
+<li>设置自定义的PTE_COW标志位，表示当前pte指向一个COW物理页。</li>
+<li>将父进程的物理页直接映射给子进程。</li>
+</ul>
+<figure class="highlight c"><figcaption><span>kernel/vm.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">int</span><br><span class="hljs-title function_">uvmcopy</span><span class="hljs-params">(<span class="hljs-type">pagetable_t</span> old, <span class="hljs-type">pagetable_t</span> new, uint64 sz)</span><br>&#123;<br>  <span class="hljs-type">pte_t</span> *pte;<br>  uint64 pa, i;<br>  uint flags;<br><br>  <span class="hljs-keyword">for</span>(i = <span class="hljs-number">0</span>; i &lt; sz; i += PGSIZE)&#123;<br>    <span class="hljs-keyword">if</span>((pte = walk(old, i, <span class="hljs-number">0</span>)) == <span class="hljs-number">0</span>)<br>      panic(<span class="hljs-string">&quot;uvmcopy: pte should exist&quot;</span>);<br>    <span class="hljs-keyword">if</span>((*pte &amp; PTE_V) == <span class="hljs-number">0</span>)<br>      panic(<span class="hljs-string">&quot;uvmcopy: page not present&quot;</span>);<br>    *pte &amp;= (~PTE_W);<br>    *pte |= (PTE_COW);<br>    pa = PTE2PA(*pte);<br>    flags = PTE_FLAGS(*pte);<br><br>    <span class="hljs-keyword">if</span>(mappages(new, i, PGSIZE, pa, flags) != <span class="hljs-number">0</span>)&#123;<br>      <span class="hljs-keyword">goto</span> err;<br>    &#125;<br>    kincref((<span class="hljs-type">void</span>*)pa);<br>  &#125;<br>  <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br><br> err:<br>  uvmunmap(new, <span class="hljs-number">0</span>, i / PGSIZE, <span class="hljs-number">1</span>);<br>  <span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>;<br>&#125;<br><br></code></pre></td></tr></table></figure>
+
+<h3 id="3-中断处理（usertrap）"><a href="#3-中断处理（usertrap）" class="headerlink" title="3. 中断处理（usertrap）"></a>3. 中断处理（usertrap）</h3><p>当进程尝试写入只读页时，RISC-V硬件抛出scause 15。</p>
+<ul>
+<li>逻辑：检查stval中保存的中断产生地址是否合法(&lt; MAXVA and &lt; p-&gt;sz)。</li>
+<li>处理：调用store_page_fault进行物理页的复制。</li>
+</ul>
+<figure class="highlight c"><figcaption><span>kernel/trap.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span><br><span class="hljs-title function_">usertrap</span><span class="hljs-params">(<span class="hljs-type">void</span>)</span><br>&#123;<br>  <span class="hljs-type">int</span> which_dev = <span class="hljs-number">0</span>;<br><br>  <span class="hljs-keyword">if</span>((r_sstatus() &amp; SSTATUS_SPP) != <span class="hljs-number">0</span>)<br>    panic(<span class="hljs-string">&quot;usertrap: not from user mode&quot;</span>);<br><br>  <span class="hljs-comment">// send interrupts and exceptions to kerneltrap(),</span><br>  <span class="hljs-comment">// since we&#x27;re now in the kernel.</span><br>  w_stvec((uint64)kernelvec);<br><br>  <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">proc</span> *<span class="hljs-title">p</span> =</span> myproc();<br>  <br>  <span class="hljs-comment">// save user program counter.</span><br>  p-&gt;trapframe-&gt;epc = r_sepc();<br>  <br>  <span class="hljs-keyword">if</span>(r_scause() == <span class="hljs-number">8</span>)&#123;<br>    <span class="hljs-comment">// system call</span><br><br>    <span class="hljs-keyword">if</span>(p-&gt;killed)<br>      <span class="hljs-built_in">exit</span>(<span class="hljs-number">-1</span>);<br><br>    <span class="hljs-comment">// sepc points to the ecall instruction,</span><br>    <span class="hljs-comment">// but we want to return to the next instruction.</span><br>    p-&gt;trapframe-&gt;epc += <span class="hljs-number">4</span>;<br><br>    <span class="hljs-comment">// an interrupt will change sstatus &amp;c registers,</span><br>    <span class="hljs-comment">// so don&#x27;t enable until done with those registers.</span><br>    intr_on();<br><br>    syscall();<br>  &#125; <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (r_scause() == <span class="hljs-number">15</span>) &#123;<br>    <span class="hljs-comment">// store page fault</span><br>    uint64 va = r_stval();<br>    <span class="hljs-keyword">if</span> (va &gt;= MAXVA || va &gt;= p-&gt;sz)<br>      p-&gt;killed = <span class="hljs-number">1</span>;<br>    <span class="hljs-keyword">else</span> &#123;<br>      <span class="hljs-keyword">if</span> (store_page_fault(p-&gt;pagetable, va) != <span class="hljs-number">0</span>) &#123;<br>        p-&gt;killed = <span class="hljs-number">1</span>;<br>      &#125;<br>    &#125;<br><br>  &#125; <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span>((which_dev = devintr()) != <span class="hljs-number">0</span>)&#123;<br>    <span class="hljs-comment">// ok</span><br>  &#125; <span class="hljs-keyword">else</span> &#123;<br>    <span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;usertrap(): unexpected scause %p pid=%d\n&quot;</span>, r_scause(), p-&gt;pid);<br>    <span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;            sepc=%p stval=%p\n&quot;</span>, r_sepc(), r_stval());<br>    p-&gt;killed = <span class="hljs-number">1</span>;<br>  &#125;<br><br><br>  <span class="hljs-keyword">if</span>(p-&gt;killed)<br>    <span class="hljs-built_in">exit</span>(<span class="hljs-number">-1</span>);<br><br>  <span class="hljs-comment">// give up the CPU if this is a timer interrupt.</span><br>  <span class="hljs-keyword">if</span>(which_dev == <span class="hljs-number">2</span>)<br>    yield();<br><br>  usertrapret();<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>store_page_fault中还有一点特殊的处理：当count为1时，不需要额外复制一个页，只需要设置这个页的PTE_W，并且清除PTE_COW，这样可以避免一次不必要的页面复制以及页面清除的资源消耗。</p>
+<figure class="highlight c"><figcaption><span>kernel/vm.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">int</span><br><span class="hljs-title function_">store_page_fault</span><span class="hljs-params">(<span class="hljs-type">pagetable_t</span> pagetable, uint64 va)</span><br>&#123;<br>  <span class="hljs-type">char</span> *mem;<br>  <span class="hljs-type">pte_t</span> *pte;<br>  uint64 pa;<br>  uint flags;<br><br>  <span class="hljs-keyword">if</span> (va &gt;= MAXVA)<br>    <span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>;<br><br>  <span class="hljs-keyword">if</span>((pte = (<span class="hljs-type">pte_t</span>*)walk(pagetable, va, <span class="hljs-number">0</span>)) == <span class="hljs-number">0</span>)<br>    panic(<span class="hljs-string">&quot;store_page_fault: pte should exist&quot;</span>);<br><br>  <span class="hljs-keyword">if</span> ((*pte &amp; PTE_V) &amp;&amp; (*pte &amp; PTE_U) &amp;&amp; (*pte &amp; PTE_COW)) &#123;<br>    pa = PTE2PA(*pte);<br><br>    <span class="hljs-type">int</span> count = kget_ref((<span class="hljs-type">void</span>*)pa);<br><br>    <span class="hljs-keyword">if</span> (count &gt; <span class="hljs-number">1</span>) &#123;<br>      <span class="hljs-keyword">if</span>((mem = kalloc()) == <span class="hljs-number">0</span>)<br>        <span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>;<br><br>      memmove(mem, (<span class="hljs-type">char</span>*)pa, PGSIZE);<br><br>      flags = (PTE_FLAGS(*pte) | PTE_W) &amp; ~PTE_COW;<br><br>      *pte = PA2PTE(mem) | flags;<br>      kfree((<span class="hljs-type">void</span>*)pa);<br>    &#125; <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (count == <span class="hljs-number">1</span>) &#123;<br>      *pte |= PTE_W;<br>      *pte &amp;= ~PTE_COW;<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>  &#125;<br><br>  <span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h3 id="4-内核边界（copyout）"><a href="#4-内核边界（copyout）" class="headerlink" title="4. 内核边界（copyout）"></a>4. 内核边界（copyout）</h3><p>这也是这个lab需要处理的一个问题，内核在执行系统调用时（如read）写回用户内存时，通过软件（即walk函数）手动模拟了硬件查表的过程，不会触发硬件中断，因此必须在copyout中手动拦截并处理PTE_COW。详细流程如下图：</p>
+<figure>
+  
+<pre>
+<code class="mermaid" >
+graph TD
+    A([开始 copyout]) --> B{len > 0?}
+    B -- 否 --> C([返回 0 成功])
+    B -- 是 --> D[计算 va0 = PGROUNDDOWN]
+    D --> E{va0 >= MAXVA?}
+    E -- 是 --> F([返回 -1 错误])
+    E -- 否 --> G[walk 查找 PTE]
+    G --> H{PTE 存在且有效?}
+    H -- 否 --> F
+    H -- 是 --> I{PTE_COW 标记为 1?}
+    I -- 是 --> J[调用 store_page_fault]
+    J --> K{处理成功?}
+    K -- 否 --> F
+    K -- 是 --> L[重新 walk 获取新 PTE]
+    L --> M
+    I -- 否 --> M{PTE_W 可写?}
+    M -- 否 --> F
+    M -- 是 --> N[计算 pa0 = PTE2PA]
+    N --> O[计算本次拷贝长度 n]
+    O --> P[执行 memmove 拷贝数据]
+    P --> Q[更新 len, src, dstva 指针]
+    Q --> B
+</code>
+</pre>
+  <figcaption class="image-caption" align="center">
+    <b>图 5-1</b>：Copyout COW Flow
+  </figcaption>
+</figure>
+
+<figure class="highlight c"><figcaption><span>kernel/vm.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">int</span><br><span class="hljs-title function_">copyout</span><span class="hljs-params">(<span class="hljs-type">pagetable_t</span> pagetable, uint64 dstva, <span class="hljs-type">char</span> *src, uint64 len)</span><br>&#123;<br>  uint64 n, va0, pa0;<br>  <span class="hljs-type">pte_t</span> *pte;<br><br>  <span class="hljs-keyword">while</span>(len &gt; <span class="hljs-number">0</span>)&#123;<br>    va0 = PGROUNDDOWN(dstva);<br>    <span class="hljs-keyword">if</span> (va0 &gt;= MAXVA)<br>      <span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>;<br><br>    <span class="hljs-keyword">if</span> ((pte = walk(pagetable, va0, <span class="hljs-number">0</span>)) == <span class="hljs-number">0</span> || (*pte &amp; PTE_V) == <span class="hljs-number">0</span>)<br>      <span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>;<br><br>    <span class="hljs-keyword">if</span> (*pte &amp; PTE_COW) &#123;<br>      <span class="hljs-keyword">if</span> (store_page_fault(pagetable, va0) &lt; <span class="hljs-number">0</span>)<br>        <span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>;<br><br>      <span class="hljs-keyword">if</span> ((pte = walk(pagetable, va0, <span class="hljs-number">0</span>)) == <span class="hljs-number">0</span> || (*pte &amp; PTE_V) == <span class="hljs-number">0</span>)<br>        <span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>;<br>    &#125;<br><br>    <span class="hljs-keyword">if</span> ((*pte &amp; PTE_W) == <span class="hljs-number">0</span>)<br>      <span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>;<br><br>    pa0 = PTE2PA(*pte);<br>    <span class="hljs-keyword">if</span>(pa0 == <span class="hljs-number">0</span>)<br>      <span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>;<br>    n = PGSIZE - (dstva - va0);<br>    <span class="hljs-keyword">if</span>(n &gt; len)<br>      n = len;<br>    memmove((<span class="hljs-type">void</span> *)(pa0 + (dstva - va0)), src, n);<br><br>    len -= n;<br>    src += n;<br>    dstva = va0 + PGSIZE;<br>  &#125;<br>  <span class="hljs-keyword">return</span> <span class="hljs-number">0</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>本实验到此结束，一个hard的lab写了一天多，现在已经比较深入了解了如何添加一个内核处理函数，并且熟悉虚拟内存的处理机制（如RISC-V中的一些宏调用和pte设置方法等），收获较大。</p>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+    <div class="post-meta mr-3 d-flex align-items-center">
+      <i class="iconfont icon-category"></i>
+      
+
+<span class="category-chains">
+  
+  
+    
+      <span class="category-chain">
+        
+  <a href="/categories/MIT-courses/" class="category-chain-item">MIT courses</a>
+  
+  
+
+      </span>
+    
+  
+    
+      <span class="category-chain">
+        
+  <a href="/categories/OS/" class="category-chain-item">OS</a>
+  
+  
+
+      </span>
+    
+  
+</span>
+
+    </div>
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/6-s081/" class="print-no-link">#6.s081</a>
+      
+        <a href="/tags/Labs/" class="print-no-link">#Labs</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>6.s081 Lab5 Copy-on-Write Fork for xv6 实现</div>
+      <div>http://qizi706.github.io/2026/03/20/6-s081-lab5/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>Author</div>
+          <div>Quan Zhou</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>Posted on</div>
+          <div>March 20, 2026</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>Licensed under</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - Attribution">
+                    <i class="iconfont icon-cc-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2026/03/17/6-s081-lab4/" title="6.s081 Lab4 traps 实现">
+                        <span class="hidden-mobile">6.s081 Lab4 traps 实现</span>
+                        <span class="visible-mobile">Next</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>Table of Contents</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+  
+  
+
+
+
+
+
+  <script>
+  Fluid.utils.createScript('https://lib.baomitu.com/mermaid/8.14.0/mermaid.min.js', function() {
+    mermaid.initialize({"theme":"default"});
+
+    Fluid.utils.listenDOMLoaded(function() {
+      Fluid.events.registerRefreshCallback(function() {
+        if ('mermaid' in window) {
+          mermaid.init();
+        }
+      });
+    });
+  });
+</script>
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">Search</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">Keyword</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+      <a href="https://github.com/qizi706" target="_blank" rel="nofollow noopener"><span>Quan Zhou</span></a>
+    </div>
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/5.0.0/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  
+      <script>
+        if (!window.MathJax) {
+          window.MathJax = {
+            tex    : {
+              inlineMath: { '[+]': [['$', '$']] }
+            },
+            loader : {
+              load: ['ui/lazy']
+            },
+            options: {
+              renderActions: {
+                insertedScript: [200, () => {
+                  document.querySelectorAll('mjx-container').forEach(node => {
+                    let target = node.parentNode;
+                    if (target.nodeName.toLowerCase() === 'li') {
+                      target.parentNode.classList.add('has-jax');
+                    }
+                  });
+                }, '', false]
+              }
+            }
+          };
+        } else {
+          MathJax.startup.document.state(0);
+          MathJax.texReset();
+          MathJax.typeset();
+          MathJax.typesetPromise();
+        }
+
+        Fluid.events.registerRefreshCallback(function() {
+          if ('MathJax' in window && MathJax.startup.document && typeof MathJax.startup.document.state === 'function') {
+            MathJax.startup.document.state(0);
+            MathJax.texReset();
+            MathJax.typeset();
+            MathJax.typesetPromise();
+          }
+        });
+      </script>
+    
+
+  <script  src="https://lib.baomitu.com/mathjax/3.2.2/es5/tex-mml-chtml.js" ></script>
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">Blog works best with JavaScript enabled</div>
+  </noscript>
+</body>
+</html>
