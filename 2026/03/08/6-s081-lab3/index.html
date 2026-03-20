@@ -32,7 +32,7 @@
 <meta property="og:image" content="http://qizi706.github.io/asserts/6-s081-lab3_assert/kernel_address_space_and_physical_address_space.png">
 <meta property="og:image" content="http://qizi706.github.io/asserts/6-s081-lab3_assert/a_process_user_address_space_with_initial_stack.png">
 <meta property="article:published_time" content="2026-03-08T15:30:03.000Z">
-<meta property="article:modified_time" content="2026-03-18T13:33:47.270Z">
+<meta property="article:modified_time" content="2026-03-20T00:50:31.981Z">
 <meta property="article:author" content="Quan Zhou">
 <meta property="article:tag" content="6.s081">
 <meta property="article:tag" content="Labs">
@@ -281,11 +281,11 @@
 
 <h2 id="xv6-book-Chapter-3-部分内容"><a href="#xv6-book-Chapter-3-部分内容" class="headerlink" title="xv6-book Chapter 3 部分内容"></a>xv6-book Chapter 3 部分内容</h2><h3 id="一、分页硬件（Paging-hardware）"><a href="#一、分页硬件（Paging-hardware）" class="headerlink" title="一、分页硬件（Paging hardware）"></a>一、分页硬件（Paging hardware）</h3><p>xv6是使用Sv39机制的64位RISC-V系统，虽然地址长度为64位，但只使用低39位（0-38）操纵虚拟地址。RAM使用物理内存（伴随着物理地址），分页硬件通过将虚拟地址映射为物理地址来连接这两种地址。</p>
 <p>Sv39机制：64位中的高25位被预留（不使用），低39位中的低12位作为页内偏移，因此有$2^{27}$个页表项（39位中的高27位表示不同的页表）。每个页表项有64位，但只用其中的54位：包含44位物理地址和10位的标志位（flag）。图3-1为简化的逻辑页表机制。</p>
-<p><img src="/asserts/6-s081-lab3_assert/simplified_logical_page_table.png" srcset="/img/loading.gif" lazyload alt="图3-1:RISC-V simplified logical page table"></p>
+<p><img src="/asserts/6-s081-lab3_assert/simplified_logical_page_table.png" srcset="/img/loading.gif" lazyload alt="图3-1：RISC-V simplified logical page table"></p>
 <p>实际上进行页表映射的时候使用了三级页表，39位中的高27位寻找页表，分为三个9位，每个页表也占一个页大小的内存（4096B），因此$\frac{4096B}{64bit}&#x3D;2^9$刚好一个页可以容纳$2^9$个页表项。</p>
 <p>三级页表还有一个好处，如果某个进程只使用从0开始的一小段内存（小于一个页大小），内核不用将所有页表都放入内存，只需要调入3个页表就可以查询到物理页，因此可以省下$511$个中间页表以及$511\times512$个底层页表。图3-2为三级页表的映射过程，图3-3为映射后物理地址表示，其中包含10bit长度的标志位，位于低10位，包含有效位和一些权限等，项目实现中会用到。</p>
-<p><img src="/asserts/6-s081-lab3_assert/address_translation_details.png" srcset="/img/loading.gif" lazyload alt="图3-2:RISC-V address translation details"></p>
-<p><img src="/asserts/6-s081-lab3_assert/physical_address_details.png" srcset="/img/loading.gif" lazyload alt="图3-3:RISC-V physical address details"></p>
+<p><img src="/asserts/6-s081-lab3_assert/address_translation_details.png" srcset="/img/loading.gif" lazyload alt="图3-2：RISC-V address translation details"></p>
+<p><img src="/asserts/6-s081-lab3_assert/physical_address_details.png" srcset="/img/loading.gif" lazyload alt="图3-3：RISC-V physical address details"></p>
 <h3 id="二、内核地址空间"><a href="#二、内核地址空间" class="headerlink" title="二、内核地址空间"></a>二、内核地址空间</h3><p>图3-4展示了内核虚拟地址如何映射为物理地址：</p>
 <p><img src="/asserts/6-s081-lab3_assert/kernel_address_space_and_physical_address_space.png" srcset="/img/loading.gif" lazyload alt="图3-4：On the left, xv6’s kernel address space. On the right, the RISC-V physical address space that xv6 expects to see."></p>
 <p>QEMU模拟的内存布局分为两块：</p>
