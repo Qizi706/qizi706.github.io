@@ -1,336 +1,370 @@
-
-
 <!DOCTYPE html>
-<html lang="en" data-default-color-scheme=auto>
-
-
-
+<html lang="en">
 <head>
   <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.1">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
 
-  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
-  <link rel="icon" href="/img/fluid.png">
-  
+<link rel="stylesheet" href="/css/main.css">
 
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
-  <meta http-equiv="x-ua-compatible" content="ie=edge">
-  
-  <meta name="theme-color" content="#2f4154">
-  <meta name="author" content="Quan Zhou">
-  <meta name="keywords" content="">
-  
-    <meta name="description" content="6.s081 Lab6: Multithreading 实现一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。 xv6-book Chapter 7 部分内容一、多路复用xv6通过在两种情况下切换进程来实现多路复用：  等待IO或事件：当进程需要等待磁盘、管">
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.css" integrity="sha256-gkQVf8UKZgQ0HyuxL/VnacadJ+D2Kox2TCEBuNQg5+w=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Mist","darkmode":true,"version":"8.27.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":true,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="6.s081 Lab6: Multithreading 实现 一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。 xv6-book Chapter 7 部分内容 一、多路复用 xv6通过在两种情况下切换进程来实现多路复用：  等待IO或事件：当进程需要等待磁">
 <meta property="og:type" content="article">
 <meta property="og:title" content="6.s081 Lab6 Multithreading 实现">
 <meta property="og:url" content="http://qizi706.github.io/2026/03/27/6-s081-lab6/index.html">
 <meta property="og:site_name" content="Quan Zhou 的 blog">
-<meta property="og:description" content="6.s081 Lab6: Multithreading 实现一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。 xv6-book Chapter 7 部分内容一、多路复用xv6通过在两种情况下切换进程来实现多路复用：  等待IO或事件：当进程需要等待磁盘、管">
+<meta property="og:description" content="6.s081 Lab6: Multithreading 实现 一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。 xv6-book Chapter 7 部分内容 一、多路复用 xv6通过在两种情况下切换进程来实现多路复用：  等待IO或事件：当进程需要等待磁">
 <meta property="og:locale" content="en_US">
-<meta property="og:image" content="http://qizi706.github.io/asserts/6-s081-lab6_assert/switching_from_one_user_process_to_another.png">
 <meta property="article:published_time" content="2026-03-27T12:00:00.000Z">
-<meta property="article:modified_time" content="2026-03-29T03:54:34.823Z">
+<meta property="article:modified_time" content="2026-04-03T07:14:23.950Z">
 <meta property="article:author" content="Quan Zhou">
 <meta property="article:tag" content="6.s081">
 <meta property="article:tag" content="Labs">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="http://qizi706.github.io/asserts/6-s081-lab6_assert/switching_from_one_user_process_to_another.png">
-  
-  
-  
-  <title>6.s081 Lab6 Multithreading 实现 - Quan Zhou 的 blog</title>
-
-  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+<meta name="twitter:card" content="summary">
 
 
-
-  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
-
-  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
-
-  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+<link rel="canonical" href="http://qizi706.github.io/2026/03/27/6-s081-lab6/">
 
 
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/03/27/6-s081-lab6/","path":"2026/03/27/6-s081-lab6/","title":"6.s081 Lab6 Multithreading 实现"}</script>
 
-<!-- 主题依赖的图标库，不要自行修改 -->
-<!-- Do not modify the link that theme dependent icons -->
-
-<link rel="stylesheet" href="//at.alicdn.com/t/c/font_1749284_5i9bdhy70f8.css">
-
-
-
-<link rel="stylesheet" href="//at.alicdn.com/t/c/font_1736178_k526ubmyhba.css">
-
-
-<link  rel="stylesheet" href="/css/main.css" />
-
-
-  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
-  
-    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>6.s081 Lab6 Multithreading 实现 | Quan Zhou 的 blog</title>
   
 
 
 
 
-  <script id="fluid-configs">
-    var Fluid = window.Fluid || {};
-    Fluid.ctx = Object.assign({}, Fluid.ctx)
-    var CONFIG = {"hostname":"qizi706.github.io","root":"/","version":"1.9.8","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false},"umami":{"src":null,"website_id":null,"domains":null,"start_time":"2024-01-01T00:00:00.000Z","token":null,"api_server":null}},"search_path":"/local-search.xml","include_content_in_search":true};
 
-    if (CONFIG.web_analytics.follow_dnt) {
-      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
-      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
-    }
-  </script>
-  <script  src="/js/utils.js" ></script>
-  <script  src="/js/color-schema.js" ></script>
-  
+
 
 
   
-<meta name="generator" content="Hexo 8.1.1"></head>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/next-theme-pjax/0.6.0/pjax.min.js" integrity="sha256-vxLn1tSKWD4dqbMRyv940UYw4sXgMtYcK6reefzZrao=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.umd.js" integrity="sha256-a+H7FYzJv6oU2hfsfDGM2Ohw/cR9v+hPfxHCLdmCrE8=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pangu/7.2.0/pangu.umd.js" integrity="sha256-JnmRRnJK7DC6RQJbAJb6AXOM9OmWzS6z8eYultk/48Y=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script><script src="/js/pjax.js" defer></script>
 
-
-<body>
   
 
-  <header>
-    
+  <script class="next-config" data-name="mermaid" type="application/json">{"enable":true,"theme":{"light":"default","dark":"dark"},"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.10.1/mermaid.min.js","integrity":"sha256-BmQmdWDS8X2OTbrwELWK366LV6escyWhHHe0XCTU/Hk="}}</script>
+  <script src="/js/third-party/tags/mermaid.js" defer></script>
 
-<div class="header-inner" style="height: 70vh;">
-  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
-  <div class="container">
-    <a class="navbar-brand" href="/">
-      <strong>Quan Zhou</strong>
-    </a>
+  <script class="next-config" data-name="wavedrom" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/wavedrom.min.js","integrity":"sha256-INLAoJc6quTNfiMWkGZniYO2cxE8mHpddnLow1m6RFs="}}</script>
+  <script class="next-config" data-name="wavedrom_skin" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/skins/default.js","integrity":"sha256-fduc/Zszk5ezWws2uInY/ALWVmIrmV6VTgXbsYSReFI="}}</script>
+  <script src="/js/third-party/tags/wavedrom.js" defer></script>
 
-    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
-            data-target="#navbarSupportedContent"
-            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-      <div class="animated-icon"><span></span><span></span><span></span></div>
-    </button>
+  <script src="/js/third-party/fancybox.js" defer></script>
 
-    <!-- Collapsible content -->
-    <div class="collapse navbar-collapse" id="navbarSupportedContent">
-      <ul class="navbar-nav ml-auto text-center">
-        
-          
-          
-          
-          
-            <li class="nav-item">
-              <a class="nav-link" href="/" target="_self">
-                <i class="iconfont icon-home-fill"></i>
-                <span>Home</span>
-              </a>
-            </li>
-          
-        
-          
-          
-          
-          
-            <li class="nav-item">
-              <a class="nav-link" href="/archives/" target="_self">
-                <i class="iconfont icon-archive-fill"></i>
-                <span>Archives</span>
-              </a>
-            </li>
-          
-        
-          
-          
-          
-          
-            <li class="nav-item">
-              <a class="nav-link" href="/categories/" target="_self">
-                <i class="iconfont icon-category-fill"></i>
-                <span>Categories</span>
-              </a>
-            </li>
-          
-        
-          
-          
-          
-          
-            <li class="nav-item">
-              <a class="nav-link" href="/tags/" target="_self">
-                <i class="iconfont icon-tags-fill"></i>
-                <span>Tags</span>
-              </a>
-            </li>
-          
-        
-          
-          
-          
-          
-            <li class="nav-item">
-              <a class="nav-link" href="/about/" target="_self">
-                <i class="iconfont icon-user-fill"></i>
-                <span>About</span>
-              </a>
-            </li>
-          
-        
-        
-          <li class="nav-item" id="search-btn">
-            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
-              <i class="iconfont icon-search"></i>
-            </a>
-          </li>
-          
-        
-        
-          <li class="nav-item" id="color-toggle-btn">
-            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
-              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
-            </a>
-          </li>
-        
-      </ul>
+
+
+  
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">true</script><script class="next-config" data-name="mathjax" type="application/json">{"enable":true,"tags":"ams","js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js","integrity":"sha256-MASABpB4tYktI2Oitl4t+78w/lyA+D7b/s9GEP0JOGI="}}</script>
+<script src="/js/third-party/math/mathjax.js" defer></script>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quicklink/3.0.1/quicklink.umd.js" integrity="sha256-44BednzIpUeQJcY8qtLyarFu0UCCTbgmWOvaoehiFQQ=" crossorigin="anonymous" defer></script>
+  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/03/27/6-s081-lab6/"}</script>
+  <script src="/js/third-party/quicklink.js" defer></script>
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
     </div>
   </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Quan Zhou 的 blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="Search" role="button">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a></li>
+  </ul>
 </nav>
 
+
+
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#s081-lab6-multithreading-%E5%AE%9E%E7%8E%B0"><span class="nav-number">1.</span> <span class="nav-text">6.s081 Lab6: Multithreading
+实现</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#xv6-book-chapter-7-%E9%83%A8%E5%88%86%E5%86%85%E5%AE%B9"><span class="nav-number">2.</span> <span class="nav-text">xv6-book Chapter 7 部分内容</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8"><span class="nav-number">2.1.</span> <span class="nav-text">一、多路复用</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8C%E4%B8%8A%E4%B8%8B%E6%96%87%E5%88%87%E6%8D%A2"><span class="nav-number">2.2.</span> <span class="nav-text">二、上下文切换</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%89%E8%B0%83%E5%BA%A6"><span class="nav-number">2.3.</span> <span class="nav-text">三、调度</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%9B%9Bsleep-wakeup"><span class="nav-number">2.4.</span> <span class="nav-text">四、Sleep &amp; wakeup</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%94%E7%AE%A1%E9%81%93"><span class="nav-number">2.5.</span> <span class="nav-text">五、管道</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%AD%E7%BB%88%E6%AD%A2%E5%92%8C%E6%B8%85%E7%90%86waitexitand-kill"><span class="nav-number">2.6.</span> <span class="nav-text">六、终止和清理（Wait,exit,and
+kill）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#s081-lab6-multithreading-%E5%AE%9E%E7%8E%B0-1"><span class="nav-number">3.</span> <span class="nav-text">6.s081 Lab6: Multithreading
+实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80uthread-switching-between-threads-moderate"><span class="nav-number">3.1.</span> <span class="nav-text">一、Uthread:
+switching between threads (moderate)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8Cusing-threads-moderate"><span class="nav-number">3.2.</span> <span class="nav-text">二、Using threads
+(moderate)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%89barrier-moderate"><span class="nav-number">3.3.</span> <span class="nav-text">三、Barrier
+(moderate)</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Quan Zhou</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+        </div>
+      </div>
+        <div class="back-to-top animated" role="button" aria-label="Back to top">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
   
 
-<div id="banner" class="banner" parallax=true
-     style="background: url('/img/default.png') no-repeat center center; background-size: cover;">
-  <div class="full-bg-img">
-    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
-      <div class="banner-text text-center fade-in-up">
-        <div class="h2">
-          
-            <span id="subtitle" data-typed-text="6.s081 Lab6 Multithreading 实现"></span>
-          
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/03/27/6-s081-lab6/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="6.s081 Lab6 Multithreading 实现 | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          6.s081 Lab6 Multithreading 实现
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+
+      <time title="Created: 2026-03-27 20:00:00" itemprop="dateCreated datePublished" datetime="2026-03-27T20:00:00+08:00">2026-03-27</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">Edited on</span>
+      <time title="Modified: 2026-04-03 15:14:23" itemprop="dateModified" datetime="2026-04-03T15:14:23+08:00">2026-04-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
+        </span>
+          , 
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
         </div>
-
-        
-          
-  <div class="mt-3">
-    
-    
-      <span class="post-meta">
-        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
-        <time datetime="2026-03-27 20:00" pubdate>
-          March 27, 2026 pm
-        </time>
-      </span>
-    
-  </div>
-
-  <div class="mt-1">
-    
-      <span class="post-meta mr-2">
-        <i class="iconfont icon-chart"></i>
-        
-          3.7k words
-        
-      </span>
-    
-
-    
+      </header>
 
     
     
-  </div>
-
-
-        
-      </div>
-
-      
-    </div>
-  </div>
-</div>
-
-</div>
-
-  </header>
-
-  <main>
     
-      
-
-<div class="container-fluid nopadding-x">
-  <div class="row nomargin-x">
-    <div class="side-col d-none d-lg-block col-lg-2">
-      
-
-    </div>
-
-    <div class="col-lg-8 nopadding-x-md">
-      <div class="container nopadding-x-md" id="board-ctn">
-        <div id="board">
-          <article class="post-content mx-auto">
-            <h1 id="seo-header">6.s081 Lab6 Multithreading 实现</h1>
-            
-            
-              <div class="markdown-body">
-                
-                <h2 id="6-s081-Lab6-Multithreading-实现"><a href="#6-s081-Lab6-Multithreading-实现" class="headerlink" title="6.s081 Lab6: Multithreading 实现"></a>6.s081 Lab6: Multithreading 实现</h2><p>一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。</p>
-<h2 id="xv6-book-Chapter-7-部分内容"><a href="#xv6-book-Chapter-7-部分内容" class="headerlink" title="xv6-book Chapter 7 部分内容"></a>xv6-book Chapter 7 部分内容</h2><h3 id="一、多路复用"><a href="#一、多路复用" class="headerlink" title="一、多路复用"></a>一、多路复用</h3><p>xv6通过在两种情况下切换进程来实现多路复用：</p>
-<ol>
-<li><p>等待IO或事件：当进程需要等待磁盘、管道或子程序退出时，会调用sleep主动让出CPU，等到条件满足时被wakeup唤醒。</p>
-</li>
-<li><p>时间片到期：一个进程不能一直持有CPU，否则其他进程将发生饥饿，因此有时间片机制；xv6会周期性强制一个占用CPU较长时间的进程放弃CPU（yield）从而实现抢占式多任务。</p>
-</li>
+    <div class="post-body" itemprop="articleBody"><h2 id="s081-lab6-multithreading-实现">6.s081 Lab6: Multithreading
+实现</h2>
+<p>一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。</p>
+<h2 id="xv6-book-chapter-7-部分内容">xv6-book Chapter 7 部分内容</h2>
+<h3 id="一多路复用">一、多路复用</h3>
+<p>xv6通过在两种情况下切换进程来实现多路复用：</p>
+<ol type="1">
+<li><p>等待IO或事件：当进程需要等待磁盘、管道或子程序退出时，会调用sleep主动让出CPU，等到条件满足时被wakeup唤醒。</p></li>
+<li><p>时间片到期：一个进程不能一直持有CPU，否则其他进程将发生饥饿，因此有时间片机制；xv6会周期性强制一个占用CPU较长时间的进程放弃CPU（yield）从而实现抢占式多任务。</p></li>
 </ol>
-<h3 id="二、上下文切换"><a href="#二、上下文切换" class="headerlink" title="二、上下文切换"></a>二、上下文切换</h3><p>上下文切换是调度的核心机制。xv6不直接从一个用户进程切换到另一个用户进程，而是遵循以下路径（如图6-1所示）：</p>
-<p>$$<br>旧进程 (Process A) → 当前 CPU 的调度器线程 (Scheduler) → 新进程 (Process B)<br>$$</p>
-<p><img src="/asserts/6-s081-lab6_assert/switching_from_one_user_process_to_another.png" srcset="/img/loading.gif" lazyload alt="图 6-1: Switching from one user process to another"><br>swtch（kernel&#x2F;swtch.S）汇编指令为内核线程切换执行保存和恢复功能，这也是这一章的重点：</p>
+<h3 id="二上下文切换">二、上下文切换</h3>
+<p>上下文切换是调度的核心机制。xv6不直接从一个用户进程切换到另一个用户进程，而是遵循以下路径（如图6-1所示）：</p>
+<p><span class="math display">\[
+旧进程\ (Process\ A) → 当前\ CPU\ 的调度器线程\ (Scheduler) → 新进程\
+(Process\ B)
+\]</span></p>
+<figure>
+<img
+src="/asserts/6-s081-lab6_assert/switching_from_one_user_process_to_another.png"
+alt="图 6-1 Switching from one user process to another" />
+<figcaption aria-hidden="true">图 6-1 Switching from one user process to
+another</figcaption>
+</figure>
+<p>swtch（kernel/swtch.S）汇编指令为内核线程切换执行保存和恢复功能，这也是这一章的重点：</p>
 <p>swtch的唯一任务就是把当前CPU寄存器的快照保存到旧进程的上下文结构（context）中，然后将新进程先前保存好的快照恢复到CPU寄存器中。</p>
-<p>它只保存<strong>被调用者保存的寄存器（Callee-saved registers）</strong>，包括：</p>
+<p>它只保存<strong>被调用者保存的寄存器（Callee-saved
+registers）</strong>，包括：</p>
 <ul>
 <li>ra：返回地址</li>
 <li>sp：栈指针</li>
 <li>s0-s11：通用保存寄存器</li>
 </ul>
-<p>这里不需要保存所有的32个寄存器，因为gcc编译器会自动在进行函数调用时保存部分寄存器，这些寄存器可以叫做Caller-saved registers（如a0-a7,t0-t6），在进入这个函数之前，这些寄存器已经被编译器自动保存到了内核栈中。</p>
+<p>这里不需要保存所有的32个寄存器，因为gcc编译器会自动在进行函数调用时保存部分寄存器，这些寄存器可以叫做Caller-saved
+registers（如a0-a7,t0-t6），在进入这个函数之前，这些寄存器已经被编译器自动保存到了内核栈中。</p>
 <p>如果在swtch中重复保存这些已经被保存过的寄存器，将造成资源的浪费。</p>
 <p>这里不需要保存pc寄存器的值：因为pc寄存器对于用户是不可见的，它一直指向下一个指令的地址，其本身是无法被汇编指令直接读写的；这里只需要保存ra寄存器的值即可，因为在C语言中调用一个函数，ra寄存器会自动写入返回地址，调用ret指令后会将ra中的地址加载到pc中，这个地址也就是执行完被调用函数后返回的指令地址即进程被重新调度后应该执行的位置。</p>
-<h3 id="三、调度"><a href="#三、调度" class="headerlink" title="三、调度"></a>三、调度</h3><p>在xv6中，swtch不仅仅是寄存器的交换，也是一次信任的交付。p-&gt;lock就像一根接力棒，在进程内核栈与CPU调度器栈之间传递，打破了传统的加锁规范。</p>
-<ol>
-<li><p>Coroutine relationship between <code>sched</code> and <code>scheduler</code></p>
+<h3 id="三调度">三、调度</h3>
+<p>在xv6中，swtch不仅仅是寄存器的交换，也是一次信任的交付。p-&gt;lock就像一根接力棒，在进程内核栈与CPU调度器栈之间传递，打破了传统的加锁规范。</p>
+<ol type="1">
+<li><p>Coroutine relationship between <code>sched</code> and
+<code>scheduler</code></p>
 <ul>
 <li>内核线程不是从A直接切换到B，它总是：<strong>进程A的内核线程-&gt;scheduler-&gt;进程B的内核线程</strong></li>
-<li>协程（Coroutine）：sched和scheduler不是简单的函数调用，他们是彼此的协程，执行流程在(kernel&#x2F;proc.c:456),(kernel&#x2F;proc.c:490)之间反复跳，这样故意将控制权通过线程切换转移的程序称为协程。</li>
+<li>协程（Coroutine）：sched和scheduler不是简单的函数调用，他们是彼此的协程，执行流程在(kernel/proc.c:456),(kernel/proc.c:490)之间反复跳，这样故意将控制权通过线程切换转移的程序称为协程。</li>
 <li>在创建新进程时scheduler对swtch的调用并不会在sched中结束，allocproc会把ra寄存器设置为forkret，因此调用scheduler时获取到的p-&gt;lock会在forkret中释放。forkret存在的目的就是为了释放p-&gt;lock，来让控制流能够不被中断；如果不考虑这一点，新进程可以直接调用usertrapret返回用户空间。</li>
-</ul>
-</li>
+</ul></li>
 <li><p>跨线程的p-&gt;lock传递</p>
 <p>通常在用到锁时会遵循“谁加锁，谁解锁”的准则。但在线程调度中，p-&gt;lock由一个线程获取（如yield,sleep,exit），再由另一个线程释放（scheduler）。</p>
 <p>锁的持有权随着swtch将控制权转移一起发生了转移。</p>
-<p>这样做可以保护不变性：当进程从RUNNING变成RUNNABLE时，这个状态改变是不完整的；如果没有这把跨越swtch的锁，另一个CPU可能直接看到这个进程的状态变成了RUNNABLE，然后尝试运行它，但此时进程还在swtch过程中，就可能导致两个CPU同时操作一个内核栈从而引发系统错误。</p>
-</li>
-<li><p>调度器的不变性（Invariants）</p>
-</li>
+<p>这样做可以保护不变性：当进程从RUNNING变成RUNNABLE时，这个状态改变是不完整的；如果没有这把跨越swtch的锁，另一个CPU可能直接看到这个进程的状态变成了RUNNABLE，然后尝试运行它，但此时进程还在swtch过程中，就可能导致两个CPU同时操作一个内核栈从而引发系统错误。</p></li>
+<li><p>调度器的不变性（Invariants）</p></li>
 </ol>
 <table>
+<colgroup>
+<col style="width: 11%" />
+<col style="width: 88%" />
+</colgroup>
 <thead>
 <tr>
-<th align="center">状态</th>
-<th align="left">必须满足的不变性</th>
+<th style="text-align: center;">状态</th>
+<th style="text-align: left;">必须满足的不变性</th>
 </tr>
 </thead>
-<tbody><tr>
-<td align="center"><code>RUNNING</code></td>
-<td align="left">1. CPU寄存器持有进程的真实值；2. c-&gt;proc指向该进程。</td>
+<tbody>
+<tr>
+<td style="text-align: center;"><code>RUNNING</code></td>
+<td style="text-align: left;">1. CPU寄存器持有进程的真实值；2.
+c-&gt;proc指向该进程。</td>
 </tr>
 <tr>
-<td align="center"><code>RUNNABLE</code></td>
-<td align="left">1.寄存器存在p-&gt;context中；2. 没有CPU在该线程上运行；3. 没有CPU的c-&gt;proc指向它。</td>
+<td style="text-align: center;"><code>RUNNABLE</code></td>
+<td style="text-align: left;">1.寄存器存在p-&gt;context中；2.
+没有CPU在该线程上运行；3. 没有CPU的c-&gt;proc指向它。</td>
 </tr>
-</tbody></table>
-<h3 id="四、Sleep-wakeup"><a href="#四、Sleep-wakeup" class="headerlink" title="四、Sleep &amp; wakeup"></a>四、Sleep &amp; wakeup</h3><p>为了实现进程间协作，xv6提供了sleep和wakeup机制：<br>例如当一个进程等待磁盘读取时，如果占用CPU进行轮询是十分浪费CPU资源的，此时应该将CPU让给其他需要计算的进程，这就是sleep机制；如果磁盘读取完成，应该告诉先前等待读取的进程这个消息，原本的进程已经可以继续执行了，但是此时它还处于sleep中，因此需要wakeup机制去唤醒这个进程。</p>
+</tbody>
+</table>
+<h3 id="四sleep-wakeup">四、Sleep &amp; wakeup</h3>
+<p>为了实现进程间协作，xv6提供了sleep和wakeup机制：
+例如当一个进程等待磁盘读取时，如果占用CPU进行轮询是十分浪费CPU资源的，此时应该将CPU让给其他需要计算的进程，这就是sleep机制；如果磁盘读取完成，应该告诉先前等待读取的进程这个消息，原本的进程已经可以继续执行了，但是此时它还处于sleep中，因此需要wakeup机制去唤醒这个进程。</p>
 <p><strong>丢失唤醒（Lost Wake-up Problem）问题：</strong></p>
 <p>这是并发编程中的经典BUG，如果sleep在检查条件和真正进入睡眠之间被中断，此时wakeup发生了，那么wakeup就不起作用，等到wakeup结束后才真正进入睡眠状态，那么该进程将处于永久的休眠中。</p>
-<p>解决方案：xv6要求调用sleep时一定要获取一个底层锁（Condition Lock）：<br>sleep(chan, lock)：进程在持有底层锁的情况下检查条件，进入sleep后，内核会原子性地释放该锁并将进程标记为SLEEPING。这样确保了wakeup只有在进程真正睡眠之后才能获得那把锁并发出通知。</p>
-<h3 id="五、管道"><a href="#五、管道" class="headerlink" title="五、管道"></a>五、管道</h3><p>xv6中管道使用上面提到的sleep和wakeup机制来进行同步，当$pi!\rightarrow!nwrite&#x3D;&#x3D;pi!\rightarrow!nread$时管道为空，当$pi!\rightarrow!nwrite&#x3D;&#x3D;pi!\rightarrow!nread+PIPESIZE$则管道为满。</p>
+<p>解决方案：xv6要求调用sleep时一定要获取一个底层锁（Condition Lock）：
+sleep(chan,
+lock)：进程在持有底层锁的情况下检查条件，进入sleep后，内核会原子性地释放该锁并将进程标记为SLEEPING。这样确保了wakeup只有在进程真正睡眠之后才能获得那把锁并发出通知。</p>
+<h3 id="五管道">五、管道</h3>
+<p>xv6中管道使用上面提到的sleep和wakeup机制来进行同步，当 <span
+class="math inline">\(pi\!\rightarrow\!nwrite = pi \!
+\rightarrow\!nread\)</span> 时管道为空，当 <span
+class="math inline">\(pi\!\rightarrow\!nwrite =
+pi\!\rightarrow\!nread+PIPESIZE\)</span> 则管道为满。</p>
 <p>以pipewrite为例，想要写入管道的buf前，一定要获取pi-&gt;lock，如果管道的buf还有空间，就将用户空间的数据不断写入管道，直到写完数据或者将管道写满；如果管道满了则先调用wakeup唤醒读进程，然后调用sleep进入休眠状态，在sleep中会释放pi-&gt;lock以便读进程能够获取到管道的控制权限。同样，piperead和pipewrite几乎一致。</p>
-<h3 id="六、终止和清理（Wait-exit-and-kill）"><a href="#六、终止和清理（Wait-exit-and-kill）" class="headerlink" title="六、终止和清理（Wait,exit,and kill）"></a>六、终止和清理（Wait,exit,and kill）</h3><ul>
+<h3 id="六终止和清理waitexitand-kill">六、终止和清理（Wait,exit,and
+kill）</h3>
+<ul>
 <li><code>wait</code></li>
 </ul>
 <p>父进程等待子进程退出并返回子进程的pid。首先获取wait_lock，这把锁是条件锁，防止父进程错过一个exiting子进程的wakeup。然后扫描进程表，如果找到一个子进程处于ZOMBIE状态，它释放这个子进程的资源和proc结构体，将子进程的退出状态码复制到wait提供的地址，然后返回这个子进程的pid。</p>
@@ -350,470 +384,122 @@
 <p>kill唤醒目标进程直接修改p-&gt;state为RUNNABLE，而不调用wakeup，原因是此时目标进程等待的条件并没有被满足，如果直接唤醒可能会造成危险的后果。</p>
 <p>有些情况下在循环中调用sleep会检查p-&gt;killed，并且放弃当前的行为如果p-&gt;killed被设置了，只有当这种放弃是正确的才会这样做（比如等待键盘按下，防止死等用户敲键盘）。</p>
 <p>在xv6中，一些sleep循环不检查p-&gt;killed，因为这些代码正处于应该是原子操作的多步骤系统调用的中间，比如对磁盘的操作。即使设置了p-&gt;killed标志，也需要等待当前系统调用完成，然后回到usertrap中看到这个killed标志才会进行销毁。</p>
-<h2 id="6-s081-Lab6-Multithreading-实现-1"><a href="#6-s081-Lab6-Multithreading-实现-1" class="headerlink" title="6.s081 Lab6: Multithreading 实现"></a>6.s081 Lab6: Multithreading 实现</h2><h3 id="一、Uthread-switching-between-threads-moderate"><a href="#一、Uthread-switching-between-threads-moderate" class="headerlink" title="一、Uthread: switching between threads (moderate)"></a>一、Uthread: switching between threads (<u style="color: #0066ff">moderate</u>)</h3><p>添加用户线程切换机制，需要实现两个目标：</p>
-<ol>
-<li>当thread_schedule()第一次运行给定线程时，这个线程要在自己的栈上运行传递给thread_create(void (*func))的函数。</li>
+<h2 id="s081-lab6-multithreading-实现-1">6.s081 Lab6: Multithreading
+实现</h2>
+<h3 id="一uthread-switching-between-threads-moderate">一、Uthread:
+switching between threads (<u style="color: #0066ff">moderate</u>)</h3>
+<p>添加用户线程切换机制，需要实现两个目标：</p>
+<ol type="1">
+<li>当thread_schedule()第一次运行给定线程时，这个线程要在自己的栈上运行传递给thread_create(void
+(*func))的函数。</li>
 <li>确保swtch能够保存和恢复寄存器，能让即将返回的线程继续执行下一条上一次离开时的指令。</li>
 </ol>
 <p>为了实现以上两个目标，需要添加以下代码：</p>
 <ul>
 <li>为thread数据结构增添上下文context结构体：</li>
 </ul>
-<figure class="highlight c"><figcaption><span>user/uthread.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">context</span> &#123;</span><br>  uint64 ra;<br>  uint64 sp;<br><br>  uint64 s0;<br>  uint64 s1;<br>  uint64 s2;<br>  uint64 s3;<br>  uint64 s4;<br>  uint64 s5;<br>  uint64 s6;<br>  uint64 s7;<br>  uint64 s8;<br>  uint64 s9;<br>  uint64 s10;<br>  uint64 s11;<br>&#125;;<br><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">thread</span> &#123;</span><br>  <span class="hljs-type">char</span>       <span class="hljs-built_in">stack</span>[STACK_SIZE]; <span class="hljs-comment">/* the thread&#x27;s stack */</span><br>  <span class="hljs-type">int</span>        state;             <span class="hljs-comment">/* FREE, RUNNING, RUNNABLE */</span><br>  <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">context</span> <span class="hljs-title">ctx</span>;</span><br>&#125;;<br></code></pre></td></tr></table></figure>
-
+<figure class="highlight c"><figcaption><span>user/uthread.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">context</span> &#123;</span></span><br><span class="line">  uint64 ra;</span><br><span class="line">  uint64 sp;</span><br><span class="line"></span><br><span class="line">  uint64 s0;</span><br><span class="line">  uint64 s1;</span><br><span class="line">  uint64 s2;</span><br><span class="line">  uint64 s3;</span><br><span class="line">  uint64 s4;</span><br><span class="line">  uint64 s5;</span><br><span class="line">  uint64 s6;</span><br><span class="line">  uint64 s7;</span><br><span class="line">  uint64 s8;</span><br><span class="line">  uint64 s9;</span><br><span class="line">  uint64 s10;</span><br><span class="line">  uint64 s11;</span><br><span class="line">&#125;;</span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">thread</span> &#123;</span></span><br><span class="line">  <span class="type">char</span>       <span class="built_in">stack</span>[STACK_SIZE]; <span class="comment">/* the thread&#x27;s stack */</span></span><br><span class="line">  <span class="type">int</span>        state;             <span class="comment">/* FREE, RUNNING, RUNNABLE */</span></span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">context</span> <span class="title">ctx</span>;</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
 <ul>
 <li>thread_create中初始化ctx字段，并设置ra和sp，使线程第一次执行时能够在本身的栈上执行传过去的函数：</li>
 </ul>
-<figure class="highlight c"><figcaption><span>user/uthread.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span><br><span class="hljs-title function_">thread_create</span><span class="hljs-params">(<span class="hljs-type">void</span> (*func)())</span><br>&#123;<br>  <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">thread</span> *<span class="hljs-title">t</span>;</span><br><br>  <span class="hljs-keyword">for</span> (t = all_thread; t &lt; all_thread + MAX_THREAD; t++) &#123;<br>    <span class="hljs-keyword">if</span> (t-&gt;state == FREE) <span class="hljs-keyword">break</span>;<br>  &#125;<br>  t-&gt;state = RUNNABLE;<br>  <span class="hljs-comment">// YOUR CODE HERE</span><br>  <span class="hljs-built_in">memset</span>(&amp;t-&gt;ctx, <span class="hljs-number">0</span>, <span class="hljs-keyword">sizeof</span>(t-&gt;ctx));<br>  t-&gt;ctx.ra = (uint64)func;<br>  t-&gt;ctx.sp = (uint64)(t-&gt;<span class="hljs-built_in">stack</span> + STACK_SIZE);<br>&#125;<br></code></pre></td></tr></table></figure>
-
+<figure class="highlight c"><figcaption><span>user/uthread.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span></span><br><span class="line"><span class="title function_">thread_create</span><span class="params">(<span class="type">void</span> (*func)())</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">thread</span> *<span class="title">t</span>;</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span> (t = all_thread; t &lt; all_thread + MAX_THREAD; t++) &#123;</span><br><span class="line">    <span class="keyword">if</span> (t-&gt;state == FREE) <span class="keyword">break</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  t-&gt;state = RUNNABLE;</span><br><span class="line">  <span class="comment">// YOUR CODE HERE</span></span><br><span class="line">  <span class="built_in">memset</span>(&amp;t-&gt;ctx, <span class="number">0</span>, <span class="keyword">sizeof</span>(t-&gt;ctx));</span><br><span class="line">  t-&gt;ctx.ra = (uint64)func;</span><br><span class="line">  t-&gt;ctx.sp = (uint64)(t-&gt;<span class="built_in">stack</span> + STACK_SIZE);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <ul>
 <li>swtch要能够完成寄存器的存储和恢复：</li>
 </ul>
-<figure class="highlight plaintext"><figcaption><span>user/thread_switch.S</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs asm"> .text<br><br> /*<br>         * save the old thread&#x27;s registers,<br>         * restore the new thread&#x27;s registers.<br>         */<br><br> .globl thread_switch<br>thread_switch:<br> /* YOUR CODE HERE */<br>        sd ra, 0(a0)<br>        sd sp, 8(a0)<br>        sd s0, 16(a0)<br>        sd s1, 24(a0)<br>        sd s2, 32(a0)<br>        sd s3, 40(a0)<br>        sd s4, 48(a0)<br>        sd s5, 56(a0)<br>        sd s6, 64(a0)<br>        sd s7, 72(a0)<br>        sd s8, 80(a0)<br>        sd s9, 88(a0)<br>        sd s10, 96(a0)<br>        sd s11, 104(a0)<br><br>        ld ra, 0(a1)<br>        ld sp, 8(a1)<br>        ld s0, 16(a1)<br>        ld s1, 24(a1)<br>        ld s2, 32(a1)<br>        ld s3, 40(a1)<br>        ld s4, 48(a1)<br>        ld s5, 56(a1)<br>        ld s6, 64(a1)<br>        ld s7, 72(a1)<br>        ld s8, 80(a1)<br>        ld s9, 88(a1)<br>        ld s10, 96(a1)<br>        ld s11, 104(a1)<br><br>        ret    /* return to ra */<br></code></pre></td></tr></table></figure>
-
+<figure class="highlight plaintext"><figcaption><span>user/thread_switch.S</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"> .text</span><br><span class="line"></span><br><span class="line"> /*</span><br><span class="line">         * save the old thread&#x27;s registers,</span><br><span class="line">         * restore the new thread&#x27;s registers.</span><br><span class="line">         */</span><br><span class="line"></span><br><span class="line"> .globl thread_switch</span><br><span class="line">thread_switch:</span><br><span class="line"> /* YOUR CODE HERE */</span><br><span class="line">        sd ra, 0(a0)</span><br><span class="line">        sd sp, 8(a0)</span><br><span class="line">        sd s0, 16(a0)</span><br><span class="line">        sd s1, 24(a0)</span><br><span class="line">        sd s2, 32(a0)</span><br><span class="line">        sd s3, 40(a0)</span><br><span class="line">        sd s4, 48(a0)</span><br><span class="line">        sd s5, 56(a0)</span><br><span class="line">        sd s6, 64(a0)</span><br><span class="line">        sd s7, 72(a0)</span><br><span class="line">        sd s8, 80(a0)</span><br><span class="line">        sd s9, 88(a0)</span><br><span class="line">        sd s10, 96(a0)</span><br><span class="line">        sd s11, 104(a0)</span><br><span class="line"></span><br><span class="line">        ld ra, 0(a1)</span><br><span class="line">        ld sp, 8(a1)</span><br><span class="line">        ld s0, 16(a1)</span><br><span class="line">        ld s1, 24(a1)</span><br><span class="line">        ld s2, 32(a1)</span><br><span class="line">        ld s3, 40(a1)</span><br><span class="line">        ld s4, 48(a1)</span><br><span class="line">        ld s5, 56(a1)</span><br><span class="line">        ld s6, 64(a1)</span><br><span class="line">        ld s7, 72(a1)</span><br><span class="line">        ld s8, 80(a1)</span><br><span class="line">        ld s9, 88(a1)</span><br><span class="line">        ld s10, 96(a1)</span><br><span class="line">        ld s11, 104(a1)</span><br><span class="line"></span><br><span class="line">        ret    /* return to ra */</span><br></pre></td></tr></table></figure>
 <ul>
 <li>thread_schedule添加一行进行线程上下文切换：</li>
 </ul>
-<figure class="highlight c"><figcaption><span>user/uthread.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span><br><span class="hljs-title function_">thread_schedule</span><span class="hljs-params">(<span class="hljs-type">void</span>)</span><br>&#123;<br>  <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">thread</span> *<span class="hljs-title">t</span>, *<span class="hljs-title">next_thread</span>;</span><br><br>  <span class="hljs-comment">/* Find another runnable thread. */</span><br>  next_thread = <span class="hljs-number">0</span>;<br>  t = current_thread + <span class="hljs-number">1</span>;<br>  <span class="hljs-keyword">for</span>(<span class="hljs-type">int</span> i = <span class="hljs-number">0</span>; i &lt; MAX_THREAD; i++)&#123;<br>    <span class="hljs-keyword">if</span>(t &gt;= all_thread + MAX_THREAD)<br>      t = all_thread;<br>    <span class="hljs-keyword">if</span>(t-&gt;state == RUNNABLE) &#123;<br>      next_thread = t;<br>      <span class="hljs-keyword">break</span>;<br>    &#125;<br>    t = t + <span class="hljs-number">1</span>;<br>  &#125;<br><br>  <span class="hljs-keyword">if</span> (next_thread == <span class="hljs-number">0</span>) &#123;<br>    <span class="hljs-built_in">printf</span>(<span class="hljs-string">&quot;thread_schedule: no runnable threads\n&quot;</span>);<br>    <span class="hljs-built_in">exit</span>(<span class="hljs-number">-1</span>);<br>  &#125;<br><br>  <span class="hljs-keyword">if</span> (current_thread != next_thread) &#123;         <span class="hljs-comment">/* switch threads?  */</span><br>    next_thread-&gt;state = RUNNING;<br>    t = current_thread;<br>    current_thread = next_thread;<br>    <span class="hljs-comment">/* YOUR CODE HERE</span><br><span class="hljs-comment">     * Invoke thread_switch to switch from t to next_thread:</span><br><span class="hljs-comment">     * thread_switch(??, ??);</span><br><span class="hljs-comment">     */</span><br>    thread_switch((uint64)&amp;t-&gt;ctx, (uint64)&amp;current_thread-&gt;ctx);<br>  &#125; <span class="hljs-keyword">else</span><br>    next_thread = <span class="hljs-number">0</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
-
-<h3 id="二、Using-threads-moderate"><a href="#二、Using-threads-moderate" class="headerlink" title="二、Using threads (moderate)"></a>二、Using threads (<u style="color: #0066ff">moderate</u>)</h3><p>使用锁来同步哈希表的操作，这里十分简单，只需要运用以往学过的锁知识进行同步就可以了，不涉及过多xv6的知识，需要使用pthread库。</p>
-<p>对每个table entry设置一个锁，当要访问该entry时申请获得对应的锁，然后再进行操作。</p>
-<figure class="highlight c"><figcaption><span>notxv6/ph.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span><br><span class="hljs-type">void</span><br><span class="hljs-title function_">put</span><span class="hljs-params">(<span class="hljs-type">int</span> key, <span class="hljs-type">int</span> value)</span><br>&#123;<br>  <span class="hljs-type">int</span> i = key % NBUCKET;<br><br>  pthread_mutex_lock(&amp;lock[i]);<br>  <span class="hljs-comment">// is the key already present?</span><br>  <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">entry</span> *<span class="hljs-title">e</span> =</span> <span class="hljs-number">0</span>;<br>  <span class="hljs-keyword">for</span> (e = table[i]; e != <span class="hljs-number">0</span>; e = e-&gt;next) &#123;<br>    <span class="hljs-keyword">if</span> (e-&gt;key == key)<br>      <span class="hljs-keyword">break</span>;<br>  &#125;<br>  <span class="hljs-keyword">if</span>(e)&#123;<br>    <span class="hljs-comment">// update the existing key.</span><br>    e-&gt;value = value;<br>  &#125; <span class="hljs-keyword">else</span> &#123;<br>    <span class="hljs-comment">// the new is new.</span><br>    insert(key, value, &amp;table[i], table[i]);<br>  &#125;<br><br>  pthread_mutex_unlock(&amp;lock[i]);<br>&#125;<br></code></pre></td></tr></table></figure>
-
+<figure class="highlight c"><figcaption><span>user/uthread.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span></span><br><span class="line"><span class="title function_">thread_schedule</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">thread</span> *<span class="title">t</span>, *<span class="title">next_thread</span>;</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">/* Find another runnable thread. */</span></span><br><span class="line">  next_thread = <span class="number">0</span>;</span><br><span class="line">  t = current_thread + <span class="number">1</span>;</span><br><span class="line">  <span class="keyword">for</span>(<span class="type">int</span> i = <span class="number">0</span>; i &lt; MAX_THREAD; i++)&#123;</span><br><span class="line">    <span class="keyword">if</span>(t &gt;= all_thread + MAX_THREAD)</span><br><span class="line">      t = all_thread;</span><br><span class="line">    <span class="keyword">if</span>(t-&gt;state == RUNNABLE) &#123;</span><br><span class="line">      next_thread = t;</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    t = t + <span class="number">1</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (next_thread == <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;thread_schedule: no runnable threads\n&quot;</span>);</span><br><span class="line">    <span class="built_in">exit</span>(<span class="number">-1</span>);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (current_thread != next_thread) &#123;         <span class="comment">/* switch threads?  */</span></span><br><span class="line">    next_thread-&gt;state = RUNNING;</span><br><span class="line">    t = current_thread;</span><br><span class="line">    current_thread = next_thread;</span><br><span class="line">    <span class="comment">/* YOUR CODE HERE</span></span><br><span class="line"><span class="comment">     * Invoke thread_switch to switch from t to next_thread:</span></span><br><span class="line"><span class="comment">     * thread_switch(??, ??);</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    thread_switch((uint64)&amp;t-&gt;ctx, (uint64)&amp;current_thread-&gt;ctx);</span><br><span class="line">  &#125; <span class="keyword">else</span></span><br><span class="line">    next_thread = <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="二using-threads-moderate">二、Using threads
+(<u style="color: #0066ff">moderate</u>)</h3>
+<p>使用锁来同步哈希表的操作，这里十分简单，只需要运用以往学过的锁知识进行同步就可以了，不涉及过多xv6的知识，需要使用pthread库。</p>
+<p>对每个table
+entry设置一个锁，当要访问该entry时申请获得对应的锁，然后再进行操作。</p>
+<figure class="highlight c"><figcaption><span>notxv6/ph.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span></span><br><span class="line"><span class="type">void</span></span><br><span class="line"><span class="title function_">put</span><span class="params">(<span class="type">int</span> key, <span class="type">int</span> value)</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="type">int</span> i = key % NBUCKET;</span><br><span class="line"></span><br><span class="line">  pthread_mutex_lock(&amp;lock[i]);</span><br><span class="line">  <span class="comment">// is the key already present?</span></span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">entry</span> *<span class="title">e</span> =</span> <span class="number">0</span>;</span><br><span class="line">  <span class="keyword">for</span> (e = table[i]; e != <span class="number">0</span>; e = e-&gt;next) &#123;</span><br><span class="line">    <span class="keyword">if</span> (e-&gt;key == key)</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">if</span>(e)&#123;</span><br><span class="line">    <span class="comment">// update the existing key.</span></span><br><span class="line">    e-&gt;value = value;</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// the new is new.</span></span><br><span class="line">    insert(key, value, &amp;table[i], table[i]);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  pthread_mutex_unlock(&amp;lock[i]);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <p>这里就放一个put操作的代码，在此测试中，get操作与put操作是分离的，先将所有的put进行完再进行get操作，因此get无需上锁。</p>
-<h3 id="三、Barrier-moderate"><a href="#三、Barrier-moderate" class="headerlink" title="三、Barrier (moderate)"></a>三、Barrier (<u style="color: #0066ff">moderate</u>)</h3><p>编写一个barrier函数，当所有线程到达这个barrier后才会一起放行，否则在最后一个线程到达barrier前都进行等待，这个任务也要用到pthread库。这里用到的条件变量类似于xv6中的sleep和wakeup机制。</p>
+<h3 id="三barrier-moderate">三、Barrier
+(<u style="color: #0066ff">moderate</u>)</h3>
+<p>编写一个barrier函数，当所有线程到达这个barrier后才会一起放行，否则在最后一个线程到达barrier前都进行等待，这个任务也要用到pthread库。这里用到的条件变量类似于xv6中的sleep和wakeup机制。</p>
 <p>条件变量介绍：</p>
 <p>条件变量一般伴随着三个成员：互斥锁、条件变量、逻辑条件。</p>
 <p>互斥锁负责保护共享数据，确保一个时刻最多只有一个线程在检查或修改条件；</p>
 <p>条件变量是线程被挂起和唤醒的等待队列。</p>
 <p>逻辑条件是一个真正的布尔表达式，只有这个条件满足，线程才能真正被唤醒。</p>
-<p>判断条件时必须用while而不是if，被唤醒后的线程还没来得及加锁，条件已经被其他线程修改了，这时候就需要继续等待；还有一种情况，即使没有接收到信号，线程也可能因为硬件或不可控外部因素醒来，这叫做虚假唤醒（Spurious Wakeup）。虚假唤醒的原因是许多操作系统（如Linux）可能出现一个信号唤醒多个线程的情况，其原因是为了达到更高的性能（不是Bug,是Feature），这种做法十分常见，以至于<a target="_blank" rel="noopener" href="https://ieeexplore.ieee.org/document/10555529">POSIX标准</a>明确规定这是允许的。</p>
-<p>wait函数内部是原子性的，pthread_cond_wait执行了非常精密的操作：释放锁+线程入队休眠。如果这两个操作不是原子性的（比如先释放锁，再让线程入队休眠），可能会出现丢失唤醒的问题（Lost Wake-up）。</p>
-<p>这一个任务要求多轮次的barrier，要求不同轮次的barrier不能互相影响，因此这里的条件我选择了使用bstate.round &#x3D;&#x3D; myround，每个线程在进入barrier时先记录下当前轮次，如果最后一个线程进入到barrier时，会将bstate.round++，唤醒所有正在等待的线程，并将bstate.nthread设为0，开始下一次的barrier。</p>
-<figure class="highlight c"><figcaption><span>notxv6/barrier.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">void</span><br><span class="hljs-title function_">barrier</span><span class="hljs-params">()</span><br>&#123;<br>  <span class="hljs-comment">// YOUR CODE HERE</span><br>  <span class="hljs-comment">//</span><br>  <span class="hljs-comment">// Block until all threads have called barrier() and</span><br>  <span class="hljs-comment">// then increment bstate.round.</span><br>  <span class="hljs-comment">//</span><br>  pthread_mutex_lock(&amp;bstate.barrier_mutex);<br><br>  <span class="hljs-type">int</span> myround = bstate.round;<br><br>  bstate.nthread++;<br>  <span class="hljs-keyword">if</span> (bstate.nthread &lt; nthread) &#123;<br>    <span class="hljs-keyword">while</span> (bstate.round == myround) &#123;<br>      pthread_cond_wait(&amp;bstate.barrier_cond, &amp;bstate.barrier_mutex);<br>    &#125;<br>  &#125; <span class="hljs-keyword">else</span> &#123;<br>    bstate.round++;<br>    bstate.nthread = <span class="hljs-number">0</span>;<br>    pthread_cond_broadcast(&amp;bstate.barrier_cond);<br>  &#125;<br><br>  pthread_mutex_unlock(&amp;bstate.barrier_mutex);<br>&#125;<br></code></pre></td></tr></table></figure>
-
+<p>判断条件时必须用while而不是if，被唤醒后的线程还没来得及加锁，条件已经被其他线程修改了，这时候就需要继续等待；还有一种情况，即使没有接收到信号，线程也可能因为硬件或不可控外部因素醒来，这叫做虚假唤醒（Spurious
+Wakeup）。虚假唤醒的原因是许多操作系统（如Linux）可能出现一个信号唤醒多个线程的情况，其原因是为了达到更高的性能（不是Bug,是Feature），这种做法十分常见，以至于<a
+target="_blank" rel="noopener" href="https://ieeexplore.ieee.org/document/10555529">POSIX标准</a>明确规定这是允许的。</p>
+<p>wait函数内部是原子性的，pthread_cond_wait执行了非常精密的操作：释放锁+线程入队休眠。如果这两个操作不是原子性的（比如先释放锁，再让线程入队休眠），可能会出现丢失唤醒的问题（Lost
+Wake-up）。</p>
+<p>这一个任务要求多轮次的barrier，要求不同轮次的barrier不能互相影响，因此这里的条件我选择了使用bstate.round
+==
+myround，每个线程在进入barrier时先记录下当前轮次，如果最后一个线程进入到barrier时，会将bstate.round++，唤醒所有正在等待的线程，并将bstate.nthread设为0，开始下一次的barrier。</p>
+<figure class="highlight c"><figcaption><span>notxv6/barrier.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">void</span></span><br><span class="line"><span class="title function_">barrier</span><span class="params">()</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="comment">// YOUR CODE HERE</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// Block until all threads have called barrier() and</span></span><br><span class="line">  <span class="comment">// then increment bstate.round.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  pthread_mutex_lock(&amp;bstate.barrier_mutex);</span><br><span class="line"></span><br><span class="line">  <span class="type">int</span> myround = bstate.round;</span><br><span class="line"></span><br><span class="line">  bstate.nthread++;</span><br><span class="line">  <span class="keyword">if</span> (bstate.nthread &lt; nthread) &#123;</span><br><span class="line">    <span class="keyword">while</span> (bstate.round == myround) &#123;</span><br><span class="line">      pthread_cond_wait(&amp;bstate.barrier_cond, &amp;bstate.barrier_mutex);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    bstate.round++;</span><br><span class="line">    bstate.nthread = <span class="number">0</span>;</span><br><span class="line">    pthread_cond_broadcast(&amp;bstate.barrier_cond);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  pthread_mutex_unlock(&amp;bstate.barrier_mutex);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <p>本次任务结束，感觉xv6-book对多线程的内容写的十分丰富，反而是lab中涉及的并不是很多。</p>
 
-                
-              </div>
-            
-            <hr/>
-            <div>
-              <div class="post-metas my-3">
-  
-    <div class="post-meta mr-3 d-flex align-items-center">
-      <i class="iconfont icon-category"></i>
-      
-
-<span class="category-chains">
-  
-  
-    
-      <span class="category-chain">
-        
-  <a href="/categories/MIT-courses/" class="category-chain-item">MIT courses</a>
-  
-  
-
-      </span>
-    
-  
-    
-      <span class="category-chain">
-        
-  <a href="/categories/OS/" class="category-chain-item">OS</a>
-  
-  
-
-      </span>
-    
-  
-</span>
-
     </div>
-  
-  
-    <div class="post-meta">
-      <i class="iconfont icon-tags"></i>
-      
-        <a href="/tags/6-s081/" class="print-no-link">#6.s081</a>
-      
-        <a href="/tags/Labs/" class="print-no-link">#Labs</a>
-      
-    </div>
-  
-</div>
 
+    
+    
+    
 
-              
-  
-
-  <div class="license-box my-3">
-    <div class="license-title">
-      <div>6.s081 Lab6 Multithreading 实现</div>
-      <div>http://qizi706.github.io/2026/03/27/6-s081-lab6/</div>
-    </div>
-    <div class="license-meta">
-      
-        <div class="license-meta-item">
-          <div>Author</div>
-          <div>Quan Zhou</div>
-        </div>
-      
-      
-        <div class="license-meta-item license-meta-date">
-          <div>Posted on</div>
-          <div>March 27, 2026</div>
-        </div>
-      
-      
-      
-        <div class="license-meta-item">
-          <div>Licensed under</div>
-          <div>
-            
-              
-              
-                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
-                  <span class="hint--top hint--rounded" aria-label="BY - Attribution">
-                    <i class="iconfont icon-cc-by"></i>
-                  </span>
-                </a>
-              
-            
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/6-s081/" rel="tag"># 6.s081</a>
+              <a href="/tags/Labs/" rel="tag"># Labs</a>
           </div>
-        </div>
-      
-    </div>
-    <div class="license-icon iconfont"></div>
-  </div>
 
+        
 
-
-              
-                <div class="post-prevnext my-3">
-                  <article class="post-prev col-6">
-                    
-                    
-                  </article>
-                  <article class="post-next col-6">
-                    
-                    
-                      <a href="/2026/03/20/6-s081-lab5/" title="6.s081 Lab5 Copy-on-Write Fork for xv6 实现">
-                        <span class="hidden-mobile">6.s081 Lab5 Copy-on-Write Fork for xv6 实现</span>
-                        <span class="visible-mobile">Next</span>
-                        <i class="iconfont icon-arrowright"></i>
-                      </a>
-                    
-                  </article>
-                </div>
-              
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/03/20/6-s081-lab5/" rel="prev" title="6.s081 Lab5 Copy-on-Write Fork for xv6 实现">
+                  <i class="fa fa-angle-left"></i> 6.s081 Lab5 Copy-on-Write Fork for xv6 实现
+                </a>
             </div>
-
-            
-          </article>
-        </div>
-      </div>
-    </div>
-
-    <div class="side-col d-none d-lg-block col-lg-2">
-      
-  <aside class="sidebar" style="margin-left: -1rem">
-    <div id="toc">
-  <p class="toc-header">
-    <i class="iconfont icon-list"></i>
-    <span>Table of Contents</span>
-  </p>
-  <div class="toc-body" id="toc-body"></div>
-</div>
-
-
-
-  </aside>
-
-
-    </div>
-  </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
 </div>
 
 
 
 
 
-  
 
-
-
-  
-
-
-
-  
-
-
-
-  
-
-
-
-  
-
-
-  
-  
-
-
-
-
-
-
-
-
-
-    
-
-    
-      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
-        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
-      </a>
-    
-
-    
-      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
-     aria-hidden="true">
-  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
-    <div class="modal-content">
-      <div class="modal-header text-center">
-        <h4 class="modal-title w-100 font-weight-bold">Search</h4>
-        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body mx-3">
-        <div class="md-form mb-5">
-          <input type="text" id="local-search-input" class="form-control validate">
-          <label data-error="x" data-success="v" for="local-search-input">Keyword</label>
-        </div>
-        <div class="list-group" id="local-search-result"></div>
-      </div>
-    </div>
-  </div>
 </div>
-
-    
-
-    
   </main>
 
-  <footer>
+  <footer class="footer">
     <div class="footer-inner">
-  
-    <div class="footer-content">
-      <a href="https://github.com/qizi706" target="_blank" rel="nofollow noopener"><span>Quan Zhou</span></a>
-    </div>
-  
-  
-  
-</div>
 
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
+  </div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/mist/" rel="noopener" target="_blank">NexT.Mist</a>
+  </div>
+
+    </div>
   </footer>
 
-  <!-- Scripts -->
   
-  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
-  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
 
-  <script>
-    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
-    NProgress.start()
-    window.addEventListener('load', function() {
-      NProgress.done();
-    })
-  </script>
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
 
-
-<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
-<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
-<script  src="/js/events.js" ></script>
-<script  src="/js/plugins.js" ></script>
-
-
-  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
-  <script>
-    (function (window, document) {
-      var typing = Fluid.plugins.typing;
-      var subtitle = document.getElementById('subtitle');
-      if (!subtitle || !typing) {
-        return;
-      }
-      var text = subtitle.getAttribute('data-typed-text');
-      
-        typing(text);
-      
-    })(window, document);
-  </script>
-
-
-
-
-  
-    <script  src="/js/img-lazyload.js" ></script>
-  
-
-
-
-
-  
-<script>
-  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
-    var toc = jQuery('#toc');
-    if (toc.length === 0 || !window.tocbot) { return; }
-    var boardCtn = jQuery('#board-ctn');
-    var boardTop = boardCtn.offset().top;
-
-    window.tocbot.init(Object.assign({
-      tocSelector     : '#toc-body',
-      contentSelector : '.markdown-body',
-      linkClass       : 'tocbot-link',
-      activeLinkClass : 'tocbot-active-link',
-      listClass       : 'tocbot-list',
-      isCollapsedClass: 'tocbot-is-collapsed',
-      collapsibleClass: 'tocbot-is-collapsible',
-      scrollSmooth    : true,
-      includeTitleTags: true,
-      headingsOffset  : -boardTop,
-    }, CONFIG.toc));
-    if (toc.find('.toc-list-item').length > 0) {
-      toc.css('visibility', 'visible');
-    }
-
-    Fluid.events.registerRefreshCallback(function() {
-      if ('tocbot' in window) {
-        tocbot.refresh();
-        var toc = jQuery('#toc');
-        if (toc.length === 0 || !tocbot) {
-          return;
-        }
-        if (toc.find('.toc-list-item').length > 0) {
-          toc.css('visibility', 'visible');
-        }
-      }
-    });
-  });
-</script>
-
-
-  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
-
-  <script>Fluid.plugins.codeWidget();</script>
-
-
-  
-<script>
-  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/5.0.0/anchor.min.js', function() {
-    window.anchors.options = {
-      placement: CONFIG.anchorjs.placement,
-      visible  : CONFIG.anchorjs.visible
-    };
-    if (CONFIG.anchorjs.icon) {
-      window.anchors.options.icon = CONFIG.anchorjs.icon;
-    }
-    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
-    var res = [];
-    for (var item of el) {
-      res.push('.markdown-body > ' + item.trim());
-    }
-    if (CONFIG.anchorjs.placement === 'left') {
-      window.anchors.options.class = 'anchorjs-link-left';
-    }
-    window.anchors.add(res.join(', '));
-
-    Fluid.events.registerRefreshCallback(function() {
-      if ('anchors' in window) {
-        anchors.removeAll();
-        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
-        var res = [];
-        for (var item of el) {
-          res.push('.markdown-body > ' + item.trim());
-        }
-        if (CONFIG.anchorjs.placement === 'left') {
-          anchors.options.class = 'anchorjs-link-left';
-        }
-        anchors.add(res.join(', '));
-      }
-    });
-  });
-</script>
-
-
-  
-<script>
-  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
-    Fluid.plugins.fancyBox();
-  });
-</script>
-
-
-  <script>Fluid.plugins.imageCaption();</script>
-
-  
-      <script>
-        if (!window.MathJax) {
-          window.MathJax = {
-            tex    : {
-              inlineMath: { '[+]': [['$', '$']] }
-            },
-            loader : {
-              load: ['ui/lazy']
-            },
-            options: {
-              renderActions: {
-                insertedScript: [200, () => {
-                  document.querySelectorAll('mjx-container').forEach(node => {
-                    let target = node.parentNode;
-                    if (target.nodeName.toLowerCase() === 'li') {
-                      target.parentNode.classList.add('has-jax');
-                    }
-                  });
-                }, '', false]
-              }
-            }
-          };
-        } else {
-          MathJax.startup.document.state(0);
-          MathJax.texReset();
-          MathJax.typeset();
-          MathJax.typesetPromise();
-        }
-
-        Fluid.events.registerRefreshCallback(function() {
-          if ('MathJax' in window && MathJax.startup.document && typeof MathJax.startup.document.state === 'function') {
-            MathJax.startup.document.state(0);
-            MathJax.texReset();
-            MathJax.typeset();
-            MathJax.typesetPromise();
-          }
-        });
-      </script>
-    
-
-  <script  src="https://lib.baomitu.com/mathjax/3.2.2/es5/tex-mml-chtml.js" ></script>
-
-  <script  src="/js/local-search.js" ></script>
-
-
-
-
-
-<!-- 主题的启动项，将它保持在最底部 -->
-<!-- the boot of the theme, keep it at the bottom -->
-<script  src="/js/boot.js" ></script>
-
-
-  
-
-  <noscript>
-    <div class="noscript-warning">Blog works best with JavaScript enabled</div>
-  </noscript>
 </body>
 </html>
