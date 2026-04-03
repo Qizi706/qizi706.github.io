@@ -21,15 +21,15 @@
 
 <script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Mist","darkmode":true,"version":"8.27.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":true,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
 
-    <meta name="description" content="6.s081 Lab5: Copy-on-Write Fork for xv6 实现 在前几个lab中提到过COW（写时复制），比如fork一个进程后，子进程与父进程使用同样的指令和数据。如果每次都复制一份父进程的数据，在一些情况下子进程创建后调用exec，原本被复制的数据根本没有被使用过就被直接覆盖，在这种情况下就白白浪费了这次复制，并且复制也会有很大的开销，会拖慢系统执行的速度。 为了提高系统">
+    <meta name="description" content="在前几个lab中提到过COW（写时复制），比如fork一个进程后，子进程与父进程使用同样的指令和数据。如果每次都复制一份父进程的数据，在一些情况下子进程创建后调用exec，原本被复制的数据根本没有被使用过就被直接覆盖，在这种情况下就白白浪费了这次复制，并且复制也会有很大的开销，会拖慢系统执行的速度。 为了提高系统执行效率，避免资源浪费，引入了COW（写时复制）机制，需要依赖缺页中断机制。当进行用户">
 <meta property="og:type" content="article">
 <meta property="og:title" content="6.s081 Lab5 Copy-on-Write Fork for xv6 实现">
 <meta property="og:url" content="http://qizi706.github.io/2026/03/20/6-s081-lab5/index.html">
 <meta property="og:site_name" content="Quan Zhou 的 blog">
-<meta property="og:description" content="6.s081 Lab5: Copy-on-Write Fork for xv6 实现 在前几个lab中提到过COW（写时复制），比如fork一个进程后，子进程与父进程使用同样的指令和数据。如果每次都复制一份父进程的数据，在一些情况下子进程创建后调用exec，原本被复制的数据根本没有被使用过就被直接覆盖，在这种情况下就白白浪费了这次复制，并且复制也会有很大的开销，会拖慢系统执行的速度。 为了提高系统">
+<meta property="og:description" content="在前几个lab中提到过COW（写时复制），比如fork一个进程后，子进程与父进程使用同样的指令和数据。如果每次都复制一份父进程的数据，在一些情况下子进程创建后调用exec，原本被复制的数据根本没有被使用过就被直接覆盖，在这种情况下就白白浪费了这次复制，并且复制也会有很大的开销，会拖慢系统执行的速度。 为了提高系统执行效率，避免资源浪费，引入了COW（写时复制）机制，需要依赖缺页中断机制。当进行用户">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2026-03-20T12:00:00.000Z">
-<meta property="article:modified_time" content="2026-04-03T07:03:35.110Z">
+<meta property="article:modified_time" content="2026-04-03T07:16:17.676Z">
 <meta property="article:author" content="Quan Zhou">
 <meta property="article:tag" content="6.s081">
 <meta property="article:tag" content="Labs">
@@ -149,9 +149,8 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#s081-lab5-copy-on-write-fork-for-xv6-%E5%AE%9E%E7%8E%B0"><span class="nav-number">1.</span> <span class="nav-text">6.s081 Lab5:
-Copy-on-Write Fork for xv6 实现</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#lab5-implement-copy-on-writehard%E5%AE%9E%E7%8E%B0"><span class="nav-number">2.</span> <span class="nav-text">Lab5 Implement copy-on
-write(hard)实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%BC%95%E7%94%A8%E8%AE%A1%E6%95%B0"><span class="nav-number">2.1.</span> <span class="nav-text">1. 引用计数</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%A1%B5%E8%A1%A8%E7%AE%A1%E7%90%86uvmcopy"><span class="nav-number">2.2.</span> <span class="nav-text">2. 页表管理（uvmcopy）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86usertrap"><span class="nav-number">2.3.</span> <span class="nav-text">3. 中断处理（usertrap）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%86%85%E6%A0%B8%E8%BE%B9%E7%95%8Ccopyout"><span class="nav-number">2.4.</span> <span class="nav-text">4. 内核边界（copyout）</span></a></li></ol></li></ol></div>
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#lab5-implement-copy-on-writehard%E5%AE%9E%E7%8E%B0"><span class="nav-number">1.</span> <span class="nav-text">Lab5 Implement copy-on
+write(hard)实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%BC%95%E7%94%A8%E8%AE%A1%E6%95%B0"><span class="nav-number">1.1.</span> <span class="nav-text">1. 引用计数</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%A1%B5%E8%A1%A8%E7%AE%A1%E7%90%86uvmcopy"><span class="nav-number">1.2.</span> <span class="nav-text">2. 页表管理（uvmcopy）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86usertrap"><span class="nav-number">1.3.</span> <span class="nav-text">3. 中断处理（usertrap）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%86%85%E6%A0%B8%E8%BE%B9%E7%95%8Ccopyout"><span class="nav-number">1.4.</span> <span class="nav-text">4. 内核边界（copyout）</span></a></li></ol></li></ol></div>
         </div>
         <!--/noindex-->
 
@@ -242,7 +241,7 @@ write(hard)实现</span></a><ol class="nav-child"><li class="nav-item nav-level-
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2026-04-03 15:03:35" itemprop="dateModified" datetime="2026-04-03T15:03:35+08:00">2026-04-03</time>
+      <time title="Modified: 2026-04-03 15:16:17" itemprop="dateModified" datetime="2026-04-03T15:16:17+08:00">2026-04-03</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -267,10 +266,9 @@ write(hard)实现</span></a><ol class="nav-child"><li class="nav-item nav-level-
     
     
     
-    <div class="post-body" itemprop="articleBody"><h2 id="s081-lab5-copy-on-write-fork-for-xv6-实现">6.s081 Lab5:
-Copy-on-Write Fork for xv6 实现</h2>
-<p>在前几个lab中提到过COW（写时复制），比如fork一个进程后，子进程与父进程使用同样的指令和数据。如果每次都复制一份父进程的数据，在一些情况下子进程创建后调用exec，原本被复制的数据根本没有被使用过就被直接覆盖，在这种情况下就白白浪费了这次复制，并且复制也会有很大的开销，会拖慢系统执行的速度。</p>
+    <div class="post-body" itemprop="articleBody"><p>在前几个lab中提到过COW（写时复制），比如fork一个进程后，子进程与父进程使用同样的指令和数据。如果每次都复制一份父进程的数据，在一些情况下子进程创建后调用exec，原本被复制的数据根本没有被使用过就被直接覆盖，在这种情况下就白白浪费了这次复制，并且复制也会有很大的开销，会拖慢系统执行的速度。</p>
 <p>为了提高系统执行效率，避免资源浪费，引入了COW（写时复制）机制，需要依赖缺页中断机制。当进行用户虚拟内存复制（uvmcopy）时，对相同的物理地址进行pte映射，使多个进程的pte指向同一片物理内存，并且这部分内容是只读的，如果有任何一个指向共享物理内存的进程需要对这部分内存进行写操作时，触发缺页中断，此时将需要进行写操作的页面进行真正的复制。</p>
+<span id="more"></span>
 <h2 id="lab5-implement-copy-on-writehard实现">Lab5 Implement copy-on
 write(<u style="color: #ff3300">hard</u>)实现</h2>
 <p>要实现一个稳健的COW，必须串联起内核的四个核心模块：</p>
@@ -391,8 +389,6 @@ graph TD
       <i class="fa fa-heart"></i>
     </span>
     <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
-  </div>
-  <div class="powered-by">Powered by <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/mist/" rel="noopener" target="_blank">NexT.Mist</a>
   </div>
 
     </div>

@@ -21,17 +21,17 @@
 
 <script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Mist","darkmode":true,"version":"8.27.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":true,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
 
-    <meta name="description" content="6.s081 lab2:system calls 实现 Lab2 实现了两个系统调用层面的功能，在开始写代码之前要求先读完 xv6-book 的 Chapter 2 and Sections 4.3 and 4.4 of Chapter 4，以及相关的源文件，花了两天不到的时间。 做完这次实验可以深入理解 OS 的用户态、内核态的隔离，以及系统调用。">
+    <meta name="description" content="Lab2 实现了两个系统调用层面的功能，在开始写代码之前要求先读完 xv6-book 的 Chapter 2 and Sections 4.3 and 4.4 of Chapter 4，以及相关的源文件，花了两天不到的时间。 做完这次实验可以深入理解 OS 的用户态、内核态的隔离，以及系统调用。">
 <meta property="og:type" content="article">
 <meta property="og:title" content="6.s081 Lab2 system calls 实现">
 <meta property="og:url" content="http://qizi706.github.io/2026/03/07/6-s081-lab2/index.html">
 <meta property="og:site_name" content="Quan Zhou 的 blog">
-<meta property="og:description" content="6.s081 lab2:system calls 实现 Lab2 实现了两个系统调用层面的功能，在开始写代码之前要求先读完 xv6-book 的 Chapter 2 and Sections 4.3 and 4.4 of Chapter 4，以及相关的源文件，花了两天不到的时间。 做完这次实验可以深入理解 OS 的用户态、内核态的隔离，以及系统调用。">
+<meta property="og:description" content="Lab2 实现了两个系统调用层面的功能，在开始写代码之前要求先读完 xv6-book 的 Chapter 2 and Sections 4.3 and 4.4 of Chapter 4，以及相关的源文件，花了两天不到的时间。 做完这次实验可以深入理解 OS 的用户态、内核态的隔离，以及系统调用。">
 <meta property="og:locale" content="en_US">
 <meta property="og:image" content="http://qizi706.github.io/asserts/6-s081-lab2_assert/ecall.png">
 <meta property="og:image" content="http://qizi706.github.io/asserts/6-s081-lab2_assert/trace.png">
 <meta property="article:published_time" content="2026-03-07T13:05:22.000Z">
-<meta property="article:modified_time" content="2026-03-18T13:33:42.824Z">
+<meta property="article:modified_time" content="2026-04-03T07:16:57.264Z">
 <meta property="article:author" content="Quan Zhou">
 <meta property="article:tag" content="6.s081">
 <meta property="article:tag" content="Labs">
@@ -152,10 +152,10 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#s081-lab2system-calls-%E5%AE%9E%E7%8E%B0"><span class="nav-number">1.</span> <span class="nav-text">6.s081 lab2:system calls 实现</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#xv6-book-chapter-2-%E9%83%A8%E5%88%86%E5%86%85%E5%AE%B9"><span class="nav-number">2.</span> <span class="nav-text">xv6-book Chapter 2 部分内容</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80%E6%8A%BD%E8%B1%A1%E7%89%A9%E7%90%86%E8%B5%84%E6%BA%90"><span class="nav-number">2.1.</span> <span class="nav-text">一、抽象物理资源</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8C%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8%E7%9A%84%E8%BF%87%E7%A8%8B"><span class="nav-number">2.2.</span> <span class="nav-text">二、系统调用的过程</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E4%B8%80%E9%98%B6%E6%AE%B5%E7%94%A8%E6%88%B7%E6%80%81%E5%87%86%E5%A4%87user-space"><span class="nav-number">2.2.1.</span> <span class="nav-text">第一阶段：用户态准备（User
-Space）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E4%BA%8C%E9%98%B6%E6%AE%B5%E8%B7%A8%E8%B6%8A%E8%BE%B9%E7%95%8Ctrap"><span class="nav-number">2.2.2.</span> <span class="nav-text">第二阶段：跨越边界（Trap）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E4%B8%89%E9%98%B6%E6%AE%B5%E8%B9%A6%E5%BA%8A%E6%9C%BA%E5%88%B6trampoline"><span class="nav-number">2.2.3.</span> <span class="nav-text">第三阶段：蹦床机制（Trampoline）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E5%9B%9B%E9%98%B6%E6%AE%B5%E5%88%86%E5%8F%91%E4%B8%8E%E6%89%A7%E8%A1%8Ckernel-space"><span class="nav-number">2.2.4.</span> <span class="nav-text">第四阶段：分发与执行（Kernel
-Space）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E4%BA%94%E9%98%B6%E6%AE%B5%E8%BF%94%E5%9B%9Ereturn"><span class="nav-number">2.2.5.</span> <span class="nav-text">第五阶段：返回（Return）</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#lab2-%E5%AE%9E%E7%8E%B0"><span class="nav-number">3.</span> <span class="nav-text">Lab2 实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80system-call-tracing-moderate"><span class="nav-number">3.1.</span> <span class="nav-text">一、System call tracing
-(moderate)</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%B7%BB%E5%8A%A0%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8%E5%AD%98%E6%A0%B9stub"><span class="nav-number">3.1.1.</span> <span class="nav-text">1.添加系统调用存根（Stub）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%B7%BB%E5%8A%A0%E5%87%BD%E6%95%B0%E7%AD%BE%E5%90%8D"><span class="nav-number">3.1.2.</span> <span class="nav-text">2.添加函数签名</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%B7%BB%E5%8A%A0%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8"><span class="nav-number">3.1.3.</span> <span class="nav-text">3.添加系统调用</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%AE%9E%E7%8E%B0-trace-%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8"><span class="nav-number">3.1.4.</span> <span class="nav-text">4.实现 trace 系统调用</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8Csysinfo-moderate"><span class="nav-number">3.2.</span> <span class="nav-text">二、Sysinfo (moderate)</span></a></li></ol></li></ol></div>
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#xv6-book-chapter-2-%E9%83%A8%E5%88%86%E5%86%85%E5%AE%B9"><span class="nav-number">1.</span> <span class="nav-text">xv6-book Chapter 2 部分内容</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80%E6%8A%BD%E8%B1%A1%E7%89%A9%E7%90%86%E8%B5%84%E6%BA%90"><span class="nav-number">1.1.</span> <span class="nav-text">一、抽象物理资源</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8C%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8%E7%9A%84%E8%BF%87%E7%A8%8B"><span class="nav-number">1.2.</span> <span class="nav-text">二、系统调用的过程</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E4%B8%80%E9%98%B6%E6%AE%B5%E7%94%A8%E6%88%B7%E6%80%81%E5%87%86%E5%A4%87user-space"><span class="nav-number">1.2.1.</span> <span class="nav-text">第一阶段：用户态准备（User
+Space）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E4%BA%8C%E9%98%B6%E6%AE%B5%E8%B7%A8%E8%B6%8A%E8%BE%B9%E7%95%8Ctrap"><span class="nav-number">1.2.2.</span> <span class="nav-text">第二阶段：跨越边界（Trap）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E4%B8%89%E9%98%B6%E6%AE%B5%E8%B9%A6%E5%BA%8A%E6%9C%BA%E5%88%B6trampoline"><span class="nav-number">1.2.3.</span> <span class="nav-text">第三阶段：蹦床机制（Trampoline）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E5%9B%9B%E9%98%B6%E6%AE%B5%E5%88%86%E5%8F%91%E4%B8%8E%E6%89%A7%E8%A1%8Ckernel-space"><span class="nav-number">1.2.4.</span> <span class="nav-text">第四阶段：分发与执行（Kernel
+Space）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E4%BA%94%E9%98%B6%E6%AE%B5%E8%BF%94%E5%9B%9Ereturn"><span class="nav-number">1.2.5.</span> <span class="nav-text">第五阶段：返回（Return）</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#lab2-%E5%AE%9E%E7%8E%B0"><span class="nav-number">2.</span> <span class="nav-text">Lab2 实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80system-call-tracing-moderate"><span class="nav-number">2.1.</span> <span class="nav-text">一、System call tracing
+(moderate)</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%B7%BB%E5%8A%A0%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8%E5%AD%98%E6%A0%B9stub"><span class="nav-number">2.1.1.</span> <span class="nav-text">1.添加系统调用存根（Stub）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%B7%BB%E5%8A%A0%E5%87%BD%E6%95%B0%E7%AD%BE%E5%90%8D"><span class="nav-number">2.1.2.</span> <span class="nav-text">2.添加函数签名</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%B7%BB%E5%8A%A0%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8"><span class="nav-number">2.1.3.</span> <span class="nav-text">3.添加系统调用</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E5%AE%9E%E7%8E%B0-trace-%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8"><span class="nav-number">2.1.4.</span> <span class="nav-text">4.实现 trace 系统调用</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8Csysinfo-moderate"><span class="nav-number">2.2.</span> <span class="nav-text">二、Sysinfo (moderate)</span></a></li></ol></li></ol></div>
         </div>
         <!--/noindex-->
 
@@ -246,7 +246,7 @@ Space）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" hre
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2026-03-18 21:33:42" itemprop="dateModified" datetime="2026-03-18T21:33:42+08:00">2026-03-18</time>
+      <time title="Modified: 2026-04-03 15:16:57" itemprop="dateModified" datetime="2026-04-03T15:16:57+08:00">2026-04-03</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -271,8 +271,7 @@ Space）</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" hre
     
     
     
-    <div class="post-body" itemprop="articleBody"><h2 id="s081-lab2system-calls-实现">6.s081 lab2:system calls 实现</h2>
-<p>Lab2 实现了两个系统调用层面的功能，在开始写代码之前要求先读完 <a
+    <div class="post-body" itemprop="articleBody"><p>Lab2 实现了两个系统调用层面的功能，在开始写代码之前要求先读完 <a
 target="_blank" rel="noopener" href="https://pdos.csail.mit.edu/6.828/2021/xv6/book-riscv-rev2.pdf">xv6-book</a>
 的 Chapter 2 and Sections 4.3 and 4.4 of Chapter
 4，以及相关的源文件，花了两天不到的时间。</p>
@@ -483,8 +482,6 @@ a user-supplied address.</p>
       <i class="fa fa-heart"></i>
     </span>
     <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
-  </div>
-  <div class="powered-by">Powered by <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/mist/" rel="noopener" target="_blank">NexT.Mist</a>
   </div>
 
     </div>

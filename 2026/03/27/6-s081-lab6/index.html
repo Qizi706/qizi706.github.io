@@ -21,15 +21,15 @@
 
 <script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Mist","darkmode":true,"version":"8.27.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":true,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
 
-    <meta name="description" content="6.s081 Lab6: Multithreading 实现 一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。 xv6-book Chapter 7 部分内容 一、多路复用 xv6通过在两种情况下切换进程来实现多路复用：  等待IO或事件：当进程需要等待磁">
+    <meta name="description" content="一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。">
 <meta property="og:type" content="article">
 <meta property="og:title" content="6.s081 Lab6 Multithreading 实现">
 <meta property="og:url" content="http://qizi706.github.io/2026/03/27/6-s081-lab6/index.html">
 <meta property="og:site_name" content="Quan Zhou 的 blog">
-<meta property="og:description" content="6.s081 Lab6: Multithreading 实现 一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。 xv6-book Chapter 7 部分内容 一、多路复用 xv6通过在两种情况下切换进程来实现多路复用：  等待IO或事件：当进程需要等待磁">
+<meta property="og:description" content="一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2026-03-27T12:00:00.000Z">
-<meta property="article:modified_time" content="2026-04-03T07:14:23.950Z">
+<meta property="article:modified_time" content="2026-04-03T07:15:42.206Z">
 <meta property="article:author" content="Quan Zhou">
 <meta property="article:tag" content="6.s081">
 <meta property="article:tag" content="Labs">
@@ -149,12 +149,11 @@
       <div class="sidebar-panel-container">
         <!--noindex-->
         <div class="post-toc-wrap sidebar-panel">
-            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#s081-lab6-multithreading-%E5%AE%9E%E7%8E%B0"><span class="nav-number">1.</span> <span class="nav-text">6.s081 Lab6: Multithreading
-实现</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#xv6-book-chapter-7-%E9%83%A8%E5%88%86%E5%86%85%E5%AE%B9"><span class="nav-number">2.</span> <span class="nav-text">xv6-book Chapter 7 部分内容</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8"><span class="nav-number">2.1.</span> <span class="nav-text">一、多路复用</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8C%E4%B8%8A%E4%B8%8B%E6%96%87%E5%88%87%E6%8D%A2"><span class="nav-number">2.2.</span> <span class="nav-text">二、上下文切换</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%89%E8%B0%83%E5%BA%A6"><span class="nav-number">2.3.</span> <span class="nav-text">三、调度</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%9B%9Bsleep-wakeup"><span class="nav-number">2.4.</span> <span class="nav-text">四、Sleep &amp; wakeup</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%94%E7%AE%A1%E9%81%93"><span class="nav-number">2.5.</span> <span class="nav-text">五、管道</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%AD%E7%BB%88%E6%AD%A2%E5%92%8C%E6%B8%85%E7%90%86waitexitand-kill"><span class="nav-number">2.6.</span> <span class="nav-text">六、终止和清理（Wait,exit,and
-kill）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#s081-lab6-multithreading-%E5%AE%9E%E7%8E%B0-1"><span class="nav-number">3.</span> <span class="nav-text">6.s081 Lab6: Multithreading
-实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80uthread-switching-between-threads-moderate"><span class="nav-number">3.1.</span> <span class="nav-text">一、Uthread:
-switching between threads (moderate)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8Cusing-threads-moderate"><span class="nav-number">3.2.</span> <span class="nav-text">二、Using threads
-(moderate)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%89barrier-moderate"><span class="nav-number">3.3.</span> <span class="nav-text">三、Barrier
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#xv6-book-chapter-7-%E9%83%A8%E5%88%86%E5%86%85%E5%AE%B9"><span class="nav-number">1.</span> <span class="nav-text">xv6-book Chapter 7 部分内容</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8"><span class="nav-number">1.1.</span> <span class="nav-text">一、多路复用</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8C%E4%B8%8A%E4%B8%8B%E6%96%87%E5%88%87%E6%8D%A2"><span class="nav-number">1.2.</span> <span class="nav-text">二、上下文切换</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%89%E8%B0%83%E5%BA%A6"><span class="nav-number">1.3.</span> <span class="nav-text">三、调度</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%9B%9Bsleep-wakeup"><span class="nav-number">1.4.</span> <span class="nav-text">四、Sleep &amp; wakeup</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%94%E7%AE%A1%E9%81%93"><span class="nav-number">1.5.</span> <span class="nav-text">五、管道</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%AD%E7%BB%88%E6%AD%A2%E5%92%8C%E6%B8%85%E7%90%86waitexitand-kill"><span class="nav-number">1.6.</span> <span class="nav-text">六、终止和清理（Wait,exit,and
+kill）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#s081-lab6-multithreading-%E5%AE%9E%E7%8E%B0"><span class="nav-number">2.</span> <span class="nav-text">6.s081 Lab6: Multithreading
+实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80uthread-switching-between-threads-moderate"><span class="nav-number">2.1.</span> <span class="nav-text">一、Uthread:
+switching between threads (moderate)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8Cusing-threads-moderate"><span class="nav-number">2.2.</span> <span class="nav-text">二、Using threads
+(moderate)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%89barrier-moderate"><span class="nav-number">2.3.</span> <span class="nav-text">三、Barrier
 (moderate)</span></a></li></ol></li></ol></div>
         </div>
         <!--/noindex-->
@@ -246,7 +245,7 @@ switching between threads (moderate)</span></a></li><li class="nav-item nav-leve
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2026-04-03 15:14:23" itemprop="dateModified" datetime="2026-04-03T15:14:23+08:00">2026-04-03</time>
+      <time title="Modified: 2026-04-03 15:15:42" itemprop="dateModified" datetime="2026-04-03T15:15:42+08:00">2026-04-03</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -271,9 +270,8 @@ switching between threads (moderate)</span></a></li><li class="nav-item nav-leve
     
     
     
-    <div class="post-body" itemprop="articleBody"><h2 id="s081-lab6-multithreading-实现">6.s081 Lab6: Multithreading
-实现</h2>
-<p>一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。</p>
+    <div class="post-body" itemprop="articleBody"><p>一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。</p>
+<span id="more"></span>
 <h2 id="xv6-book-chapter-7-部分内容">xv6-book Chapter 7 部分内容</h2>
 <h3 id="一多路复用">一、多路复用</h3>
 <p>xv6通过在两种情况下切换进程来实现多路复用：</p>
@@ -384,7 +382,7 @@ kill）</h3>
 <p>kill唤醒目标进程直接修改p-&gt;state为RUNNABLE，而不调用wakeup，原因是此时目标进程等待的条件并没有被满足，如果直接唤醒可能会造成危险的后果。</p>
 <p>有些情况下在循环中调用sleep会检查p-&gt;killed，并且放弃当前的行为如果p-&gt;killed被设置了，只有当这种放弃是正确的才会这样做（比如等待键盘按下，防止死等用户敲键盘）。</p>
 <p>在xv6中，一些sleep循环不检查p-&gt;killed，因为这些代码正处于应该是原子操作的多步骤系统调用的中间，比如对磁盘的操作。即使设置了p-&gt;killed标志，也需要等待当前系统调用完成，然后回到usertrap中看到这个killed标志才会进行销毁。</p>
-<h2 id="s081-lab6-multithreading-实现-1">6.s081 Lab6: Multithreading
+<h2 id="s081-lab6-multithreading-实现">6.s081 Lab6: Multithreading
 实现</h2>
 <h3 id="一uthread-switching-between-threads-moderate">一、Uthread:
 switching between threads (<u style="color: #0066ff">moderate</u>)</h3>
@@ -482,8 +480,6 @@ myround，每个线程在进入barrier时先记录下当前轮次，如果最后
       <i class="fa fa-heart"></i>
     </span>
     <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
-  </div>
-  <div class="powered-by">Powered by <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/mist/" rel="noopener" target="_blank">NexT.Mist</a>
   </div>
 
     </div>
