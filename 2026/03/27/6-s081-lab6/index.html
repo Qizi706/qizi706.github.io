@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.css" integrity="sha256-gkQVf8UKZgQ0HyuxL/VnacadJ+D2Kox2TCEBuNQg5+w=" crossorigin="anonymous">
 
-<script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Mist","darkmode":true,"version":"8.27.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":true,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
+<script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Muse","darkmode":true,"version":"8.27.0","exturl":false,"sidebar":{"position":"right","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":true,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
 
     <meta name="description" content="一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。">
 <meta property="og:type" content="article">
@@ -29,7 +29,7 @@
 <meta property="og:description" content="一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2026-03-27T12:00:00.000Z">
-<meta property="article:modified_time" content="2026-04-03T07:15:42.206Z">
+<meta property="article:modified_time" content="2026-04-03T11:30:19.133Z">
 <meta property="article:author" content="Quan Zhou">
 <meta property="article:tag" content="6.s081">
 <meta property="article:tag" content="Labs">
@@ -167,7 +167,7 @@ switching between threads (moderate)</span></a></li><li class="nav-item nav-leve
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">6</span>
+          <span class="site-state-item-count">7</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
@@ -245,7 +245,7 @@ switching between threads (moderate)</span></a></li><li class="nav-item nav-leve
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2026-04-03 15:15:42" itemprop="dateModified" datetime="2026-04-03T15:15:42+08:00">2026-04-03</time>
+      <time title="Modified: 2026-04-03 19:30:19" itemprop="dateModified" datetime="2026-04-03T19:30:19+08:00">2026-04-03</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -456,6 +456,9 @@ myround，每个线程在进入barrier时先记录下当前轮次，如果最后
                 </a>
             </div>
             <div class="post-nav-item">
+                <a href="/2026/04/03/6-s081-lab7/" rel="next" title="6.s081 Lab7 locks 实现">
+                  6.s081 Lab7 locks 实现 <i class="fa fa-angle-right"></i>
+                </a>
             </div>
           </div>
     </footer>
