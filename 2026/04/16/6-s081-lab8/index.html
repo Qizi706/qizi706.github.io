@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.1">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.css" integrity="sha256-gkQVf8UKZgQ0HyuxL/VnacadJ+D2Kox2TCEBuNQg5+w=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Muse","darkmode":true,"version":"8.27.0","exturl":false,"sidebar":{"position":"right","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":true,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="文件系统是操作系统中最复杂的组件之一，它需要管理磁盘块的分配、维护文件层级结构、处理并发访问，最重要的是：必须能够从系统崩溃中安全恢复。在这个 Lab 中，我们将深入 xv6 的文件系统内部，完成两个扩展任务：增加文件最大容量（支持大文件）以及实现软链接（Symbolic links）。 此 Lab 包含两个任务，涉及修改 Inode 结构和路径解析逻辑。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="6.s081 Lab8 file system 实现">
+<meta property="og:url" content="http://qizi706.github.io/2026/04/16/6-s081-lab8/index.html">
+<meta property="og:site_name" content="Quan Zhou 的 blog">
+<meta property="og:description" content="文件系统是操作系统中最复杂的组件之一，它需要管理磁盘块的分配、维护文件层级结构、处理并发访问，最重要的是：必须能够从系统崩溃中安全恢复。在这个 Lab 中，我们将深入 xv6 的文件系统内部，完成两个扩展任务：增加文件最大容量（支持大文件）以及实现软链接（Symbolic links）。 此 Lab 包含两个任务，涉及修改 Inode 结构和路径解析逻辑。">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-04-16T10:23:01.000Z">
+<meta property="article:modified_time" content="2026-04-16T01:09:35.029Z">
+<meta property="article:author" content="Quan Zhou">
+<meta property="article:tag" content="6.s081">
+<meta property="article:tag" content="Labs">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="http://qizi706.github.io/2026/04/16/6-s081-lab8/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/04/16/6-s081-lab8/","path":"2026/04/16/6-s081-lab8/","title":"6.s081 Lab8 file system 实现"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>6.s081 Lab8 file system 实现 | Quan Zhou 的 blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/next-theme-pjax/0.6.0/pjax.min.js" integrity="sha256-vxLn1tSKWD4dqbMRyv940UYw4sXgMtYcK6reefzZrao=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.umd.js" integrity="sha256-a+H7FYzJv6oU2hfsfDGM2Ohw/cR9v+hPfxHCLdmCrE8=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pangu/7.2.0/pangu.umd.js" integrity="sha256-JnmRRnJK7DC6RQJbAJb6AXOM9OmWzS6z8eYultk/48Y=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script><script src="/js/pjax.js" defer></script>
+
+  
+
+  <script class="next-config" data-name="mermaid" type="application/json">{"enable":true,"theme":{"light":"default","dark":"dark"},"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.10.1/mermaid.min.js","integrity":"sha256-BmQmdWDS8X2OTbrwELWK366LV6escyWhHHe0XCTU/Hk="}}</script>
+  <script src="/js/third-party/tags/mermaid.js" defer></script>
+
+  <script class="next-config" data-name="wavedrom" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/wavedrom.min.js","integrity":"sha256-INLAoJc6quTNfiMWkGZniYO2cxE8mHpddnLow1m6RFs="}}</script>
+  <script class="next-config" data-name="wavedrom_skin" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/skins/default.js","integrity":"sha256-fduc/Zszk5ezWws2uInY/ALWVmIrmV6VTgXbsYSReFI="}}</script>
+  <script src="/js/third-party/tags/wavedrom.js" defer></script>
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">false</script><script class="next-config" data-name="mathjax" type="application/json">{"enable":true,"tags":"ams","js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js","integrity":"sha256-MASABpB4tYktI2Oitl4t+78w/lyA+D7b/s9GEP0JOGI="}}</script>
+<script src="/js/third-party/math/mathjax.js" defer></script>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quicklink/3.0.1/quicklink.umd.js" integrity="sha256-44BednzIpUeQJcY8qtLyarFu0UCCTbgmWOvaoehiFQQ=" crossorigin="anonymous" defer></script>
+  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/04/16/6-s081-lab8/"}</script>
+  <script src="/js/third-party/quicklink.js" defer></script>
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Quan Zhou 的 blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="Search" role="button">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a></li>
+  </ul>
+</nav>
+
+
+
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#xv6-book-chapter-8-%E9%83%A8%E5%88%86%E5%86%85%E5%AE%B9"><span class="nav-number">1.</span> <span class="nav-text">xv6-book Chapter 8 部分内容</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E7%9A%84%E4%B8%83%E5%B1%82%E6%9E%B6%E6%9E%84"><span class="nav-number">1.1.</span> <span class="nav-text">一、文件系统的七层架构</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8C%E5%B4%A9%E6%BA%83%E6%81%A2%E5%A4%8D%E4%B8%8E-logging-%E5%B1%82"><span class="nav-number">1.2.</span> <span class="nav-text">二、崩溃恢复与 Logging 层</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%89inode-%E7%9A%84%E4%B8%A4%E7%A7%8D%E5%BD%A2%E6%80%81"><span class="nav-number">1.3.</span> <span class="nav-text">三、Inode 的两种形态</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#s081-lab8-file-system-%E5%AE%9E%E7%8E%B0"><span class="nav-number">2.</span> <span class="nav-text">6.s081 Lab8: file system 实现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80large-files-moderate"><span class="nav-number">2.1.</span> <span class="nav-text">一、Large files
+(moderate)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BA%8Csymbolic-links-moderate"><span class="nav-number">2.2.</span> <span class="nav-text">二、Symbolic links
+(moderate)</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Quan Zhou</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">8</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+        </div>
+      </div>
+        <div class="back-to-top animated" role="button" aria-label="Back to top">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/04/16/6-s081-lab8/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="6.s081 Lab8 file system 实现 | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          6.s081 Lab8 file system 实现
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-04-16 18:23:01 / Modified: 09:09:35" itemprop="dateCreated datePublished" datetime="2026-04-16T18:23:01+08:00">2026-04-16</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+        </span>
+          , 
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>文件系统是操作系统中最复杂的组件之一，它需要管理磁盘块的分配、维护文件层级结构、处理并发访问，最重要的是：必须能够从系统崩溃中安全恢复。在这个
+Lab 中，我们将深入 xv6
+的文件系统内部，完成两个扩展任务：增加文件最大容量（支持大文件）以及实现软链接（Symbolic
+links）。</p>
+<p>此 Lab 包含两个任务，涉及修改 Inode 结构和路径解析逻辑。</p>
+<span id="more"></span>
+<h2 id="xv6-book-chapter-8-部分内容">xv6-book Chapter 8 部分内容</h2>
+<h3 id="一文件系统的七层架构">一、文件系统的七层架构</h3>
+<p>xv6 的文件系统实现被优雅地划分为了七个层次，从下到上依次为：</p>
+<ol type="1">
+<li><p>Disk (磁盘层)：直接与硬件（virtio
+驱动）交互，读写物理磁盘块。</p></li>
+<li><p>Buffer cache
+(缓存层)：在内存中缓存磁盘块，并保证同一时刻只有一个内核线程能修改特定的块（Lab
+7 优化的就是这里）。</p></li>
+<li><p>Logging
+(日志层)：文件系统崩溃恢复的核心。通过将多个相关的磁盘更新打包成一个原子事务（Transaction），保证系统在断电时不会留下损坏的内部数据结构。</p></li>
+<li><p>Inode
+(索引结点层)：将无序的磁盘块抽象为一个个独立的文件，每个文件由一个唯一的
+i-number 标识，包含文件大小和数据块的物理位置。</p></li>
+<li><p>Directory (目录层)：一种特殊的
+Inode，其内容是一系列目录项（目录名与 i-number 的映射）。</p></li>
+<li><p>Pathname (路径层)：提供层级化路径的解析（例如将 /usr/bin/sh
+递归解析为对应的 Inode）。</p></li>
+<li><p>File descriptor (文件描述符层)：将许多 Unix
+资源（文件、管道、设备）统一抽象，供用户进程操作。</p></li>
+</ol>
+<div class="note info"><p>这种分层设计体现了极致的软件工程美学：下层对上层隐藏底层的复杂性（如日志层向上层屏蔽了崩溃恢复的细节），上层则通过组合下层的原语来实现更高级的抽象。</p>
+</div>
+<h3 id="二崩溃恢复与-logging-层">二、崩溃恢复与 Logging 层</h3>
+<ol type="1">
+<li>磁盘的不一致性问题</li>
+</ol>
+<p>假设我们在删除一个文件，需要进行两步磁盘写操作：</p>
+<ul>
+<li><p>在 Inode 结构中清空数据块指针。</p></li>
+<li><p>在 Bitmap（位图）中将该数据块标记为空闲。</p></li>
+</ul>
+<p>如果系统在执行完第一步后断电崩溃，重启后就会出现：一个块在 Bitmap
+中显示“已分配”，但没有任何 Inode
+指向它。这个块变成了“幽灵块”，永远无法被回收（空间泄露）。更糟的是，如果先执行第二步后崩溃，可能导致两个文件同时指向同一个数据块，产生严重的安全问题。</p>
+<ol type="1">
+<li>xv6 的解决办法：Write-Ahead Log</li>
+</ol>
+<p>为了保证多步磁盘写操作的原子性，xv6 引入了日志：</p>
+<ul>
+<li><p>写日志：内核不直接修改目标磁盘块，而是先将所有想做的修改写入磁盘上预留的
+Log 区。</p></li>
+<li><p>提交 (Commit)：当所有修改都安全写入 Log 区后，向 Log Header
+写入一个计数，表示事务完成。这是决定操作生死的唯一界限。</p></li>
+<li><p>安装 (Install)：将 Log 区的数据真正拷贝到目标位置。</p></li>
+<li><p>清理 (Clean)：清空 Log Header。</p></li>
+</ul>
+<p>如果重启时发现 Log Header
+中有完整的提交记录，就重放（Replay）安装过程；如果没有，则直接丢弃，仿佛操作从未发生。</p>
+<h3 id="三inode-的两种形态">三、Inode 的两种形态</h3>
+<p>Inode 是文件系统的核心枢纽，它分为磁盘上 (on-disk) 和 内存中
+(in-memory) 两种形态：</p>
+<ul>
+<li><p>磁盘上的 dinode：持久化存储，包含文件类型、大小、以及指向数据块的
+addrs 数组。</p></li>
+<li><p>内存中的
+inode：是磁盘形态的缓存副本，但多了内核运行时急需的信息：ref（引用计数）和一根保护该文件内容的睡眠锁（sleep-lock）。</p></li>
+</ul>
+<div class="note "><p>引用计数 (ref) vs 链接计数 (nlink)</p>
+<ul>
+<li><p><code>nlink</code>（磁盘层面）：有多少个文件名（硬链接）指向这个
+Inode。归零时，文件在逻辑上被删除。</p></li>
+<li><p><code>ref</code>（内存层面）：有多少个内核 C 指针指向这个
+Inode。归零时，Inode 才能从内存表 itable 中被逐出。 xv6 规定：只有当
+<code>nlink == 0</code> 且 <code>ref == 0</code>
+时，文件的物理数据块才会被真正释放（通过
+<code>itrunc</code>）。</p></li>
+</ul>
+</div>
+<h2 id="s081-lab8-file-system-实现">6.s081 Lab8: file system 实现</h2>
+<h3 id="一large-files-moderate">一、Large files
+(<u style="color: #0066ff">moderate</u>)</h3>
+<p>在 xv6 原生的实现中，一个 Inode 的 <code>addrs</code> 数组包含 12
+个直接索引（Direct blocks）和 1 个一级间接索引（Indirect
+block）。一个块大小为 1024 字节，一个块号占 4
+字节，因此一级索引表可以容纳 256 个块号。
+原生最大文件体积：(12+256)×1024=268 KB。</p>
+<p>我们的任务是修改数据结构，将 12 个直接索引减少为 11
+个，腾出一个位置作为二级间接索引（Double-indirect block）。
+改造后的最大文件体积跃升为：(11+256+256×256)×1024≈64 MB。</p>
+<ol type="1">
+<li>修改 Inode 结构与 bmap</li>
+</ol>
+<p>在 kernel/fs.h 中，将 NDIRECT 改为 11，并定义二级索引的相关宏：</p>
+<figure class="highlight c"><figcaption><span>kernel/fs.h</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> NDIRECT 11</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> NINDIRECT (BSIZE / sizeof(uint))</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> NDOUBINDIRECT (NINDIRECT * NINDIRECT)</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> MAXFILE (NDIRECT + NINDIRECT + NDOUBINDIRECT)</span></span><br></pre></td></tr></table></figure>
+<p><code>bmap(struct inode *ip, uint bn)</code> 负责将文件的逻辑块号
+<code>bn</code>
+映射到物理磁盘块号。我们需要为其增加第三段逻辑：处理落入二级间接索引范围内的块。</p>
+<figure class="highlight c"><figcaption><span>kernel/fs.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> uint</span><br><span class="line"><span class="title function_">bmap</span><span class="params">(<span class="keyword">struct</span> inode *ip, uint bn)</span></span><br><span class="line">&#123;</span><br><span class="line">  uint addr, *a;</span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">buf</span> *<span class="title">bp</span>;</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(bn &lt; NDIRECT)&#123;</span><br><span class="line">    <span class="keyword">if</span>((addr = ip-&gt;addrs[bn]) == <span class="number">0</span>)</span><br><span class="line">      ip-&gt;addrs[bn] = addr = balloc(ip-&gt;dev);</span><br><span class="line">    <span class="keyword">return</span> addr;</span><br><span class="line">  &#125;</span><br><span class="line">  bn -= NDIRECT;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(bn &lt; NINDIRECT)&#123;</span><br><span class="line">    <span class="comment">// Load indirect block, allocating if necessary.</span></span><br><span class="line">    <span class="keyword">if</span>((addr = ip-&gt;addrs[NDIRECT]) == <span class="number">0</span>)</span><br><span class="line">      ip-&gt;addrs[NDIRECT] = addr = balloc(ip-&gt;dev);</span><br><span class="line">    bp = bread(ip-&gt;dev, addr);</span><br><span class="line">    a = (uint*)bp-&gt;data;</span><br><span class="line">    <span class="keyword">if</span>((addr = a[bn]) == <span class="number">0</span>)&#123;</span><br><span class="line">      a[bn] = addr = balloc(ip-&gt;dev);</span><br><span class="line">      log_write(bp);</span><br><span class="line">    &#125;</span><br><span class="line">    brelse(bp);</span><br><span class="line">    <span class="keyword">return</span> addr;</span><br><span class="line">  &#125;</span><br><span class="line">  bn -= NINDIRECT;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(bn &lt; NDOUBINDIRECT)&#123;</span><br><span class="line">    <span class="keyword">if</span>((addr = ip-&gt;addrs[NDIRECT+<span class="number">1</span>]) == <span class="number">0</span>)</span><br><span class="line">      ip-&gt;addrs[NDIRECT+<span class="number">1</span>] = addr = balloc(ip-&gt;dev);</span><br><span class="line">    bp = bread(ip-&gt;dev, addr);</span><br><span class="line">    a = (uint*)bp-&gt;data;</span><br><span class="line"></span><br><span class="line">    uint nindirect_bn = bn / NINDIRECT;</span><br><span class="line">    bn %= NINDIRECT;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span>((addr = a[nindirect_bn]) == <span class="number">0</span>)&#123;</span><br><span class="line">      a[nindirect_bn] = addr = balloc(ip-&gt;dev);</span><br><span class="line">      log_write(bp);</span><br><span class="line">    &#125;</span><br><span class="line">    brelse(bp);</span><br><span class="line"></span><br><span class="line">    bp = bread(ip-&gt;dev, addr);</span><br><span class="line">    a = (uint*)bp-&gt;data;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span>((addr = a[bn]) == <span class="number">0</span>)&#123;</span><br><span class="line">      a[bn] = addr = balloc(ip-&gt;dev);</span><br><span class="line">      log_write(bp);</span><br><span class="line">    &#125;</span><br><span class="line">    brelse(bp);</span><br><span class="line">    <span class="keyword">return</span> addr;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  panic(<span class="string">&quot;bmap: out of range&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol type="1">
+<li>修改 itrunc (释放大文件)</li>
+</ol>
+<p>能分配还得能释放，否则会导致严重的磁盘空间泄露。我们需要在 itrunc
+中增加三层嵌套循环，来递归释放二级间接块占用的所有空间。</p>
+<p><strong>踩坑记录</strong> ：释放错了指针导致
+<code>freeing free block Panic</code></p>
+<p>在最初写三层循环释放二级间接块时，我的最内层循环长这样：
+bfree(ip-&gt;dev, a[k]); 跑测试时直接内核崩溃。仔细 Debug 后发现，a
+是一级表的数据，我本意是要释放二级表 <code>a_2</code> 中的数据块
+<code>a_2[k]</code>。一字之差，导致我反反复复释放存索引的元数据块，当第二次释放同一个已经为空的块时，Bitmap
+校验失败直接 panic。 PS：在 C
+语言中操作嵌套数据结构时，临时指针的命名和使用必须极其严谨。</p>
+<p>修改后的正确释放逻辑如下：</p>
+<figure class="highlight c"><figcaption><span>kernel/fs.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span></span><br><span class="line"><span class="title function_">itrunc</span><span class="params">(<span class="keyword">struct</span> inode *ip)</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="type">int</span> i, j;</span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">buf</span> *<span class="title">bp</span>;</span></span><br><span class="line">  uint *a;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">for</span>(i = <span class="number">0</span>; i &lt; NDIRECT; i++)&#123;</span><br><span class="line">    <span class="keyword">if</span>(ip-&gt;addrs[i])&#123;</span><br><span class="line">      bfree(ip-&gt;dev, ip-&gt;addrs[i]);</span><br><span class="line">      ip-&gt;addrs[i] = <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(ip-&gt;addrs[NDIRECT])&#123;</span><br><span class="line">    bp = bread(ip-&gt;dev, ip-&gt;addrs[NDIRECT]);</span><br><span class="line">    a = (uint*)bp-&gt;data;</span><br><span class="line">    <span class="keyword">for</span>(j = <span class="number">0</span>; j &lt; NINDIRECT; j++)&#123;</span><br><span class="line">      <span class="keyword">if</span>(a[j])</span><br><span class="line">        bfree(ip-&gt;dev, a[j]);</span><br><span class="line">    &#125;</span><br><span class="line">    brelse(bp);</span><br><span class="line">    bfree(ip-&gt;dev, ip-&gt;addrs[NDIRECT]);</span><br><span class="line">    ip-&gt;addrs[NDIRECT] = <span class="number">0</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(ip-&gt;addrs[NDIRECT+<span class="number">1</span>])&#123;</span><br><span class="line">    bp = bread(ip-&gt;dev, ip-&gt;addrs[NDIRECT+<span class="number">1</span>]);</span><br><span class="line">    a = (uint*)bp-&gt;data;</span><br><span class="line">    <span class="keyword">for</span>(<span class="type">int</span> j = <span class="number">0</span>; j &lt; NINDIRECT; j++)&#123;</span><br><span class="line">      <span class="keyword">if</span>(a[j])&#123;</span><br><span class="line">        <span class="class"><span class="keyword">struct</span> <span class="title">buf</span> *<span class="title">bp_2</span>;</span></span><br><span class="line">        uint *a_2;</span><br><span class="line">        bp_2 = bread(ip-&gt;dev, a[j]);</span><br><span class="line">        a_2 = (uint*)bp_2-&gt;data;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> k = <span class="number">0</span>; k &lt; NINDIRECT; k++)&#123;</span><br><span class="line">          <span class="keyword">if</span>(a_2[k])</span><br><span class="line">            bfree(ip-&gt;dev, a_2[k]);</span><br><span class="line">        &#125;</span><br><span class="line">        brelse(bp_2);</span><br><span class="line">        bfree(ip-&gt;dev, a[j]);</span><br><span class="line">        a[j] = <span class="number">0</span>;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    brelse(bp);</span><br><span class="line">    bfree(ip-&gt;dev, ip-&gt;addrs[NDIRECT+<span class="number">1</span>]);</span><br><span class="line">    ip-&gt;addrs[NDIRECT+<span class="number">1</span>] = <span class="number">0</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  ip-&gt;size = <span class="number">0</span>;</span><br><span class="line">  iupdate(ip);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="二symbolic-links-moderate">二、Symbolic links
+(<u style="color: #0066ff">moderate</u>)</h3>
+<p>硬链接（Hard links）是通过多个名字指向同一个 Inode
+来实现的，不能跨越文件系统。而软链接（Symbolic
+links）本质上是一个独立的全新文件，它的 Inode 类型为
+<code>T_SYMLINK</code>，其数据块中存放的是目标文件的路径字符串。当内核
+<code>open</code> 遇到软链接时，会自动读取该字符串并进行路径的跳转。</p>
+<ol type="1">
+<li>创建 sys_symlink</li>
+</ol>
+<p>这个系统调用的核心逻辑非常简单：就是新建一个文件，并把
+<code>target</code>
+字符串写进它的数据块。值得注意的是，软链接不关心目标文件是否存在，只要把“纸条”（目标路径）塞进“空瓶子”（软链接文件）即可。</p>
+<figure class="highlight c"><figcaption><span>kernel/sysfile.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">uint64</span><br><span class="line"><span class="title function_">sys_symlink</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="type">char</span> target[MAXPATH], path[MAXPATH];</span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">inode</span> *<span class="title">ip</span>;</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(argstr(<span class="number">0</span>, target, MAXPATH) &lt; <span class="number">0</span> || argstr(<span class="number">1</span>, path, MAXPATH) &lt; <span class="number">0</span>)</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line"></span><br><span class="line">  begin_op();</span><br><span class="line">  <span class="keyword">if</span>((ip = create(path, T_SYMLINK, <span class="number">0</span>, <span class="number">0</span>)) == <span class="number">0</span>)&#123;</span><br><span class="line">    end_op();</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="type">int</span> target_len = <span class="built_in">strlen</span>(target);</span><br><span class="line">  <span class="keyword">if</span> (writei(ip, <span class="number">0</span>, (uint64)target, <span class="number">0</span>, target_len) != target_len)&#123;</span><br><span class="line">    iunlockput(ip);</span><br><span class="line">    end_op();</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  iunlockput(ip);</span><br><span class="line">  end_op();</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol type="1">
+<li>修改 sys_open 支持Symbolic link</li>
+</ol>
+<p>这是本 Lab 最容易引发<strong>死锁（Deadlock）</strong>的地方。
+当用户通过 <code>open</code> 打开文件时，我们需要拦截
+<code>T_SYMLINK</code> 类型，并开始循环追踪（最大深度设为 10
+以防止软链接环路 <code>A -&gt; B -&gt; A</code> 导致内核死循环）。</p>
+<p>踩坑记录：带着锁找锁的死锁问题</p>
+<p>第一次写 sys_open 追踪逻辑时，我读出了 <code>target</code>
+路径，然后直接调用 <code>ip = namei(target);</code>。系统瞬间卡死。 回顾
+Lab 7 对锁的领悟才突然意识到：此时原软链接的 <code>ip</code> 还被
+<code>ilock</code>
+锁着！如果新路径的解析过程中恰好又要访问父目录或产生资源竞争，就会引发典型的“持有并等待”死锁。必须先解锁当前
+Inode，再去解析新路径。</p>
+<figure class="highlight c"><figcaption><span>kernel/sysfil.c</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br></pre></td><td class="code"><pre><span class="line">uint64</span><br><span class="line"><span class="title function_">sys_open</span><span class="params">(<span class="type">void</span>)</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="type">char</span> path[MAXPATH];</span><br><span class="line">  <span class="type">int</span> fd, omode;</span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">file</span> *<span class="title">f</span>;</span></span><br><span class="line">  <span class="class"><span class="keyword">struct</span> <span class="title">inode</span> *<span class="title">ip</span>;</span></span><br><span class="line">  <span class="type">int</span> n;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>((n = argstr(<span class="number">0</span>, path, MAXPATH)) &lt; <span class="number">0</span> || argint(<span class="number">1</span>, &amp;omode) &lt; <span class="number">0</span>)</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line"></span><br><span class="line">  begin_op();</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(omode &amp; O_CREATE)&#123;</span><br><span class="line">    ip = create(path, T_FILE, <span class="number">0</span>, <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">if</span>(ip == <span class="number">0</span>)&#123;</span><br><span class="line">      end_op();</span><br><span class="line">      <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="keyword">if</span>((ip = namei(path)) == <span class="number">0</span>)&#123;</span><br><span class="line">      end_op();</span><br><span class="line">      <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    ilock(ip);</span><br><span class="line">    <span class="keyword">if</span> (ip-&gt;type == T_SYMLINK &amp;&amp; !(omode &amp; O_NOFOLLOW))&#123;</span><br><span class="line">      <span class="type">int</span> depth = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">while</span> (depth &lt; <span class="number">10</span>)&#123;</span><br><span class="line">        <span class="type">char</span> target[MAXPATH];</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (readi(ip, <span class="number">0</span>, (uint64)target, <span class="number">0</span>, MAXPATH) &lt;= <span class="number">0</span>)&#123;</span><br><span class="line">          iunlockput(ip);</span><br><span class="line">          end_op();</span><br><span class="line">          <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        iunlockput(ip);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span>((ip = namei(target)) == <span class="number">0</span>)&#123;</span><br><span class="line">          end_op();</span><br><span class="line">          <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        ilock(ip);</span><br><span class="line">        <span class="keyword">if</span>(ip-&gt;type == T_SYMLINK)&#123;</span><br><span class="line">          depth++;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">          <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span>(depth == <span class="number">10</span>)&#123;</span><br><span class="line">        iunlockput(ip);</span><br><span class="line">        end_op();</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span>(ip-&gt;type == T_DIR &amp;&amp; omode != O_RDONLY)&#123;</span><br><span class="line">      iunlockput(ip);</span><br><span class="line">      end_op();</span><br><span class="line">      <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(ip-&gt;type == T_DEVICE &amp;&amp; (ip-&gt;major &lt; <span class="number">0</span> || ip-&gt;major &gt;= NDEV))&#123;</span><br><span class="line">    iunlockput(ip);</span><br><span class="line">    end_op();</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>((f = filealloc()) == <span class="number">0</span> || (fd = fdalloc(f)) &lt; <span class="number">0</span>)&#123;</span><br><span class="line">    <span class="keyword">if</span>(f)</span><br><span class="line">      fileclose(f);</span><br><span class="line">    iunlockput(ip);</span><br><span class="line">    end_op();</span><br><span class="line">    <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>(ip-&gt;type == T_DEVICE)&#123;</span><br><span class="line">    f-&gt;type = FD_DEVICE;</span><br><span class="line">    f-&gt;major = ip-&gt;major;</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    f-&gt;type = FD_INODE;</span><br><span class="line">    f-&gt;off = <span class="number">0</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  f-&gt;ip = ip;</span><br><span class="line">  f-&gt;readable = !(omode &amp; O_WRONLY);</span><br><span class="line">  f-&gt;writable = (omode &amp; O_WRONLY) || (omode &amp; O_RDWR);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span>((omode &amp; O_TRUNC) &amp;&amp; ip-&gt;type == T_FILE)&#123;</span><br><span class="line">    itrunc(ip);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  iunlock(ip);</span><br><span class="line">  end_op();</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> fd;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>经历过 Lab 7 对锁的深度折磨后，在 Lab 8 中看到文件系统随处可见的
+<code>ilock</code>、<code>iunlockput</code> 时，感觉亲切了许多。 在这个
+Lab 中，我真切地体会到了：</p>
+<ol type="1">
+<li><p>多级索引分配机制并不是课本上干巴巴的公式，而是 <code>bmap</code>
+里严密的指针偏移计算。</p></li>
+<li><p>锁的粒度与周期：在路径解析、文件读写的过程中，锁什么时候加、什么时候放，差一条指令都会带来灾难性的死锁或数据毁坏。</p></li>
+<li><p>事务机制的伟大：<code>begin_op</code> 和 <code>end_op</code>
+完美地包裹了所有对磁盘数据的脏修改，极大地降低了编写文件系统上层业务逻辑时的心智负担。</p></li>
+</ol>
+<p>至此，xv6 的核心子系统已尽收眼底，收获颇丰！</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/6-s081/" rel="tag"># 6.s081</a>
+              <a href="/tags/Labs/" rel="tag"># Labs</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/04/03/6-s081-lab7/" rel="prev" title="6.s081 Lab7 locks 实现">
+                  <i class="fa fa-angle-left"></i> 6.s081 Lab7 locks 实现
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>
