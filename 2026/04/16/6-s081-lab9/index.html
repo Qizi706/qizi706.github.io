@@ -24,22 +24,22 @@
     <meta name="description" content="作为 xv6 的最后一个核心大实验，Lab 9 (mmap) 标着硬核的 “Hard” 难度。但从本质上讲，它其实是 Lab 3（缺页中断）和 Lab 8（文件系统）的融合。 mmap 和 munmap 系统调用允许 UNIX 程序对自己的地址空间进行极其细致的控制。通过将磁盘文件直接映射到内存中，程序可以像读写普通数组一样操作文件，不仅免去了频繁调用 read 和 write 的开销，">
 <meta property="og:type" content="article">
 <meta property="og:title" content="6.s081 Lab9 mmap 实现">
-<meta property="og:url" content="http://qizi706.github.io/2026/04/17/6-s081-lab9/index.html">
+<meta property="og:url" content="http://qizi706.github.io/2026/04/16/6-s081-lab9/index.html">
 <meta property="og:site_name" content="Quan Zhou 的 blog">
 <meta property="og:description" content="作为 xv6 的最后一个核心大实验，Lab 9 (mmap) 标着硬核的 “Hard” 难度。但从本质上讲，它其实是 Lab 3（缺页中断）和 Lab 8（文件系统）的融合。 mmap 和 munmap 系统调用允许 UNIX 程序对自己的地址空间进行极其细致的控制。通过将磁盘文件直接映射到内存中，程序可以像读写普通数组一样操作文件，不仅免去了频繁调用 read 和 write 的开销，">
 <meta property="og:locale" content="en_US">
-<meta property="article:published_time" content="2026-04-17T10:23:01.000Z">
-<meta property="article:modified_time" content="2026-04-16T11:54:12.189Z">
+<meta property="article:published_time" content="2026-04-16T10:23:01.000Z">
+<meta property="article:modified_time" content="2026-04-16T11:55:37.141Z">
 <meta property="article:author" content="Quan Zhou">
 <meta property="article:tag" content="6.s081">
 <meta property="article:tag" content="Labs">
 <meta name="twitter:card" content="summary">
 
 
-<link rel="canonical" href="http://qizi706.github.io/2026/04/17/6-s081-lab9/">
+<link rel="canonical" href="http://qizi706.github.io/2026/04/16/6-s081-lab9/">
 
 
-<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/04/17/6-s081-lab9/","path":"2026/04/17/6-s081-lab9/","title":"6.s081 Lab9 mmap 实现"}</script>
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/04/16/6-s081-lab9/","path":"2026/04/16/6-s081-lab9/","title":"6.s081 Lab9 mmap 实现"}</script>
 
 <script class="next-config" data-name="calendar" type="application/json">""</script>
 <title>6.s081 Lab9 mmap 实现 | Quan Zhou 的 blog</title>
@@ -84,7 +84,7 @@
 
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quicklink/3.0.1/quicklink.umd.js" integrity="sha256-44BednzIpUeQJcY8qtLyarFu0UCCTbgmWOvaoehiFQQ=" crossorigin="anonymous" defer></script>
-  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/04/17/6-s081-lab9/"}</script>
+  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/04/16/6-s081-lab9/"}</script>
   <script src="/js/third-party/quicklink.js" defer></script>
 
   <noscript>
@@ -207,7 +207,7 @@ Area) 与懒加载</span></a></li></ol></li><li class="nav-item nav-level-2"><a 
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
-    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/04/17/6-s081-lab9/">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/04/16/6-s081-lab9/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/avatar.gif">
@@ -235,15 +235,9 @@ Area) 与懒加载</span></a></li></ol></li><li class="nav-item nav-level-2"><a 
         <i class="far fa-calendar"></i>
       </span>
       <span class="post-meta-item-text">Posted on</span>
+      
 
-      <time title="Created: 2026-04-17 18:23:01" itemprop="dateCreated datePublished" datetime="2026-04-17T18:23:01+08:00">2026-04-17</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2026-04-16 19:54:12" itemprop="dateModified" datetime="2026-04-16T19:54:12+08:00">2026-04-16</time>
+      <time title="Created: 2026-04-16 18:23:01 / Modified: 19:55:37" itemprop="dateCreated datePublished" datetime="2026-04-16T18:23:01+08:00">2026-04-16</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -251,11 +245,11 @@ Area) 与懒加载</span></a></li></ol></li><li class="nav-item nav-level-2"><a 
       </span>
       <span class="post-meta-item-text">In</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
         </span>
           , 
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
         </span>
     </span>
 
@@ -390,7 +384,7 @@ VMA 内部的偏移。</p></li>
 
           <div class="post-nav">
             <div class="post-nav-item">
-                <a href="/2026/04/16/6-s081-lab8/" rel="prev" title="6.s081 Lab8 file system 实现">
+                <a href="/2026/04/15/6-s081-lab8/" rel="prev" title="6.s081 Lab8 file system 实现">
                   <i class="fa fa-angle-left"></i> 6.s081 Lab8 file system 实现
                 </a>
             </div>
