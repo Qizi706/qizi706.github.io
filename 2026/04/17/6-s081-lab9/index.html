@@ -23,13 +23,13 @@
 
     <meta name="description" content="作为 xv6 的最后一个核心大实验，Lab 9 (mmap) 标着硬核的 “Hard” 难度。但从本质上讲，它其实是 Lab 3（缺页中断）和 Lab 8（文件系统）的融合。 mmap 和 munmap 系统调用允许 UNIX 程序对自己的地址空间进行极其细致的控制。通过将磁盘文件直接映射到内存中，程序可以像读写普通数组一样操作文件，不仅免去了频繁调用 read 和 write 的开销，">
 <meta property="og:type" content="article">
-<meta property="og:title" content="6.s081 Lab8 file system 实现">
+<meta property="og:title" content="6.s081 Lab9 mmap 实现">
 <meta property="og:url" content="http://qizi706.github.io/2026/04/17/6-s081-lab9/index.html">
 <meta property="og:site_name" content="Quan Zhou 的 blog">
 <meta property="og:description" content="作为 xv6 的最后一个核心大实验，Lab 9 (mmap) 标着硬核的 “Hard” 难度。但从本质上讲，它其实是 Lab 3（缺页中断）和 Lab 8（文件系统）的融合。 mmap 和 munmap 系统调用允许 UNIX 程序对自己的地址空间进行极其细致的控制。通过将磁盘文件直接映射到内存中，程序可以像读写普通数组一样操作文件，不仅免去了频繁调用 read 和 write 的开销，">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2026-04-17T10:23:01.000Z">
-<meta property="article:modified_time" content="2026-04-16T11:52:57.899Z">
+<meta property="article:modified_time" content="2026-04-16T11:54:12.189Z">
 <meta property="article:author" content="Quan Zhou">
 <meta property="article:tag" content="6.s081">
 <meta property="article:tag" content="Labs">
@@ -39,10 +39,10 @@
 <link rel="canonical" href="http://qizi706.github.io/2026/04/17/6-s081-lab9/">
 
 
-<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/04/17/6-s081-lab9/","path":"2026/04/17/6-s081-lab9/","title":"6.s081 Lab8 file system 实现"}</script>
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/04/17/6-s081-lab9/","path":"2026/04/17/6-s081-lab9/","title":"6.s081 Lab9 mmap 实现"}</script>
 
 <script class="next-config" data-name="calendar" type="application/json">""</script>
-<title>6.s081 Lab8 file system 实现 | Quan Zhou 的 blog</title>
+<title>6.s081 Lab9 mmap 实现 | Quan Zhou 的 blog</title>
   
 
 
@@ -220,12 +220,12 @@ Area) 与懒加载</span></a></li></ol></li><li class="nav-item nav-level-2"><a 
     </span>
 
     <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content="6.s081 Lab8 file system 实现 | Quan Zhou 的 blog">
+      <meta itemprop="name" content="6.s081 Lab9 mmap 实现 | Quan Zhou 的 blog">
       <meta itemprop="description" content="">
     </span>
       <header class="post-header">
         <h1 class="post-title" itemprop="name headline">
-          6.s081 Lab8 file system 实现
+          6.s081 Lab9 mmap 实现
         </h1>
 
         <div class="post-meta-container">
@@ -243,7 +243,7 @@ Area) 与懒加载</span></a></li></ol></li><li class="nav-item nav-level-2"><a 
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2026-04-16 19:52:57" itemprop="dateModified" datetime="2026-04-16T19:52:57+08:00">2026-04-16</time>
+      <time title="Modified: 2026-04-16 19:54:12" itemprop="dateModified" datetime="2026-04-16T19:54:12+08:00">2026-04-16</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
