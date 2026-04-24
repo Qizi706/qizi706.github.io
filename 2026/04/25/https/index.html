@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.1">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.css" integrity="sha256-gkQVf8UKZgQ0HyuxL/VnacadJ+D2Kox2TCEBuNQg5+w=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Muse","darkmode":true,"version":"8.27.0","exturl":false,"sidebar":{"position":"right","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":true,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="HTTPS 加密过程解读 之前碰见过面试中遇到的问题没有完全回答上来，暴露出我对 HTTPS 的理解还很不足，这篇文章记录一下我重新学习 HTTPS 协议的过程，方便复习和更好地理解。 HTTP 在传输数据的过程中，所有的数据都是明文传输，比如客户端向服务端发送了密码等信息，中间者可以很轻易地劫持。HTTPS 通过一系列的加密，可以防止客户端发送的信息被劫持。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="HTTPS 加密过程解读">
+<meta property="og:url" content="http://qizi706.github.io/2026/04/25/https/index.html">
+<meta property="og:site_name" content="Quan Zhou 的 blog">
+<meta property="og:description" content="HTTPS 加密过程解读 之前碰见过面试中遇到的问题没有完全回答上来，暴露出我对 HTTPS 的理解还很不足，这篇文章记录一下我重新学习 HTTPS 协议的过程，方便复习和更好地理解。 HTTP 在传输数据的过程中，所有的数据都是明文传输，比如客户端向服务端发送了密码等信息，中间者可以很轻易地劫持。HTTPS 通过一系列的加密，可以防止客户端发送的信息被劫持。">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-04-24T16:19:44.000Z">
+<meta property="article:modified_time" content="2026-04-24T17:06:37.941Z">
+<meta property="article:author" content="Quan Zhou">
+<meta property="article:tag" content="Network">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="http://qizi706.github.io/2026/04/25/https/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/04/25/https/","path":"2026/04/25/https/","title":"HTTPS 加密过程解读"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>HTTPS 加密过程解读 | Quan Zhou 的 blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/next-theme-pjax/0.6.0/pjax.min.js" integrity="sha256-vxLn1tSKWD4dqbMRyv940UYw4sXgMtYcK6reefzZrao=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.umd.js" integrity="sha256-a+H7FYzJv6oU2hfsfDGM2Ohw/cR9v+hPfxHCLdmCrE8=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pangu/7.2.0/pangu.umd.js" integrity="sha256-JnmRRnJK7DC6RQJbAJb6AXOM9OmWzS6z8eYultk/48Y=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script><script src="/js/pjax.js" defer></script>
+
+  
+
+  <script class="next-config" data-name="mermaid" type="application/json">{"enable":true,"theme":{"light":"default","dark":"dark"},"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.10.1/mermaid.min.js","integrity":"sha256-BmQmdWDS8X2OTbrwELWK366LV6escyWhHHe0XCTU/Hk="}}</script>
+  <script src="/js/third-party/tags/mermaid.js" defer></script>
+
+  <script class="next-config" data-name="wavedrom" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/wavedrom.min.js","integrity":"sha256-INLAoJc6quTNfiMWkGZniYO2cxE8mHpddnLow1m6RFs="}}</script>
+  <script class="next-config" data-name="wavedrom_skin" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/skins/default.js","integrity":"sha256-fduc/Zszk5ezWws2uInY/ALWVmIrmV6VTgXbsYSReFI="}}</script>
+  <script src="/js/third-party/tags/wavedrom.js" defer></script>
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">true</script><script class="next-config" data-name="mathjax" type="application/json">{"enable":true,"tags":"ams","js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js","integrity":"sha256-MASABpB4tYktI2Oitl4t+78w/lyA+D7b/s9GEP0JOGI="}}</script>
+<script src="/js/third-party/math/mathjax.js" defer></script>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quicklink/3.0.1/quicklink.umd.js" integrity="sha256-44BednzIpUeQJcY8qtLyarFu0UCCTbgmWOvaoehiFQQ=" crossorigin="anonymous" defer></script>
+  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/04/25/https/"}</script>
+  <script src="/js/third-party/quicklink.js" defer></script>
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Quan Zhou 的 blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="Search" role="button">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a></li>
+  </ul>
+</nav>
+
+
+
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#https-%E5%8A%A0%E5%AF%86%E8%BF%87%E7%A8%8B%E8%A7%A3%E8%AF%BB"><span class="nav-number">1.</span> <span class="nav-text">HTTPS 加密过程解读</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#https-%E6%A0%B8%E5%BF%83%E9%98%B6%E6%AE%B5%E6%8B%86%E8%A7%A3"><span class="nav-number">1.1.</span> <span class="nav-text">HTTPS 核心阶段拆解</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E4%B8%80%E9%98%B6%E6%AE%B5%E6%8F%A1%E6%89%8B%E5%8D%8F%E5%95%86-hello"><span class="nav-number">1.1.1.</span> <span class="nav-text">第一阶段：握手协商 (Hello)</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E4%BA%8C%E9%98%B6%E6%AE%B5%E8%BA%AB%E4%BB%BD%E9%AA%8C%E8%AF%81-certificate"><span class="nav-number">1.1.2.</span> <span class="nav-text">第二阶段：身份验证
+(Certificate)</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E7%AC%AC%E4%B8%89%E9%98%B6%E6%AE%B5%E7%A7%98%E9%92%A5%E7%94%9F%E6%88%90-key-exchange"><span class="nav-number">1.1.3.</span> <span class="nav-text">第三阶段：秘钥生成 (Key
+Exchange)</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88-https-%E4%B8%8D%E4%BC%9A%E8%A2%AB%E9%BB%91%E5%AE%A2%E5%8A%AB%E6%8C%81"><span class="nav-number">1.1.4.</span> <span class="nav-text">为什么 HTTPS 不会被黑客劫持</span></a></li></ol></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Quan Zhou</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">10</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">3</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">3</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+        </div>
+      </div>
+        <div class="back-to-top animated" role="button" aria-label="Back to top">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/04/25/https/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="HTTPS 加密过程解读 | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          HTTPS 加密过程解读
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-04-25 00:19:44 / Modified: 01:06:37" itemprop="dateCreated datePublished" datetime="2026-04-25T00:19:44+08:00">2026-04-25</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E5%9F%BA%E7%A1%80/" itemprop="url" rel="index"><span itemprop="name">计算机基础</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h2 id="https-加密过程解读">HTTPS 加密过程解读</h2>
+<p>之前碰见过面试中遇到的问题没有完全回答上来，暴露出我对 HTTPS
+的理解还很不足，这篇文章记录一下我重新学习 HTTPS
+协议的过程，方便复习和更好地理解。</p>
+<p>HTTP
+在传输数据的过程中，所有的数据都是明文传输，比如客户端向服务端发送了密码等信息，中间者可以很轻易地劫持。HTTPS
+通过一系列的加密，可以防止客户端发送的信息被劫持。</p>
+<span id="more"></span>
+<h3 id="https-核心阶段拆解">HTTPS 核心阶段拆解</h3>
+<p>HTTPS HTTPS 的握手过程（以主流的 TLS 1.2 为例）分为三个主要阶段：</p>
+<h4 id="第一阶段握手协商-hello">第一阶段：握手协商 (Hello)</h4>
+<p>这个阶段就像是两台电脑在对暗号，确定大家都能听懂的语言。</p>
+<ul>
+<li>客户端（Client Hello）：
+<ul>
+<li>发送自己支持的 TLS 版本。</li>
+<li>发送一个 密码套件列表（Cipher
+Suites，包含支持的加密算法、哈希算法等）。</li>
+<li>发送一个 客户端随机数 (Client Random) <span
+class="math inline">\(r_1\)</span>。</li>
+</ul></li>
+<li>服务端（Server Hello）：
+<ul>
+<li>从列表中选出一套双方都支持的密码套件。</li>
+<li>发送一个 服务端随机数 (Server Random) <span
+class="math inline">\(r_2\)</span>。</li>
+</ul></li>
+</ul>
+<div class="note "><p>此时暗号对上了，但是安全性还没有建立</p>
+</div>
+<h4 id="第二阶段身份验证-certificate">第二阶段：身份验证
+(Certificate)</h4>
+<ul>
+<li>服务端：
+<ul>
+<li>发送自己的<strong>数字证书 (Digital Certificate)</strong>
+。证书里包含服务端的<strong>公钥</strong>和 CA 机构的签名。</li>
+</ul></li>
+<li>客户端（验证逻辑）：
+<ul>
+<li>客户端利用浏览器/操作系统内置的 CA
+根证书去验证服务端证书的签名。</li>
+<li>确认证书里的域名和当前访问的域名一致，且证书未过期。</li>
+<li>如果验证通过，客户端就拿到了服务端的<strong>公钥</strong>。</li>
+</ul></li>
+</ul>
+<h4 id="第三阶段秘钥生成-key-exchange">第三阶段：秘钥生成 (Key
+Exchange)</h4>
+<p>为了效率，HTTPS
+不会一直用非对称加密，而是要生成一个只有双方知道的“对称秘钥”。</p>
+<ul>
+<li>客户端：
+<ul>
+<li>生成第三个随机数：<strong>预主秘钥 (Pre-master Secret)</strong>
+<span class="math inline">\(r_3\)</span>。</li>
+<li>使用拿到的 服务端公钥 对这个预主秘钥进行加密，发送给服务端。</li>
+</ul></li>
+<li>服务端：
+<ul>
+<li>使用自己的<strong>私钥</strong>进行解密，得到预主密钥。</li>
+</ul></li>
+<li>双方共同动作：
+<ul>
+<li>此时双方手中都有 <span class="math inline">\(r_1\)</span>,<span
+class="math inline">\(r_2\)</span> 和预主密钥 <span
+class="math inline">\(r_3\)</span>。</li>
+<li>双方各自运行相同的算法，计算出最终的<strong>主密钥</strong>。</li>
+</ul></li>
+</ul>
+<div class="note "><p>此前的数据传输都是非对称加密的，也就是服务端会给出公钥，客户端使用公钥传输给服务器的数据只有服务器使用对应的私钥才能解密，这个过程即使数据被劫持也不会被破解出原文。
+此时安全性生效，客户端和服务端使用最终的主密钥进行对称加密传输。</p>
+</div>
+<figure>
+<pre>
+<code class="mermaid">
+
+sequenceDiagram
+  autonumber
+  participant C as 客户端 (浏览器)
+  participant S as 服务端 (服务器)
+  Note over C, S: 第一阶段：参数协商 (Negotiation)
+  C-&gt;&gt;S: 客户端问候 (Client Hello)&lt;br&#x2F;&gt;包含：TLS版本、加密套件列表、客户端随机数 r1
+  S-&gt;&gt;C: 服务端问候 (Server Hello)&lt;br&#x2F;&gt;包含：选定的加密套件、服务端随机数 r2
+  Note over C, S: 第二阶段：身份认证与公钥分发 (Authentication)
+  S-&gt;&gt;C: 数字证书 (Certificate)&lt;br&#x2F;&gt;包含：服务端 RSA 公钥、CA 电子签名
+  Note right of C: 客户端执行证书校验：&lt;br&#x2F;&gt;1. 验证 CA 信任链&lt;br&#x2F;&gt;2. 确认域名与有效期
+  Note over C, S: 第三阶段：预主密钥交换 (Key Exchange)
+  Note left of C: 内部生成：预主密钥 r3&lt;br&#x2F;&gt;(Pre-master Secret)
+  C-&gt;&gt;S: 客户端密钥交换 (Client Key Exchange)&lt;br&#x2F;&gt;内容：经服务端公钥加密后的 r3 密文
+  Note right of S: 服务端利用【RSA 私钥】进行解密&lt;br&#x2F;&gt;提取原始随机数 r3
+  Note over C, S: 第四阶段：会话密钥派生 (Key Derivation)
+  Note left of C: 基于 r1, r2, r3&lt;br&#x2F;&gt;派生主密钥 (Master Secret)&lt;br&#x2F;&gt;及对称会话密钥
+  Note right of S: 基于 r1, r2, r3&lt;br&#x2F;&gt;派生相同的主密钥&lt;br&#x2F;&gt;及对称会话密钥
+  Note over C, S: 第五阶段：握手验证与切换 (Finalization)
+  C-&gt;&gt;S: 切换加密规范 (Change Cipher Spec)&lt;br&#x2F;&gt;发送握手结束消息 (Finished，含 MAC 校验)
+  S-&gt;&gt;C: 切换加密规范 (Change Cipher Spec)&lt;br&#x2F;&gt;发送握手结束消息 (Finished，含 MAC 校验)
+  Note over C, S: 握手建立成功：后续应用层数据 (HTTP) 使用对称密钥进行加密传输
+</code>
+</pre>
+<figcaption class="image-caption" align="center">
+TLS 1.2（RSA 模式） 握手过程
+</figcaption>
+</figure>
+<h4 id="为什么-https-不会被黑客劫持">为什么 HTTPS 不会被黑客劫持</h4>
+<p>这是我在看 HTTPS 协议时遇到的一个疑问，最开始客户端与服务端发送 <span
+class="math inline">\(r_1\)</span>, <span
+class="math inline">\(r_2\)</span> 以及 CA
+证书和公钥的时候，这三样东西都被劫持了不会造成安全问题吗？</p>
+<p>在 HTTPS (TLS) 的安全体系中，攻击者即使劫持了客户端随机数 <span
+class="math inline">\(r_1\)</span>、服务端随机数 <span
+class="math inline">\(r_2\)</span>
+以及服务端公钥，依然无法破解通信或有效伪造合法服务端获取用户私密数据。这种防御能力源于协议设计的底层逻辑：公开参数的组合并不等同于机密参数的推导。</p>
+<ol type="1">
+<li><p>“伪造客户端”与“身份准入”的区别</p>
+<p>需要区分<strong>“建立加密通道”与“获取业务权限”</strong>这两个概念：</p>
+<ul>
+<li><p>通道建立：任何人（包括黑客）都可以发起 TLS
+握手与服务端建立连接。在这种情况下，黑客是作为“他自己”这个客户端与服务器建立加密信道，这本身并不违背
+HTTPS 的设计目标。</p></li>
+<li><p>身份仿冒：如果黑客想伪造成“周同学”这个特定客户端，HTTPS
+此时并非防线。身份识别通常由应用层（如
+Cookie、Session、Token）完成。除非开启了双向 TLS 认证（mTLS），否则 TLS
+协议本身并不负责验证客户端的特定用户身份，它只负责确保这条通道是机密的。</p></li>
+<li><p>mTLS
+的作用：在极高安全场景下，服务端会要求客户端也提供证书。如果黑客没有私钥，他将无法通过服务端对客户端证书的验证，从而无法建立连接。</p></li>
+</ul></li>
+<li><p>核心机密变量 <span class="math inline">\(r_3\)</span>
+的非对称机密性在 TLS
+握手流程中，真正决定安全性的变量是预主密钥（Pre-master Secret，<span
+class="math inline">\(r_3\)</span>）。隔离生成：<span
+class="math inline">\(r_3\)</span>
+是由客户端在本地内存中独立生成的随机数，从未在网络上以明文形式出现。非对称加密机制：客户端使用服务端公钥对
+<span class="math inline">\(r_3\)</span> 进行加密。根据非对称算法（如
+RSA）的特性，经过公钥加密的数据，其数学逆运算（解密）只能通过服务端持有的私钥完成。黑客的困境：攻击者虽然截获了公钥和加密后的
+<span class="math inline">\(r_3\)</span>
+密文，但由于不具备私钥，无法通过计算还原出 <span
+class="math inline">\(r_3\)</span>。</p></li>
+<li><p>会话密钥生成的“三向因子”绑定最终用于对称加密通信的<strong>会话密钥（Session
+Key）</strong>并非由 <span class="math inline">\(r_1\)</span> 和 <span
+class="math inline">\(r_2\)</span> 直接生成，而是由 <span
+class="math inline">\((r_1, r_2, r_3)\)</span>
+三者通过伪随机函数（PRF）共同派生。必要性约束：在派生公式中，<span
+class="math inline">\(r_3\)</span>
+作为高熵值的机密因子，是生成密钥的必要输入。计算壁垒：即便劫持者掌握了
+<span class="math inline">\(r_1\)</span> 和 <span
+class="math inline">\(r_2\)</span>，只要无法获取 <span
+class="math inline">\(r_3\)</span>，就无法计算出最终的主密钥（Master
+Secret），进而无法生成对称加密所需的会话密钥。因此，攻击者无法解密后续的应用层数据。</p></li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Network/" rel="tag"># Network</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/04/16/6-s081-lab9/" rel="prev" title="6.s081 Lab9 mmap 实现">
+                  <i class="fa fa-angle-left"></i> 6.s081 Lab9 mmap 实现
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>
