@@ -21,15 +21,15 @@
 
 <script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Muse","darkmode":true,"version":"8.27.0","exturl":false,"sidebar":{"position":"right","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":true,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
 
-    <meta name="description" content="HTTPS 加密过程解读 之前碰见过面试中遇到的问题没有完全回答上来，暴露出我对 HTTPS 的理解还很不足，这篇文章记录一下我重新学习 HTTPS 协议的过程，方便复习和更好地理解。 HTTP 在传输数据的过程中，所有的数据都是明文传输，比如客户端向服务端发送了密码等信息，中间者可以很轻易地劫持。HTTPS 通过一系列的加密，可以防止客户端发送的信息被劫持。">
+    <meta name="description" content="HTTPS 加密过程解读 这是之前面试中遇到的问题，当时没有完全回答上来，暴露出我对 HTTPS 的理解还很不足，这篇文章记录一下我重新学习 HTTPS 协议的过程，方便复习和更好地理解。 HTTP 在传输数据的过程中，所有的数据都是明文传输，比如客户端向服务端发送了密码等信息，中间者可以很轻易地劫持。HTTPS 通过一系列的加密，可以防止客户端发送的信息被劫持。">
 <meta property="og:type" content="article">
 <meta property="og:title" content="HTTPS 加密过程解读">
 <meta property="og:url" content="http://qizi706.github.io/2026/04/25/https/index.html">
 <meta property="og:site_name" content="Quan Zhou 的 blog">
-<meta property="og:description" content="HTTPS 加密过程解读 之前碰见过面试中遇到的问题没有完全回答上来，暴露出我对 HTTPS 的理解还很不足，这篇文章记录一下我重新学习 HTTPS 协议的过程，方便复习和更好地理解。 HTTP 在传输数据的过程中，所有的数据都是明文传输，比如客户端向服务端发送了密码等信息，中间者可以很轻易地劫持。HTTPS 通过一系列的加密，可以防止客户端发送的信息被劫持。">
+<meta property="og:description" content="HTTPS 加密过程解读 这是之前面试中遇到的问题，当时没有完全回答上来，暴露出我对 HTTPS 的理解还很不足，这篇文章记录一下我重新学习 HTTPS 协议的过程，方便复习和更好地理解。 HTTP 在传输数据的过程中，所有的数据都是明文传输，比如客户端向服务端发送了密码等信息，中间者可以很轻易地劫持。HTTPS 通过一系列的加密，可以防止客户端发送的信息被劫持。">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2026-04-24T16:19:44.000Z">
-<meta property="article:modified_time" content="2026-04-24T17:06:37.941Z">
+<meta property="article:modified_time" content="2026-05-04T10:01:10.233Z">
 <meta property="article:author" content="Quan Zhou">
 <meta property="article:tag" content="Network">
 <meta name="twitter:card" content="summary">
@@ -233,9 +233,15 @@ Exchange)</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" hr
         <i class="far fa-calendar"></i>
       </span>
       <span class="post-meta-item-text">Posted on</span>
-      
 
-      <time title="Created: 2026-04-25 00:19:44 / Modified: 01:06:37" itemprop="dateCreated datePublished" datetime="2026-04-25T00:19:44+08:00">2026-04-25</time>
+      <time title="Created: 2026-04-25 00:19:44" itemprop="dateCreated datePublished" datetime="2026-04-25T00:19:44+08:00">2026-04-25</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">Edited on</span>
+      <time title="Modified: 2026-05-04 18:01:10" itemprop="dateModified" datetime="2026-05-04T18:01:10+08:00">2026-05-04</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -257,7 +263,7 @@ Exchange)</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" hr
     
     
     <div class="post-body" itemprop="articleBody"><h2 id="https-加密过程解读">HTTPS 加密过程解读</h2>
-<p>之前碰见过面试中遇到的问题没有完全回答上来，暴露出我对 HTTPS
+<p>这是之前面试中遇到的问题，当时没有完全回答上来，暴露出我对 HTTPS
 的理解还很不足，这篇文章记录一下我重新学习 HTTPS
 协议的过程，方便复习和更好地理解。</p>
 <p>HTTP
