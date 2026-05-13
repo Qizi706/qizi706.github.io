@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.1">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.css" integrity="sha256-gkQVf8UKZgQ0HyuxL/VnacadJ+D2Kox2TCEBuNQg5+w=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Muse","darkmode":true,"version":"8.27.0","exturl":false,"sidebar":{"position":"right","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":false,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="在理解了左值、右值和移动语义之后，继续学习一下完美转发，这些概念都看过很多次，但是每隔一段时间都会有一定遗忘，现在写下这篇文章记录一下这部分内容，方便下次复习。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="C++ 完美转发">
+<meta property="og:url" content="http://qizi706.github.io/2026/05/13/perfect-forwarding/index.html">
+<meta property="og:site_name" content="Quan Zhou 的 blog">
+<meta property="og:description" content="在理解了左值、右值和移动语义之后，继续学习一下完美转发，这些概念都看过很多次，但是每隔一段时间都会有一定遗忘，现在写下这篇文章记录一下这部分内容，方便下次复习。">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-05-13T10:48:17.000Z">
+<meta property="article:modified_time" content="2026-05-13T14:34:55.159Z">
+<meta property="article:author" content="Quan Zhou">
+<meta property="article:tag" content="C++11特性">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="http://qizi706.github.io/2026/05/13/perfect-forwarding/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/05/13/perfect-forwarding/","path":"2026/05/13/perfect-forwarding/","title":"C++ 完美转发"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>C++ 完美转发 | Quan Zhou 的 blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/next-theme-pjax/0.6.0/pjax.min.js" integrity="sha256-vxLn1tSKWD4dqbMRyv940UYw4sXgMtYcK6reefzZrao=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.umd.js" integrity="sha256-a+H7FYzJv6oU2hfsfDGM2Ohw/cR9v+hPfxHCLdmCrE8=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pangu/7.2.0/pangu.umd.js" integrity="sha256-JnmRRnJK7DC6RQJbAJb6AXOM9OmWzS6z8eYultk/48Y=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script><script src="/js/pjax.js" defer></script>
+
+  
+
+  <script class="next-config" data-name="mermaid" type="application/json">{"enable":true,"theme":{"light":"default","dark":"dark"},"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.10.1/mermaid.min.js","integrity":"sha256-BmQmdWDS8X2OTbrwELWK366LV6escyWhHHe0XCTU/Hk="}}</script>
+  <script src="/js/third-party/tags/mermaid.js" defer></script>
+
+  <script class="next-config" data-name="wavedrom" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/wavedrom.min.js","integrity":"sha256-INLAoJc6quTNfiMWkGZniYO2cxE8mHpddnLow1m6RFs="}}</script>
+  <script class="next-config" data-name="wavedrom_skin" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/skins/default.js","integrity":"sha256-fduc/Zszk5ezWws2uInY/ALWVmIrmV6VTgXbsYSReFI="}}</script>
+  <script src="/js/third-party/tags/wavedrom.js" defer></script>
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">false</script><script class="next-config" data-name="mathjax" type="application/json">{"enable":true,"tags":"ams","js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js","integrity":"sha256-MASABpB4tYktI2Oitl4t+78w/lyA+D7b/s9GEP0JOGI="}}</script>
+<script src="/js/third-party/math/mathjax.js" defer></script>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quicklink/3.0.1/quicklink.umd.js" integrity="sha256-44BednzIpUeQJcY8qtLyarFu0UCCTbgmWOvaoehiFQQ=" crossorigin="anonymous" defer></script>
+  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/05/13/perfect-forwarding/"}</script>
+  <script src="/js/third-party/quicklink.js" defer></script>
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Quan Zhou 的 blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="Search" role="button">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a></li>
+  </ul>
+</nav>
+
+
+
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%85%88%E7%90%86%E8%A7%A3%E5%B7%A6%E5%80%BC%E5%92%8C%E5%8F%B3%E5%80%BC"><span class="nav-number">1.</span> <span class="nav-text">先理解左值和右值</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%B7%A6%E5%80%BC-lvalue"><span class="nav-number">1.1.</span> <span class="nav-text">左值 lvalue</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8F%B3%E5%80%BC-rvalue"><span class="nav-number">1.2.</span> <span class="nav-text">右值 rvalue</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8%E5%92%8C%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8"><span class="nav-number">2.</span> <span class="nav-text">左值引用和右值引用</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%B7%A6%E5%80%BC%E5%BC%95%E7%94%A8"><span class="nav-number">2.1.</span> <span class="nav-text">左值引用</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8"><span class="nav-number">2.2.</span> <span class="nav-text">右值引用</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91"><span class="nav-number">3.</span> <span class="nav-text">为什么需要完美转发？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91"><span class="nav-number">4.</span> <span class="nav-text">完美转发</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%AE%8C%E7%BE%8E%E8%BD%AC%E5%8F%91%E6%A0%87%E5%87%86%E5%86%99%E6%B3%95"><span class="nav-number">4.1.</span> <span class="nav-text">完美转发标准写法</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#t-%E5%9C%A8%E6%A8%A1%E6%9D%BF%E9%87%8C%E4%B8%8D%E6%98%AF%E6%99%AE%E9%80%9A%E5%8F%B3%E5%80%BC%E5%BC%95%E7%94%A8"><span class="nav-number">5.</span> <span class="nav-text">T&amp;&amp;
+在模板里不是普通右值引用</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#t-%E6%80%8E%E4%B9%88%E6%8E%A5%E5%B7%A6%E5%80%BC"><span class="nav-number">6.</span> <span class="nav-text">T&amp;&amp; 怎么接左值？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#t-%E6%80%8E%E4%B9%88%E6%8E%A5%E5%8F%B3%E5%80%BC"><span class="nav-number">7.</span> <span class="nav-text">T&amp;&amp; 怎么接右值？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%BC%95%E7%94%A8%E6%8A%98%E5%8F%A0%E8%A7%84%E5%88%99"><span class="nav-number">8.</span> <span class="nav-text">引用折叠规则</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#stdforward-%E5%88%B0%E5%BA%95%E5%81%9A%E4%BA%86%E4%BB%80%E4%B9%88"><span class="nav-number">9.</span> <span class="nav-text">std::forward
+到底做了什么？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#stdmove-%E5%92%8C-stdforward-%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="nav-number">10.</span> <span class="nav-text">std::move 和
+std::forward 的区别</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%80%E4%B8%AA%E5%BE%88%E7%9B%B4%E8%A7%82%E7%9A%84%E4%BE%8B%E5%AD%90%E6%9E%84%E9%80%A0%E5%AF%B9%E8%B1%A1"><span class="nav-number">11.</span> <span class="nav-text">一个很直观的例子：构造对象</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99-t-%E4%B8%8D%E6%98%AF%E4%B8%87%E8%83%BD%E5%BC%95%E7%94%A8"><span class="nav-number">12.</span> <span class="nav-text">什么时候 T&amp;&amp;
+不是万能引用？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%80%E5%90%8E%E4%BB%A5%E4%B8%80%E4%B8%AA%E5%AE%8C%E6%95%B4%E7%9A%84%E8%A7%82%E5%AF%9F%E4%BB%A3%E7%A0%81%E7%BB%93%E6%9D%9F"><span class="nav-number">13.</span> <span class="nav-text">最后以一个完整的观察代码结束</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Quan Zhou</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">11</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">4</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">4</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+        </div>
+      </div>
+        <div class="back-to-top animated" role="button" aria-label="Back to top">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/05/13/perfect-forwarding/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="C++ 完美转发 | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          C++ 完美转发
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-05-13 18:48:17 / Modified: 22:34:55" itemprop="dateCreated datePublished" datetime="2026-05-13T18:48:17+08:00">2026-05-13</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/C-C/" itemprop="url" rel="index"><span itemprop="name">C/C++</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>在理解了左值、右值和移动语义之后，继续学习一下完美转发，这些概念都看过很多次，但是每隔一段时间都会有一定遗忘，现在写下这篇文章记录一下这部分内容，方便下次复习。</p>
+<span id="more"></span>
+<p><strong>完美转发就是：在模板函数里，把参数原来的“左值/右值属性”原封不动地传给另一个函数。</strong></p>
+<p>它通常和这三个东西一起出现：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">T&amp;&amp;</span><br><span class="line">std::forward&lt;T&gt;(x)</span><br><span class="line">引用折叠</span><br></pre></td></tr></table></figure>
+<p>我们一步步来。</p>
+<h2 id="先理解左值和右值">先理解左值和右值</h2>
+<h3 id="左值-lvalue">左值 lvalue</h3>
+<p>简单说：</p>
+<blockquote>
+<p>有名字、能取地址、可以反复使用的对象，通常是左值。</p>
+</blockquote>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> x = <span class="number">10</span>;</span><br></pre></td></tr></table></figure>
+<p>这里 <code>x</code> 是左值。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> y = x;</span><br></pre></td></tr></table></figure>
+<p><code>x</code> 仍是左值。</p>
+<hr />
+<h3 id="右值-rvalue">右值 rvalue</h3>
+<p>简单说：</p>
+<blockquote>
+<p>临时值、没有名字、马上就要销毁的值，通常是右值。</p>
+</blockquote>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">10</span></span><br><span class="line">x + <span class="number">1</span></span><br><span class="line">std::<span class="built_in">string</span>(<span class="string">&quot;hello&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>这些都是右值。</p>
+<p>例如：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">std::string s = std::<span class="built_in">string</span>(<span class="string">&quot;hello&quot;</span>);</span><br></pre></td></tr></table></figure>
+<p><code>std::string("hello")</code> 是一个临时对象，是右值。</p>
+<hr />
+<h2 id="左值引用和右值引用">左值引用和右值引用</h2>
+<h3 id="左值引用">左值引用</h3>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> x = <span class="number">10</span>;</span><br><span class="line"><span class="type">int</span> &amp;ref = x;</span><br></pre></td></tr></table></figure>
+<p><code>int&amp;</code> 只能绑定到左值。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> &amp;a = <span class="number">10</span>; <span class="comment">// 错误，10 是右值</span></span><br></pre></td></tr></table></figure>
+<hr />
+<h3 id="右值引用">右值引用</h3>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> &amp;&amp;rref = <span class="number">10</span>;</span><br></pre></td></tr></table></figure>
+<p><code>int&amp;&amp;</code> 可以绑定到右值。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> x = <span class="number">10</span>;</span><br><span class="line"><span class="type">int</span> &amp;&amp;r = x; <span class="comment">// 错误，x 是左值</span></span><br></pre></td></tr></table></figure>
+<p>但是注意一个非常重要的点：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> &amp;&amp;r = <span class="number">10</span>;</span><br></pre></td></tr></table></figure>
+<p>虽然 <code>r</code> 的类型是 <code>int&amp;&amp;</code>，但是：</p>
+<blockquote>
+<p>变量 <code>r</code> 本身是左值。</p>
+</blockquote>
+<p>因为 r 有名字，可以取地址，可以反复使用。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> &amp;&amp;r = <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">// r 是左值</span></span><br></pre></td></tr></table></figure>
+<p>这一点后面特别关键，如果不理解这个知识，对完美转发的理解会比较困难（分不清是左值还是右值）。</p>
+<hr />
+<h2 id="为什么需要完美转发">为什么需要完美转发？</h2>
+<p>假设我们有两个重载函数：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">process</span><span class="params">(<span class="type">int</span> &amp;x)</span> </span>&#123;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;process lvalue\n&quot;</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">process</span><span class="params">(<span class="type">int</span> &amp;&amp;x)</span> </span>&#123;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;process rvalue\n&quot;</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>现在直接调用：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> a = <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line"><span class="built_in">process</span>(a);   <span class="comment">// lvalue</span></span><br><span class="line"><span class="built_in">process</span>(<span class="number">20</span>);  <span class="comment">// rvalue</span></span><br></pre></td></tr></table></figure>
+<p>输出：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">process lvalue</span><br><span class="line">process rvalue</span><br></pre></td></tr></table></figure>
+<p>这就是预期的结果，没问题。</p>
+<hr />
+<p>现在我们写一个包装函数：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">wrapper</span><span class="params">(T x)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">process</span>(x);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>调用：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> a = <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line"><span class="built_in">wrapper</span>(a);</span><br><span class="line"><span class="built_in">wrapper</span>(<span class="number">20</span>);</span><br></pre></td></tr></table></figure>
+<p>我们希望它输出：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">process lvalue</span><br><span class="line">process rvalue</span><br></pre></td></tr></table></figure>
+<p>但实际会输出：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">process lvalue</span><br><span class="line">process lvalue</span><br></pre></td></tr></table></figure>
+<p>为什么？</p>
+<p>因为在 wrapper 里面：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">wrapper</span><span class="params">(T x)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">process</span>(x);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>x</code> 是一个有名字的变量。</p>
+<p>有名字就是左值。</p>
+<p>所以不管你传进来的是左值还是右值，在函数里面 x 都是左值。</p>
+<hr />
+<h2 id="完美转发">完美转发</h2>
+<p>我们希望：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">wrapper</span>(a);</span><br></pre></td></tr></table></figure>
+<p>里面调用：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">process</span>(左值);</span><br></pre></td></tr></table></figure>
+<p>我们也希望：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">wrapper</span>(<span class="number">20</span>);</span><br></pre></td></tr></table></figure>
+<p>里面调用：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">process</span>(右值);</span><br></pre></td></tr></table></figure>
+<p>但是普通写法会把所有参数都变成左值。</p>
+<p>所以我们需要一种机制：</p>
+<div class="note info"><p>传进来是左值，就继续当左值传出去；
+传进来是右值，就继续当右值传出去。</p>
+</div>
+<p>这就是 <strong>完美转发</strong>。</p>
+<hr />
+<h3 id="完美转发标准写法">完美转发标准写法</h3>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">wrapper</span><span class="params">(T &amp;&amp;x)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">process</span>(std::forward&lt;T&gt;(x));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>重点是两个部分：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">T &amp;&amp;x</span><br><span class="line"></span><br><span class="line">std::forward&lt;T&gt;(x)</span><br></pre></td></tr></table></figure>
+<p>这两个必须配套使用。</p>
+<hr />
+<p>完整代码：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;utility&gt;</span></span></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">process</span><span class="params">(<span class="type">int</span> &amp;x)</span> </span>&#123;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;process lvalue\n&quot;</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">process</span><span class="params">(<span class="type">int</span> &amp;&amp;x)</span> </span>&#123;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;process rvalue\n&quot;</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">wrapper</span><span class="params">(T &amp;&amp;x)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">process</span>(std::forward&lt;T&gt;(x));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">int</span> a = <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">wrapper</span>(a);   <span class="comment">// process lvalue</span></span><br><span class="line">    <span class="built_in">wrapper</span>(<span class="number">20</span>);  <span class="comment">// process rvalue</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>输出：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">process lvalue</span><br><span class="line">process rvalue</span><br></pre></td></tr></table></figure>
+<hr />
+<h2 id="t-在模板里不是普通右值引用"><code>T&amp;&amp;</code>
+在模板里不是普通右值引用</h2>
+<p>这是最容易混的点。</p>
+<p>当看到：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">wrapper</span><span class="params">(T &amp;&amp;x)</span></span></span><br></pre></td></tr></table></figure>
+<p>可能会以为 <code>x</code> 是右值引用。</p>
+<p>但在模板参数推导场景下，T&amp;&amp; 有特殊含义，它叫<strong>转发引用
+forwarding reference</strong>，也常被叫作<strong>万能引用 universal
+reference</strong>，它既可以接左值，也可以接右值。</p>
+<hr />
+<h2 id="t-怎么接左值"><code>T&amp;&amp;</code> 怎么接左值？</h2>
+<p>看这个调用：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> a = <span class="number">10</span>;</span><br><span class="line"><span class="built_in">wrapper</span>(a);</span><br></pre></td></tr></table></figure>
+<p><code>a</code> 是左值，这时模板推导会把 <code>T</code> 推导成
+<code>int&amp;</code>。所以 <code>T&amp;&amp;</code> 会变成
+<code>int&amp; &amp;&amp;</code>，接下来发生引用折叠：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span>&amp; &amp;&amp;  -&gt; <span class="type">int</span>&amp;</span><br></pre></td></tr></table></figure>
+<p>所以最终函数参数类型是：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> &amp;x</span><br></pre></td></tr></table></figure>
+<p>因此可以接左值。</p>
+<hr />
+<h2 id="t-怎么接右值"><code>T&amp;&amp;</code> 怎么接右值？</h2>
+<p>调用：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">wrapper</span>(<span class="number">20</span>);</span><br></pre></td></tr></table></figure>
+<p><code>20</code> 是右值。</p>
+<p>这时模板推导：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">T = <span class="type">int</span></span><br></pre></td></tr></table></figure>
+<p>所以：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">T&amp;&amp; -&gt; <span class="type">int</span>&amp;&amp;</span><br></pre></td></tr></table></figure>
+<p>最终函数参数类型是右值引用。</p>
+<hr />
+<h2 id="引用折叠规则">引用折叠规则</h2>
+<p>这里在刚开始了解的时候感觉很迷惑，但其实不用背一大堆，记住一句话就够：</p>
+<div class="note info"><p>只要有一个 &amp;，结果就是 &amp;；只有 &amp;&amp; &amp;&amp; 才是
+&amp;&amp;。</p>
+</div>
+<p>完整规则：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">T&amp;  &amp;   -&gt; T&amp;</span><br><span class="line">T&amp;  &amp;&amp;  -&gt; T&amp;</span><br><span class="line">T&amp;&amp; &amp;   -&gt; T&amp;</span><br><span class="line">T&amp;&amp; &amp;&amp;  -&gt; T&amp;&amp;</span><br></pre></td></tr></table></figure>
+<p>简单记：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">左值引用优先</span><br></pre></td></tr></table></figure>
+<hr />
+<h2 id="stdforward-到底做了什么"><code>std::forward</code>
+到底做了什么？</h2>
+<p>前面说过：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">wrapper</span><span class="params">(T &amp;&amp;x)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">process</span>(x);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里的 <code>x</code>
+本身是有名字的变量，所以它永远是左值，所以我们需要：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">std::forward&lt;T&gt;(x)</span><br></pre></td></tr></table></figure>
+<p>它的作用是：</p>
+<blockquote>
+<p>根据 <code>T</code> 的推导结果，决定把 <code>x</code>
+转成左值还是右值。</p>
+</blockquote>
+<p>如果传进来的是左值：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> a = <span class="number">10</span>;</span><br><span class="line"><span class="built_in">wrapper</span>(a);</span><br></pre></td></tr></table></figure>
+<p>此时传入的变量 <code>a</code> 是左值，因此
+<code>T = int&amp;</code>，所以 <code>std::forward&lt;T&gt;(x)</code>
+结果仍然是左值。</p>
+<hr />
+<p>如果传进来的是右值：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">wrapper</span>(<span class="number">20</span>);</span><br></pre></td></tr></table></figure>
+<p>此时传入的 <code>20</code> 是右值，因此 <code>T = int</code>，所以
+<code>std::forward&lt;T&gt;(x)</code> 结果变成右值</p>
+<blockquote>
+<p>std::forward<T>(x) 是“有条件的 move”：
+原来是右值，才转成右值；原来是左值，就保持左值。</p>
+</blockquote>
+<h2 id="stdmove-和-stdforward-的区别"><code>std::move</code> 和
+<code>std::forward</code> 的区别</h2>
+<p><code>std::move(x)</code> 会无条件把 <code>x</code> 转成右值，它不管
+x 原来是什么。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">wrapper</span><span class="params">(T &amp;&amp;x)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">process</span>(std::<span class="built_in">move</span>(x));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这样的代码无论传入的是左值还是右值，都会被 <code>std::move</code>
+强行转换成右值，于是可能调用右值版本，甚至把外部对象资源偷走。</p>
+<hr />
+<p><code>std::forward</code>
+是有条件地转发，会保留传进来的参数的所有属性。</p>
+<h2 id="一个很直观的例子构造对象">一个很直观的例子：构造对象</h2>
+<p>假设有一个类：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string&gt;</span></span></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Person</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="built_in">Person</span>(<span class="type">const</span> string &amp;name) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;copy string\n&quot;</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">Person</span>(string &amp;&amp;name) &#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;move string\n&quot;</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>如果直接调用：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">string s = <span class="string">&quot;Alice&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="function">Person <span class="title">p1</span><span class="params">(s)</span></span>;             <span class="comment">// copy string</span></span><br><span class="line"><span class="function">Person <span class="title">p2</span><span class="params">(string(<span class="string">&quot;Bob&quot;</span>))</span></span>; <span class="comment">// move string</span></span><br></pre></td></tr></table></figure>
+<p>没问题。</p>
+<hr />
+<p>现在写一个工厂函数：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function">Person <span class="title">createPerson</span><span class="params">(T &amp;&amp;name)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">Person</span>(std::forward&lt;T&gt;(name));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>调用：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">string s = <span class="string">&quot;Alice&quot;</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">auto</span> p1 = <span class="built_in">createPerson</span>(s);              <span class="comment">// copy string</span></span><br><span class="line"><span class="keyword">auto</span> p2 = <span class="built_in">createPerson</span>(<span class="built_in">string</span>(<span class="string">&quot;Bob&quot;</span>));  <span class="comment">// move string</span></span><br></pre></td></tr></table></figure>
+<p>结果也没有问题，这就是完美转发的意义，它让工厂函数不破坏参数原来的属性。</p>
+<p>如果工厂函数不使用 <code>std::forward</code>，那么 <code>p1</code> 和
+<code>p2</code> 都会调用拷贝构造，右值信息丢失了。</p>
+<hr />
+<h2 id="什么时候-t-不是万能引用">什么时候 <code>T&amp;&amp;</code>
+不是万能引用？</h2>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 是万能引用</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">(T&amp;&amp; x)</span></span>;</span><br></pre></td></tr></table></figure>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 不是万能引用，就是普通的右值引用</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">(<span class="type">int</span>&amp;&amp; x)</span></span>;</span><br></pre></td></tr></table></figure>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Box</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">(T&amp;&amp; x)</span></span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>这里要小心，如果 <code>T</code> 是类模板参数，不是在函数调用时由
+<code>f</code> 推导出来的，那么 <code>T&amp;&amp;</code>
+不一定是转发引用。</p>
+<p>例如：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Box&lt;<span class="type">int</span>&gt; b;</span><br><span class="line">b.<span class="built_in">f</span>(<span class="number">10</span>);  <span class="comment">// T 已经固定为 int，所以 int&amp;&amp;</span></span><br></pre></td></tr></table></figure>
+<p>它不是通过 <code>f</code> 推导出来的。</p>
+<p>如果想让成员函数里使用转发引用，要写成：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Box</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">typename</span> U&gt;</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">f</span><span class="params">(U&amp;&amp; x)</span> </span>&#123;</span><br><span class="line">        <span class="comment">// U&amp;&amp; 才是转发引用</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<hr />
+<h2 id="最后以一个完整的观察代码结束">最后以一个完整的观察代码结束</h2>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;utility&gt;</span></span></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">func</span><span class="params">(<span class="type">int</span> &amp;x)</span> </span>&#123;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;lvalue\n&quot;</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">func</span><span class="params">(<span class="type">int</span> &amp;&amp;x)</span> </span>&#123;</span><br><span class="line">    cout &lt;&lt; <span class="string">&quot;rvalue\n&quot;</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">badWrapper</span><span class="params">(T &amp;&amp;x)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">func</span>(x);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">goodWrapper</span><span class="params">(T &amp;&amp;x)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">func</span>(std::forward&lt;T&gt;(x));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">int</span> a = <span class="number">10</span>;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">badWrapper</span>(a);   <span class="comment">// lvalue</span></span><br><span class="line">    <span class="built_in">badWrapper</span>(<span class="number">20</span>);  <span class="comment">// lvalue</span></span><br><span class="line"></span><br><span class="line">    <span class="built_in">goodWrapper</span>(a);  <span class="comment">// lvalue</span></span><br><span class="line">    <span class="built_in">goodWrapper</span>(<span class="number">20</span>); <span class="comment">// rvalue</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C-11%E7%89%B9%E6%80%A7/" rel="tag"># C++11特性</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/04/25/https/" rel="prev" title="HTTPS 加密过程解读">
+                  <i class="fa fa-angle-left"></i> HTTPS 加密过程解读
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>
