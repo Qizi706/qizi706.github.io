@@ -24,22 +24,22 @@
     <meta name="description" content="背景 刚开始实习时，组内方向是训练-推理一体存储，尤其是围绕 KV Cache 做存储、调度、迁移或复用，那么“分布式”不是一个单独的理论章节，而是会贯穿在每一次请求、每一份缓存、每一次节点故障和每一个性能指标里。 我目前的目标不是一下子掌握所有分布式系统，而是先建立一张够用的地图： 123451. 计算任务为什么要分布到多台机器上？2. 数据为什么要分片、复制和迁移？3. 多副本之间如何保证一致">
 <meta property="og:type" content="article">
 <meta property="og:title" content="分布式基础：初步学习路径">
-<meta property="og:url" content="http://qizi706.github.io/2026/07/06/distributed-algorithms/index.html">
+<meta property="og:url" content="http://qizi706.github.io/2026/07/06/distributed-basis/index.html">
 <meta property="og:site_name" content="Quan Zhou 的 blog">
 <meta property="og:description" content="背景 刚开始实习时，组内方向是训练-推理一体存储，尤其是围绕 KV Cache 做存储、调度、迁移或复用，那么“分布式”不是一个单独的理论章节，而是会贯穿在每一次请求、每一份缓存、每一次节点故障和每一个性能指标里。 我目前的目标不是一下子掌握所有分布式系统，而是先建立一张够用的地图： 123451. 计算任务为什么要分布到多台机器上？2. 数据为什么要分片、复制和迁移？3. 多副本之间如何保证一致">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2026-07-06T07:59:28.000Z">
-<meta property="article:modified_time" content="2026-07-06T14:28:48.394Z">
+<meta property="article:modified_time" content="2026-07-06T14:34:42.080Z">
 <meta property="article:author" content="Quan Zhou">
 <meta property="article:tag" content="分布式">
 <meta property="article:tag" content="算法">
 <meta name="twitter:card" content="summary">
 
 
-<link rel="canonical" href="http://qizi706.github.io/2026/07/06/distributed-algorithms/">
+<link rel="canonical" href="http://qizi706.github.io/2026/07/06/distributed-basis/">
 
 
-<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/07/06/distributed-algorithms/","path":"2026/07/06/distributed-algorithms/","title":"分布式基础：初步学习路径"}</script>
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/07/06/distributed-basis/","path":"2026/07/06/distributed-basis/","title":"分布式基础：初步学习路径"}</script>
 
 <script class="next-config" data-name="calendar" type="application/json">""</script>
 <title>分布式基础：初步学习路径 | Quan Zhou 的 blog</title>
@@ -84,7 +84,7 @@
 
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quicklink/3.0.1/quicklink.umd.js" integrity="sha256-44BednzIpUeQJcY8qtLyarFu0UCCTbgmWOvaoehiFQQ=" crossorigin="anonymous" defer></script>
-  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/07/06/distributed-algorithms/"}</script>
+  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/07/06/distributed-basis/"}</script>
   <script src="/js/third-party/quicklink.js" defer></script>
 
   <noscript>
@@ -166,7 +166,7 @@ Detector</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">14</span>
+          <span class="site-state-item-count">15</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
@@ -177,7 +177,7 @@ Detector</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav
       </div>
       <div class="site-state-item site-state-tags">
           <a href="/tags/">
-        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-count">10</span>
         <span class="site-state-item-name">tags</span></a>
       </div>
   </nav>
@@ -208,7 +208,7 @@ Detector</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
-    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/06/distributed-algorithms/">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/06/distributed-basis/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/avatar.gif">
@@ -238,7 +238,7 @@ Detector</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav
       <span class="post-meta-item-text">Posted on</span>
       
 
-      <time title="Created: 2026-07-06 15:59:28 / Modified: 22:28:48" itemprop="dateCreated datePublished" datetime="2026-07-06T15:59:28+08:00">2026-07-06</time>
+      <time title="Created: 2026-07-06 15:59:28 / Modified: 22:34:42" itemprop="dateCreated datePublished" datetime="2026-07-06T15:59:28+08:00">2026-07-06</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -636,6 +636,9 @@ P99，因为用户感受到的是慢请求，而不是平均值。</p>
                 </a>
             </div>
             <div class="post-nav-item">
+                <a href="/2026/07/06/distributed-foundation-os-network-concurrency-storage/" rel="next" title="分布式基础：操作系统、网络、并发与存储">
+                  分布式基础：操作系统、网络、并发与存储 <i class="fa fa-angle-right"></i>
+                </a>
             </div>
           </div>
     </footer>

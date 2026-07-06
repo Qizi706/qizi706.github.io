@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.css" integrity="sha256-gkQVf8UKZgQ0HyuxL/VnacadJ+D2Kox2TCEBuNQg5+w=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Muse","darkmode":true,"version":"8.28.0","exturl":false,"sidebar":{"position":"right","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":false,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="背景 学习分布式系统时，很容易一开始就看到 Raft、Paxos、CAP、一致性、分布式事务这些概念。但如果底层基础没有建立起来，这些概念会比较悬空。 对我现在的实习方向来说，组内工作内容和训练-推理一体存储、KV Cache 相关。这个场景里，分布式问题经常不是先表现为“算法问题”，而是先表现为： 123456为什么请求变慢？为什么 P99 延迟突然升高？为什么 GPU 显存满了？为什么 cac">
+<meta property="og:type" content="article">
+<meta property="og:title" content="分布式基础：操作系统、网络、并发与存储">
+<meta property="og:url" content="http://qizi706.github.io/2026/07/06/distributed-foundation-os-network-concurrency-storage/index.html">
+<meta property="og:site_name" content="Quan Zhou 的 blog">
+<meta property="og:description" content="背景 学习分布式系统时，很容易一开始就看到 Raft、Paxos、CAP、一致性、分布式事务这些概念。但如果底层基础没有建立起来，这些概念会比较悬空。 对我现在的实习方向来说，组内工作内容和训练-推理一体存储、KV Cache 相关。这个场景里，分布式问题经常不是先表现为“算法问题”，而是先表现为： 123456为什么请求变慢？为什么 P99 延迟突然升高？为什么 GPU 显存满了？为什么 cac">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-07-06T12:30:00.000Z">
+<meta property="article:modified_time" content="2026-07-06T14:38:24.569Z">
+<meta property="article:author" content="Quan Zhou">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="存储">
+<meta property="article:tag" content="并发">
+<meta property="article:tag" content="操作系统">
+<meta property="article:tag" content="网络">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="http://qizi706.github.io/2026/07/06/distributed-foundation-os-network-concurrency-storage/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/07/06/distributed-foundation-os-network-concurrency-storage/","path":"2026/07/06/distributed-foundation-os-network-concurrency-storage/","title":"分布式基础：操作系统、网络、并发与存储"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>分布式基础：操作系统、网络、并发与存储 | Quan Zhou 的 blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/next-theme-pjax/0.6.0/pjax.min.js" integrity="sha256-vxLn1tSKWD4dqbMRyv940UYw4sXgMtYcK6reefzZrao=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.umd.js" integrity="sha256-a+H7FYzJv6oU2hfsfDGM2Ohw/cR9v+hPfxHCLdmCrE8=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pangu/7.2.0/pangu.umd.js" integrity="sha256-JnmRRnJK7DC6RQJbAJb6AXOM9OmWzS6z8eYultk/48Y=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script><script src="/js/pjax.js" defer></script>
+
+  
+
+  <script class="next-config" data-name="mermaid" type="application/json">{"enable":true,"theme":{"light":"default","dark":"dark"},"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.10.1/mermaid.min.js","integrity":"sha256-BmQmdWDS8X2OTbrwELWK366LV6escyWhHHe0XCTU/Hk="}}</script>
+  <script src="/js/third-party/tags/mermaid.js" defer></script>
+
+  <script class="next-config" data-name="wavedrom" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/wavedrom.min.js","integrity":"sha256-INLAoJc6quTNfiMWkGZniYO2cxE8mHpddnLow1m6RFs="}}</script>
+  <script class="next-config" data-name="wavedrom_skin" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/skins/default.js","integrity":"sha256-fduc/Zszk5ezWws2uInY/ALWVmIrmV6VTgXbsYSReFI="}}</script>
+  <script src="/js/third-party/tags/wavedrom.js" defer></script>
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">false</script><script class="next-config" data-name="mathjax" type="application/json">{"enable":true,"tags":"ams","js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js","integrity":"sha256-MASABpB4tYktI2Oitl4t+78w/lyA+D7b/s9GEP0JOGI="}}</script>
+<script src="/js/third-party/math/mathjax.js" defer></script>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quicklink/3.0.1/quicklink.umd.js" integrity="sha256-44BednzIpUeQJcY8qtLyarFu0UCCTbgmWOvaoehiFQQ=" crossorigin="anonymous" defer></script>
+  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/07/06/distributed-foundation-os-network-concurrency-storage/"}</script>
+  <script src="/js/third-party/quicklink.js" defer></script>
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Quan Zhou 的 blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="Search" role="button">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a></li>
+  </ul>
+</nav>
+
+
+
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-text">背景</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AD%A6%E4%B9%A0%E7%9B%AE%E6%A0%87"><span class="nav-text">学习目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%E5%9F%BA%E7%A1%80"><span class="nav-text">操作系统基础</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%BF%9B%E7%A8%8B"><span class="nav-text">进程</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BA%BF%E7%A8%8B"><span class="nav-text">线程</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8D%8F%E7%A8%8B"><span class="nav-text">协程</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B9%B6%E5%8F%91%E5%9F%BA%E7%A1%80"><span class="nav-text">并发基础</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%94%81"><span class="nav-text">锁</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%9D%A1%E4%BB%B6%E5%8F%98%E9%87%8F"><span class="nav-text">条件变量</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C"><span class="nav-text">原子操作</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%86%85%E5%AD%98%E5%9F%BA%E7%A1%80"><span class="nav-text">内存基础</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98%E5%92%8C%E9%A1%B5%E8%A1%A8"><span class="nav-text">虚拟内存和页表</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#mmap"><span class="nav-text">mmap</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%86%85%E5%AD%98%E6%8B%B7%E8%B4%9D"><span class="nav-text">内存拷贝</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BD%91%E7%BB%9C%E5%9F%BA%E7%A1%80"><span class="nav-text">网络基础</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%BB%B6%E8%BF%9F"><span class="nav-text">延迟</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%B8%A6%E5%AE%BD"><span class="nav-text">带宽</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%90%9E%E5%90%90"><span class="nav-text">吞吐</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#p99"><span class="nav-text">P99</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#tcp-%E5%9F%BA%E7%A1%80"><span class="nav-text">TCP 基础</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%BF%9E%E6%8E%A5"><span class="nav-text">连接</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%B6%85%E6%97%B6"><span class="nav-text">超时</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%87%8D%E4%BC%A0"><span class="nav-text">重传</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AD%98%E5%82%A8%E5%9F%BA%E7%A1%80"><span class="nav-text">存储基础</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#gpu-hbm"><span class="nav-text">GPU HBM</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#cpu-memory"><span class="nav-text">CPU Memory</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ssd"><span class="nav-text">SSD</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%A1%BA%E5%BA%8F%E8%AF%BB%E5%86%99%E5%92%8C%E9%9A%8F%E6%9C%BA%E8%AF%BB%E5%86%99"><span class="nav-text">顺序读写和随机读写</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%A4%9A%E7%BA%A7%E5%AD%98%E5%82%A8%E5%92%8C-kv-cache"><span class="nav-text">多级存储和 KV Cache</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%80%E4%B8%AA%E8%AF%B7%E6%B1%82%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BC%9A%E6%85%A2"><span class="nav-text">一个请求为什么会慢？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%80%E4%B8%AA%E8%AF%B7%E6%B1%82%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BC%9A%E5%A4%B1%E8%B4%A5"><span class="nav-text">一个请求为什么会失败？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%9D%A2%E5%90%91-kv-cache-%E7%9A%84%E5%9F%BA%E7%A1%80%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95"><span class="nav-text">面向 KV Cache 的基础检查清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%8E%A8%E8%8D%90%E5%AD%A6%E4%B9%A0%E9%A1%BA%E5%BA%8F"><span class="nav-text">推荐学习顺序</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-text">总结</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Quan Zhou</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">15</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+        </div>
+      </div>
+        <div class="back-to-top animated" role="button" aria-label="Back to top">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/06/distributed-foundation-os-network-concurrency-storage/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="分布式基础：操作系统、网络、并发与存储 | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          分布式基础：操作系统、网络、并发与存储
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-07-06 20:30:00 / Modified: 22:38:24" itemprop="dateCreated datePublished" datetime="2026-07-06T20:30:00+08:00">2026-07-06</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/" itemprop="url" rel="index"><span itemprop="name">分布式</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h2 id="背景">背景</h2>
+<p>学习分布式系统时，很容易一开始就看到
+<code>Raft</code>、<code>Paxos</code>、<code>CAP</code>、一致性、分布式事务这些概念。但如果底层基础没有建立起来，这些概念会比较悬空。</p>
+<p>对我现在的实习方向来说，组内工作内容和训练-推理一体存储、<code>KV Cache</code>
+相关。这个场景里，分布式问题经常不是先表现为“算法问题”，而是先表现为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">为什么请求变慢？</span><br><span class="line">为什么 P99 延迟突然升高？</span><br><span class="line">为什么 GPU 显存满了？</span><br><span class="line">为什么 cache 迁移很贵？</span><br><span class="line">为什么一次远程访问比本地访问慢很多？</span><br><span class="line">为什么某个 block group 明明存在，却读不到？</span><br></pre></td></tr></table></figure>
+<p>这些问题背后，最先需要补牢的是四类基础：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">操作系统</span><br><span class="line">网络</span><br><span class="line">并发</span><br><span class="line">存储</span><br></pre></td></tr></table></figure>
+<p>这一篇先不追求把每个方向讲得很深，而是建立一个基础判断能力：看到一个系统设计时，能够大概判断这个系统可能慢在哪里、可能失败在哪里。</p>
+<span id="more"></span>
+<h2 id="学习目标">学习目标</h2>
+<p>这一组基础的学习目标可以概括成一句话：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">理解系统为什么会慢，为什么会失败。</span><br></pre></td></tr></table></figure>
+<p>具体来说，需要掌握：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">进程、线程、协程</span><br><span class="line">锁、条件变量、原子操作</span><br><span class="line">内存、页表、mmap</span><br><span class="line">磁盘、SSD、顺序读写、随机读写</span><br><span class="line">TCP、连接、超时、重传</span><br><span class="line">带宽、延迟、吞吐、P99</span><br></pre></td></tr></table></figure>
+<p>放到 KV Cache 场景里，还要额外关注：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">GPU HBM 很快但容量小。</span><br><span class="line">CPU Memory 容量大但访问慢。</span><br><span class="line">SSD 更慢但容量更大。</span><br><span class="line">跨机器访问比本机访问更慢。</span><br><span class="line">跨 GPU / 跨节点搬运 KV Cache 代价很高。</span><br></pre></td></tr></table></figure>
+<p>如果这些概念不清楚，后面学习调度、迁移、淘汰、元数据、一致性时，就很难判断一个方案到底好不好。</p>
+<h2 id="操作系统基础">操作系统基础</h2>
+<p>分布式系统虽然运行在多台机器上，但每台机器内部仍然要依赖操作系统管理资源。</p>
+<p>操作系统负责：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">1. 管理进程和线程。</span><br><span class="line">2. 调度 CPU。</span><br><span class="line">3. 管理内存。</span><br><span class="line">4. 管理文件和磁盘。</span><br><span class="line">5. 管理网络 I/O。</span><br><span class="line">6. 提供系统调用接口。</span><br></pre></td></tr></table></figure>
+<p>在分布式系统里，操作系统层面的开销会被放大。比如一次远程请求，可能会经历：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">用户态编码请求</span><br><span class="line">系统调用</span><br><span class="line">内核协议栈</span><br><span class="line">网卡发送</span><br><span class="line">对端网卡接收</span><br><span class="line">对端内核协议栈</span><br><span class="line">对端用户态处理</span><br></pre></td></tr></table></figure>
+<p>这比一次本地函数调用复杂得多。</p>
+<h3 id="进程">进程</h3>
+<p>进程是操作系统进行资源隔离的基本单位。每个进程有自己的虚拟地址空间、文件描述符、堆、栈和代码段。</p>
+<p>分布式系统里，很多服务都是以进程形式运行的，例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">scheduler 进程</span><br><span class="line">metadata server 进程</span><br><span class="line">worker 进程</span><br><span class="line">cache manager 进程</span><br><span class="line">gateway 进程</span><br></pre></td></tr></table></figure>
+<p>进程的优点是隔离性强。一个进程崩溃，不一定会直接影响另一个进程。</p>
+<p>但进程之间通信成本比线程高，常见方式包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">pipe</span><br><span class="line">unix domain socket</span><br><span class="line">shared memory</span><br><span class="line">TCP socket</span><br><span class="line">RPC</span><br></pre></td></tr></table></figure>
+<p>如果一个 KV Cache 系统把调度器、模型 worker、cache manager
+拆成多个进程，就要考虑进程间通信成本和故障边界。</p>
+<h3 id="线程">线程</h3>
+<p>线程是 CPU
+调度的基本单位。同一个进程里的多个线程共享进程地址空间。</p>
+<p>线程适合处理并发任务，例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">接收网络请求。</span><br><span class="line">执行 RPC handler。</span><br><span class="line">后台迁移 cache。</span><br><span class="line">后台淘汰 cache。</span><br><span class="line">定期上报 heartbeat。</span><br><span class="line">异步刷新元数据。</span><br></pre></td></tr></table></figure>
+<p>线程共享内存，所以通信方便，但也带来并发问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">数据竞争</span><br><span class="line">死锁</span><br><span class="line">锁竞争</span><br><span class="line">内存可见性</span><br><span class="line">状态更新顺序错误</span><br></pre></td></tr></table></figure>
+<p>比如一个线程正在迁移
+<code>block_group_1</code>，另一个线程同时准备淘汰它，如果没有正确的锁、状态机和版本校验，就可能出现错误释放或重复迁移。</p>
+<h3 id="协程">协程</h3>
+<p>协程通常比线程更轻量，适合高并发 I/O
+场景。它由用户态调度，不一定每个协程都对应一个内核线程。</p>
+<p>在网络服务中，协程常用于：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">同时处理大量 RPC 请求。</span><br><span class="line">等待远程存储返回。</span><br><span class="line">等待元数据服务响应。</span><br><span class="line">异步执行 cache prefetch。</span><br></pre></td></tr></table></figure>
+<p>协程的优势是切换成本低，适合大量等待 I/O 的任务。缺点是它并不会让 CPU
+计算变快，如果任务是重 CPU 计算，协程不能替代并行计算。</p>
+<p>对 KV Cache 系统来说，协程适合处理远程读写、元数据查询、异步迁移等
+I/O 密集任务。</p>
+<h2 id="并发基础">并发基础</h2>
+<p>分布式系统里，很多错误不是网络导致的，而是并发状态没有处理好。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">一个请求正在读取 cache，后台淘汰线程把 cache 删除了。</span><br><span class="line">一个 block group 正在迁移，另一个线程又发起了一次迁移。</span><br><span class="line">调度器认为某个 worker 还有空间，但 worker 实际已经分配满了。</span><br><span class="line">ref_count 还没更新，cache 就被释放了。</span><br></pre></td></tr></table></figure>
+<p>这些问题都属于并发控制问题。</p>
+<h3 id="锁">锁</h3>
+<p>锁用来保护共享状态，保证同一时间只有一个执行流修改某个关键数据。</p>
+<p>常见锁包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">mutex：互斥锁。</span><br><span class="line">rwlock：读写锁，允许多个读者并发，但写者独占。</span><br><span class="line">spinlock：自旋锁，等待时不睡眠，适合极短临界区。</span><br></pre></td></tr></table></figure>
+<p>锁能保证正确性，但也会带来性能问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">锁竞争：大量线程争同一把锁。</span><br><span class="line">死锁：多个线程互相等待对方持有的锁。</span><br><span class="line">优先级反转：低优先级任务持锁，高优先级任务被阻塞。</span><br><span class="line">临界区过大：持锁时间太长，系统吞吐下降。</span><br></pre></td></tr></table></figure>
+<p>在 KV Cache 场景中，如果整个 cache manager 只有一把全局锁，那么所有
+block 的读写、迁移、淘汰都要串行，P99 延迟很容易变差。</p>
+<p>更合理的做法通常是细粒度锁，例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">按 block_group_id 加锁。</span><br><span class="line">按 shard 加锁。</span><br><span class="line">读多写少的元数据使用读写锁。</span><br><span class="line">短状态更新使用 CAS。</span><br></pre></td></tr></table></figure>
+<h3 id="条件变量">条件变量</h3>
+<p>条件变量用于线程之间等待某个条件成立。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">某个 block group 正在 MIGRATING_OUT。</span><br><span class="line">decode 请求需要读取它。</span><br><span class="line">请求线程可以等待迁移完成。</span><br><span class="line">迁移线程完成后通知等待线程。</span><br></pre></td></tr></table></figure>
+<p>伪代码可以表示为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">while group.state == MIGRATING_OUT:</span><br><span class="line">    wait(group.cond)</span><br><span class="line"></span><br><span class="line">read(group)</span><br></pre></td></tr></table></figure>
+<p>这里要注意，等待条件时通常要用 <code>while</code>，而不是
+<code>if</code>。因为线程被唤醒后，条件不一定仍然成立。</p>
+<h3 id="原子操作">原子操作</h3>
+<p>原子操作用于执行不可分割的更新，例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ref_count += 1</span><br><span class="line">pin_count += 1</span><br><span class="line">version compare-and-swap</span><br></pre></td></tr></table></figure>
+<p>在 KV Cache 中，<code>ref_count</code> 和 <code>pin_count</code>
+非常关键。</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ref_count：表示当前有多少使用者引用这份 cache。</span><br><span class="line">pin_count：表示这份 cache 当前被固定，不能淘汰或迁移。</span><br></pre></td></tr></table></figure>
+<p>典型规则是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ref_count &gt; 0：不能直接释放。</span><br><span class="line">pin_count &gt; 0：不能淘汰，通常也不能迁移。</span><br></pre></td></tr></table></figure>
+<p>如果这些计数不是原子更新，就可能出现：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">线程 A 准备读取 cache，但 ref_count 还没加成功。</span><br><span class="line">线程 B 看到 ref_count == 0，于是释放 cache。</span><br><span class="line">线程 A 继续读取，读到了已经释放的内存。</span><br></pre></td></tr></table></figure>
+<p>这类问题非常隐蔽，所以并发状态要尽早设计清楚。</p>
+<h2 id="内存基础">内存基础</h2>
+<p>分布式系统的性能很多时候受内存影响，尤其是 KV Cache 系统。</p>
+<p>需要理解几个概念：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">虚拟内存</span><br><span class="line">物理内存</span><br><span class="line">页表</span><br><span class="line">缺页异常</span><br><span class="line">内存拷贝</span><br><span class="line">mmap</span><br><span class="line">NUMA</span><br></pre></td></tr></table></figure>
+<h3 id="虚拟内存和页表">虚拟内存和页表</h3>
+<p>进程看到的是虚拟地址，CPU 通过页表把虚拟地址翻译成物理地址。</p>
+<p>虚拟内存的好处是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">进程之间地址空间隔离。</span><br><span class="line">程序可以使用连续的虚拟地址。</span><br><span class="line">操作系统可以按页管理内存。</span><br><span class="line">可以把文件映射到内存。</span><br></pre></td></tr></table></figure>
+<p>但虚拟内存也有成本：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">地址翻译需要 TLB。</span><br><span class="line">页表会占用内存。</span><br><span class="line">缺页会触发内核处理。</span><br><span class="line">随机访问可能导致更多 TLB miss。</span><br></pre></td></tr></table></figure>
+<p>对 KV Cache 来说，大量随机访问、频繁分配释放、跨 NUMA
+节点访问都可能影响性能。</p>
+<h3 id="mmap">mmap</h3>
+<p><code>mmap</code>
+可以把文件或设备内存映射到进程地址空间。程序可以像访问内存一样访问文件内容。</p>
+<p>它常用于：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">大文件读取。</span><br><span class="line">共享内存。</span><br><span class="line">内存映射持久化文件。</span><br><span class="line">零拷贝场景。</span><br></pre></td></tr></table></figure>
+<p>但 <code>mmap</code>
+不是免费的。第一次访问某个页时可能触发缺页异常，操作系统需要把数据加载进内存。</p>
+<p>如果 KV Cache 下沉到 SSD，并通过 mmap 访问，那么要注意：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">首次访问可能很慢。</span><br><span class="line">随机访问可能导致大量 page fault。</span><br><span class="line">预取策略会影响性能。</span><br><span class="line">内存压力大时，映射页可能被回收。</span><br></pre></td></tr></table></figure>
+<h3 id="内存拷贝">内存拷贝</h3>
+<p>数据从一个位置移动到另一个位置，往往需要拷贝。拷贝会占用
+CPU、内存带宽和总线带宽。</p>
+<p>KV Cache 的迁移尤其要关注拷贝路径：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">GPU HBM -&gt; CPU Memory</span><br><span class="line">CPU Memory -&gt; GPU HBM</span><br><span class="line">GPU HBM -&gt; Remote GPU HBM</span><br><span class="line">GPU HBM -&gt; Remote CPU Memory</span><br><span class="line">CPU Memory -&gt; SSD</span><br><span class="line">SSD -&gt; CPU Memory</span><br></pre></td></tr></table></figure>
+<p>如果没有 RDMA 或 GPUDirect，跨节点搬运 GPU 数据可能需要经过 CPU
+中转，路径更长：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">GPU HBM -&gt; CPU Memory -&gt; NIC -&gt; Network -&gt; NIC -&gt; CPU Memory -&gt; GPU HBM</span><br></pre></td></tr></table></figure>
+<p>每多一次拷贝，就多一段延迟和带宽消耗。</p>
+<h2 id="网络基础">网络基础</h2>
+<p>分布式系统和单机系统最大的区别之一是：请求需要经过网络。</p>
+<p>网络访问有几个基本指标：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">延迟 latency：一次请求从发出到收到响应的时间。</span><br><span class="line">带宽 bandwidth：单位时间内最多能传输多少数据。</span><br><span class="line">吞吐 throughput：单位时间内实际完成多少请求或传输多少数据。</span><br><span class="line">尾延迟 tail latency：P99、P999 这类慢请求延迟。</span><br></pre></td></tr></table></figure>
+<h3 id="延迟">延迟</h3>
+<p>延迟会直接影响在线推理体验。</p>
+<p>例如一次 decode 请求需要访问远端 KV Cache：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">worker -&gt; remote cache manager -&gt; remote memory -&gt; response</span><br></pre></td></tr></table></figure>
+<p>如果每生成一个 token 都要远程访问一次，那么远程延迟会被不断放大。</p>
+<p>因此 KV Cache 系统通常希望：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">尽量让 cache 和计算在同一张 GPU 或同一台机器。</span><br><span class="line">尽量批量访问，而不是频繁小请求。</span><br><span class="line">尽量预取后续会用到的 block group。</span><br><span class="line">避免在 decode 关键路径上做大规模迁移。</span><br></pre></td></tr></table></figure>
+<h3 id="带宽">带宽</h3>
+<p>带宽决定单位时间内能搬多少数据。</p>
+<p>KV Cache 的数据量很大，迁移时很容易吃满网络带宽。例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">一个 block group 几百 MB。</span><br><span class="line">多个请求同时迁移。</span><br><span class="line">后台训练任务也在使用网络。</span><br><span class="line">远端存储也在读写。</span><br></pre></td></tr></table></figure>
+<p>这时即使每次远程访问延迟不高，整体吞吐也可能被带宽限制。</p>
+<p>所以系统需要控制：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">同时迁移的任务数量。</span><br><span class="line">单个租户的迁移流量。</span><br><span class="line">后台任务和在线请求的带宽优先级。</span><br><span class="line">是否压缩或量化传输内容。</span><br><span class="line">是否按 block group 批量搬运。</span><br></pre></td></tr></table></figure>
+<h3 id="吞吐">吞吐</h3>
+<p>吞吐不是单纯由带宽决定，还受
+CPU、锁、队列、下游服务、批处理策略影响。</p>
+<p>例如一个 cache manager 的吞吐可能被限制在：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">网络带宽。</span><br><span class="line">RPC 线程池。</span><br><span class="line">元数据锁。</span><br><span class="line">内存分配器。</span><br><span class="line">GPU/CPU 拷贝带宽。</span><br><span class="line">远端存储 IOPS。</span><br></pre></td></tr></table></figure>
+<p>所以当吞吐上不去时，不能只看网络，也要看系统内部是否有串行瓶颈。</p>
+<h3 id="p99">P99</h3>
+<p>平均延迟不够用，在线服务更关心 P99。</p>
+<p>原因是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">一个 batch 里最慢的请求可能拖慢整个 batch。</span><br><span class="line">一个慢 worker 可能拖慢调度队列。</span><br><span class="line">用户感受到的是慢请求，而不是平均值。</span><br></pre></td></tr></table></figure>
+<p>P99 变差的原因可能包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">锁竞争。</span><br><span class="line">网络重传。</span><br><span class="line">队列堆积。</span><br><span class="line">GC 或内存回收。</span><br><span class="line">SSD 随机读。</span><br><span class="line">远端 cache miss。</span><br><span class="line">后台迁移占用带宽。</span><br><span class="line">GPU 显存不足触发淘汰。</span><br></pre></td></tr></table></figure>
+<p>所以观察系统时，不能只看平均值，还要看 P50、P90、P99、P999
+的变化。</p>
+<h2 id="tcp-基础">TCP 基础</h2>
+<p>TCP 是可靠的字节流协议。它提供：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">连接管理。</span><br><span class="line">有序传输。</span><br><span class="line">丢包重传。</span><br><span class="line">流量控制。</span><br><span class="line">拥塞控制。</span><br></pre></td></tr></table></figure>
+<p>但可靠不等于没有成本。</p>
+<h3 id="连接">连接</h3>
+<p>TCP
+通信前需要建立连接。频繁创建连接会有额外开销，所以服务通常会使用连接池。</p>
+<p>在 RPC 系统中，连接池可以减少：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">三次握手成本。</span><br><span class="line">频繁创建和销毁 socket 的成本。</span><br><span class="line">内核资源开销。</span><br></pre></td></tr></table></figure>
+<p>但连接池也要管理：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">最大连接数。</span><br><span class="line">空闲连接回收。</span><br><span class="line">连接异常重建。</span><br><span class="line">连接上的请求排队。</span><br></pre></td></tr></table></figure>
+<h3 id="超时">超时</h3>
+<p>远程调用必须有超时。</p>
+<p>没有超时会导致：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">请求一直卡住。</span><br><span class="line">线程或协程被占用。</span><br><span class="line">连接池被耗尽。</span><br><span class="line">上游队列堆积。</span><br><span class="line">故障传播到更多模块。</span><br></pre></td></tr></table></figure>
+<p>在 KV Cache 系统里，例如远程读取 block group：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">get_block_group(block_group_id, epoch)</span><br></pre></td></tr></table></figure>
+<p>如果没有超时，远端节点变慢时，本地 worker
+可能一直等待，进而拖慢整个推理请求。</p>
+<h3 id="重传">重传</h3>
+<p>TCP 会在丢包时重传，这保证了数据可靠到达，但会增加延迟。</p>
+<p>当网络拥塞、丢包或网卡异常时，重传会让 P99 延迟明显变差。</p>
+<p>所以线上排查时，如果发现远程访问 P99 突然升高，可以考虑查看：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">网络丢包。</span><br><span class="line">TCP retransmission。</span><br><span class="line">网卡错误。</span><br><span class="line">交换机拥塞。</span><br><span class="line">远端节点 CPU 或内存压力。</span><br></pre></td></tr></table></figure>
+<h2 id="存储基础">存储基础</h2>
+<p>KV Cache 系统常常会涉及多级存储。</p>
+<p>从快到慢，大致可以这样理解：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">GPU HBM</span><br><span class="line">CPU Memory</span><br><span class="line">Local SSD</span><br><span class="line">Remote Memory</span><br><span class="line">Remote SSD / Distributed Storage</span><br></pre></td></tr></table></figure>
+<p>它们的容量、延迟、带宽和成本完全不同。</p>
+<h3 id="gpu-hbm">GPU HBM</h3>
+<p><code>HBM</code> 是 GPU
+上的高带宽显存，速度很快，适合存放正在计算中高频访问的数据。</p>
+<p>它的特点是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">带宽高。</span><br><span class="line">延迟低。</span><br><span class="line">容量有限。</span><br><span class="line">成本高。</span><br><span class="line">分配失败会直接影响推理任务。</span><br></pre></td></tr></table></figure>
+<p>KV Cache 在 decode 阶段会被频繁访问，所以最理想情况是放在 GPU
+HBM。</p>
+<p>但 HBM 容量有限，当长上下文、多并发、多 batch
+同时存在时，很容易不够用。</p>
+<p>这时系统需要决定：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">哪些 block group 留在 HBM？</span><br><span class="line">哪些迁移到 CPU Memory？</span><br><span class="line">哪些下沉到 SSD？</span><br><span class="line">哪些直接淘汰或重算？</span><br></pre></td></tr></table></figure>
+<h3 id="cpu-memory">CPU Memory</h3>
+<p>CPU Memory 容量比 GPU HBM 大，但 GPU 访问 CPU Memory 通常更慢。</p>
+<p>它适合存放：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">暂时不在 decode 热路径上的 cache。</span><br><span class="line">可以较快拉回 GPU 的 cache。</span><br><span class="line">远端迁移的中转数据。</span><br><span class="line">元数据和索引。</span><br></pre></td></tr></table></figure>
+<p>但是 GPU 和 CPU 之间的数据搬运会消耗 PCIe 或 NVLink 带宽。频繁在 HBM
+和 CPU Memory 之间来回搬 cache，会显著影响延迟。</p>
+<h3 id="ssd">SSD</h3>
+<p>SSD
+容量大，单位成本低，但延迟和带宽都比内存差，随机访问尤其要小心。</p>
+<p>SSD 适合：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">存放冷 cache。</span><br><span class="line">存放 checkpoint。</span><br><span class="line">存放可延迟加载的数据。</span><br><span class="line">作为内存不足时的下沉层。</span><br></pre></td></tr></table></figure>
+<p>但如果在线 decode 阶段频繁从 SSD 读取 KV Cache，通常会严重影响
+P99。</p>
+<p>所以 SSD 更适合作为冷数据层，而不是热路径上的高频访问层。</p>
+<h3 id="顺序读写和随机读写">顺序读写和随机读写</h3>
+<p>存储系统里，顺序读写通常比随机读写更友好。</p>
+<p>原因是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">顺序读写更容易预取。</span><br><span class="line">顺序写更容易合并。</span><br><span class="line">随机读写会产生更多寻址和 I/O 放大。</span><br><span class="line">SSD 虽然比 HDD 擅长随机读写，但随机 I/O 仍然比顺序 I/O 更贵。</span><br></pre></td></tr></table></figure>
+<p>对于 KV Cache，如果 block 太碎、访问模式太随机，下沉到 SSD
+或远端存储后性能会更差。</p>
+<p>因此 block group 的设计也和存储访问模式有关：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">把经常一起访问的 block 放进同一个 group。</span><br><span class="line">让 group 在物理存储上尽量连续。</span><br><span class="line">迁移和预取时按 group 批量处理。</span><br><span class="line">减少大量小随机读。</span><br></pre></td></tr></table></figure>
+<h2 id="多级存储和-kv-cache">多级存储和 KV Cache</h2>
+<p>KV Cache 管理的本质之一，是在多级存储之间做取舍。</p>
+<p>可以把不同层级理解为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">GPU HBM：最热的数据，正在 decode 使用。</span><br><span class="line">CPU Memory：温数据，可能很快会再次使用。</span><br><span class="line">SSD：冷数据，重算成本高但短期不访问。</span><br><span class="line">Remote Memory：本地放不下，但远端还有较快访问能力。</span><br><span class="line">Remote SSD：更冷、更便宜、更慢。</span><br></pre></td></tr></table></figure>
+<p>系统要不断回答：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">这个 block group 当前热不热？</span><br><span class="line">未来是否很快会访问？</span><br><span class="line">重算成本高不高？</span><br><span class="line">迁移成本高不高？</span><br><span class="line">留在 HBM 是否值得？</span><br><span class="line">下沉后再拉回来是否划算？</span><br></pre></td></tr></table></figure>
+<p>这就是为什么 KV Cache 系统需要缓存策略、迁移策略和调度策略。</p>
+<h2 id="一个请求为什么会慢">一个请求为什么会慢？</h2>
+<p>假设一次推理请求需要读取一个远端 block
+group，它可能慢在很多地方：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">1. 本地元数据缓存过期，需要重新查 metadata server。</span><br><span class="line">2. metadata server 排队或锁竞争。</span><br><span class="line">3. 路由发现 block group 在远端节点。</span><br><span class="line">4. 远端 cache manager RPC 排队。</span><br><span class="line">5. 远端 block group 正在迁移或被 pin。</span><br><span class="line">6. 数据从 SSD 加载到 CPU Memory。</span><br><span class="line">7. 数据从 CPU Memory 拷贝到 GPU HBM。</span><br><span class="line">8. 网络传输受到带宽限制。</span><br><span class="line">9. 本地 GPU HBM 空间不足，触发淘汰。</span><br><span class="line">10. decode batch 等待最慢的请求。</span><br></pre></td></tr></table></figure>
+<p>所以当系统变慢时，不能只问“网络是不是慢”，而要拆开看：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">CPU 是否满？</span><br><span class="line">锁是否竞争？</span><br><span class="line">队列是否堆积？</span><br><span class="line">网络是否拥塞？</span><br><span class="line">存储是否随机读太多？</span><br><span class="line">显存是否触发频繁淘汰？</span><br><span class="line">block group 是否被迁移打断？</span><br></pre></td></tr></table></figure>
+<h2 id="一个请求为什么会失败">一个请求为什么会失败？</h2>
+<p>失败也可能发生在很多层：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">进程崩溃。</span><br><span class="line">线程卡死。</span><br><span class="line">锁死锁。</span><br><span class="line">内存分配失败。</span><br><span class="line">GPU HBM 不足。</span><br><span class="line">RPC 超时。</span><br><span class="line">TCP 连接断开。</span><br><span class="line">远端节点不可达。</span><br><span class="line">SSD 读取失败。</span><br><span class="line">元数据版本过期。</span><br><span class="line">block group 已经被淘汰。</span><br></pre></td></tr></table></figure>
+<p>分布式系统的难点在于：失败经常不是“全部失败”，而是部分失败。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">迁移任务已经把数据复制到目标节点，但元数据还没更新。</span><br><span class="line">元数据已经更新到新位置，但源节点还没释放旧副本。</span><br><span class="line">客户端请求超时，但服务端其实执行成功了。</span><br><span class="line">worker 挂了，但它 pin 住的 block group 还没释放。</span><br></pre></td></tr></table></figure>
+<p>因此后续学习
+RPC、幂等、状态机、epoch、fencing、补偿任务时，都要带着这些失败场景去理解。</p>
+<h2 id="面向-kv-cache-的基础检查清单">面向 KV Cache 的基础检查清单</h2>
+<p>学习完这一组基础后，看系统设计或代码时可以用下面的问题检查：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">1. 这个模块运行在进程、线程还是协程中？</span><br><span class="line">2. 共享状态由谁保护？锁粒度多大？</span><br><span class="line">3. ref_count 和 pin_count 是否是原子更新？</span><br><span class="line">4. 是否存在全局锁导致 P99 变差？</span><br><span class="line">5. 一次远程访问会经过几次内存拷贝？</span><br><span class="line">6. 数据在 GPU HBM、CPU Memory、SSD 还是远端？</span><br><span class="line">7. 热路径上是否有 SSD 随机读？</span><br><span class="line">8. 是否频繁跨 GPU 或跨节点搬运 KV Cache？</span><br><span class="line">9. RPC 是否设置超时？</span><br><span class="line">10. P99 升高时，是网络、锁、队列、存储还是显存导致？</span><br><span class="line">11. block group 是否按访问局部性组织？</span><br><span class="line">12. 后台迁移是否会影响在线 decode？</span><br></pre></td></tr></table></figure>
+<h2 id="推荐学习顺序">推荐学习顺序</h2>
+<p>这一组基础可以按下面顺序学：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">1. 进程、线程、协程：理解执行模型。</span><br><span class="line">2. 锁、条件变量、原子操作：理解并发状态。</span><br><span class="line">3. 虚拟内存、页表、mmap：理解内存访问和缺页。</span><br><span class="line">4. TCP、连接、超时、重传：理解网络访问为什么会失败。</span><br><span class="line">5. 延迟、带宽、吞吐、P99：理解性能指标。</span><br><span class="line">6. GPU HBM、CPU Memory、SSD：理解多级存储差异。</span><br><span class="line">7. 顺序读写、随机读写：理解存储访问模式。</span><br><span class="line">8. 结合 KV Cache 分析一次 block group 访问路径。</span><br></pre></td></tr></table></figure>
+<p>最后一步最重要。不要只背概念，而是要能画出一条访问路径：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">worker</span><br><span class="line">-&gt; local cache manager</span><br><span class="line">-&gt; metadata server</span><br><span class="line">-&gt; remote cache manager</span><br><span class="line">-&gt; remote CPU Memory / SSD</span><br><span class="line">-&gt; network</span><br><span class="line">-&gt; local CPU Memory</span><br><span class="line">-&gt; local GPU HBM</span><br></pre></td></tr></table></figure>
+<p>然后逐段分析：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">哪里会排队？</span><br><span class="line">哪里会加锁？</span><br><span class="line">哪里会拷贝？</span><br><span class="line">哪里会超时？</span><br><span class="line">哪里会触发淘汰？</span><br><span class="line">哪里会导致 P99 变差？</span><br></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>分布式系统不是脱离单机基础凭空出现的。很多分布式问题，本质上仍然是操作系统、网络、并发和存储问题在多机环境下被放大。</p>
+<p>对训练-推理一体存储和 KV Cache
+来说，第一组基础最重要的是建立下面几个判断：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">1. 本地访问和远程访问不是一个量级。</span><br><span class="line">2. GPU HBM 很快，但容量是核心瓶颈。</span><br><span class="line">3. 数据迁移不是免费的，会消耗网络、总线、CPU 和内存带宽。</span><br><span class="line">4. 并发状态如果没有保护，cache 迁移和淘汰很容易出错。</span><br><span class="line">5. P99 比平均值更能反映在线推理体验。</span><br><span class="line">6. block group 的划分会影响局部性、迁移成本和淘汰质量。</span><br></pre></td></tr></table></figure>
+<p>掌握这些之后，再继续学习
+RPC、元数据、一致性、故障恢复和调度，会更容易把概念落到真实系统里。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+              <a href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" rel="tag"># 操作系统</a>
+              <a href="/tags/%E7%BD%91%E7%BB%9C/" rel="tag"># 网络</a>
+              <a href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag"># 并发</a>
+              <a href="/tags/%E5%AD%98%E5%82%A8/" rel="tag"># 存储</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/07/06/distributed-basis/" rel="prev" title="分布式基础：初步学习路径">
+                  <i class="fa fa-angle-left"></i> 分布式基础：初步学习路径
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

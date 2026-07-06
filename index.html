@@ -155,7 +155,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">14</span>
+          <span class="site-state-item-count">15</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
@@ -166,7 +166,7 @@
       </div>
       <div class="site-state-item site-state-tags">
           <a href="/tags/">
-        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-count">10</span>
         <span class="site-state-item-name">tags</span></a>
       </div>
   </nav>
@@ -196,7 +196,7 @@
   
 
   <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/06/distributed-algorithms/">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/06/distributed-foundation-os-network-concurrency-storage/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/avatar.gif">
@@ -214,7 +214,7 @@
     </span>
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
-          <a href="/2026/07/06/distributed-algorithms/" class="post-title-link" itemprop="url">分布式基础：初步学习路径</a>
+          <a href="/2026/07/06/distributed-foundation-os-network-concurrency-storage/" class="post-title-link" itemprop="url">分布式基础：操作系统、网络、并发与存储</a>
         </h2>
 
         <div class="post-meta-container">
@@ -226,7 +226,101 @@
       <span class="post-meta-item-text">Posted on</span>
       
 
-      <time title="Created: 2026-07-06 15:59:28 / Modified: 22:28:48" itemprop="dateCreated datePublished" datetime="2026-07-06T15:59:28+08:00">2026-07-06</time>
+      <time title="Created: 2026-07-06 20:30:00 / Modified: 22:38:24" itemprop="dateCreated datePublished" datetime="2026-07-06T20:30:00+08:00">2026-07-06</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/" itemprop="url" rel="index"><span itemprop="name">分布式</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <h2 id="背景">背景</h2>
+<p>学习分布式系统时，很容易一开始就看到
+<code>Raft</code>、<code>Paxos</code>、<code>CAP</code>、一致性、分布式事务这些概念。但如果底层基础没有建立起来，这些概念会比较悬空。</p>
+<p>对我现在的实习方向来说，组内工作内容和训练-推理一体存储、<code>KV Cache</code>
+相关。这个场景里，分布式问题经常不是先表现为“算法问题”，而是先表现为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">为什么请求变慢？</span><br><span class="line">为什么 P99 延迟突然升高？</span><br><span class="line">为什么 GPU 显存满了？</span><br><span class="line">为什么 cache 迁移很贵？</span><br><span class="line">为什么一次远程访问比本地访问慢很多？</span><br><span class="line">为什么某个 block group 明明存在，却读不到？</span><br></pre></td></tr></table></figure>
+<p>这些问题背后，最先需要补牢的是四类基础：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">操作系统</span><br><span class="line">网络</span><br><span class="line">并发</span><br><span class="line">存储</span><br></pre></td></tr></table></figure>
+<p>这一篇先不追求把每个方向讲得很深，而是建立一个基础判断能力：看到一个系统设计时，能够大概判断这个系统可能慢在哪里、可能失败在哪里。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2026/07/06/distributed-foundation-os-network-concurrency-storage/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/06/distributed-basis/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content=" | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2026/07/06/distributed-basis/" class="post-title-link" itemprop="url">分布式基础：初步学习路径</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-07-06 15:59:28 / Modified: 22:34:42" itemprop="dateCreated datePublished" datetime="2026-07-06T15:59:28+08:00">2026-07-06</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -257,7 +351,7 @@
 <p>这篇博客先从这些问题出发，总结作为初学者最应该掌握的分布式基础。</p>
           <!--noindex-->
             <div class="post-button">
-              <a class="btn" href="/2026/07/06/distributed-algorithms/#more" rel="contents">
+              <a class="btn" href="/2026/07/06/distributed-basis/#more" rel="contents">
                 Read more &raquo;
               </a>
             </div>
@@ -324,7 +418,7 @@
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2026-07-06 15:59:47" itemprop="dateModified" datetime="2026-07-06T15:59:47+08:00">2026-07-06</time>
+      <time title="Modified: 2026-07-06 22:34:42" itemprop="dateModified" datetime="2026-07-06T22:34:42+08:00">2026-07-06</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -722,11 +816,11 @@ pthread，而是在标准层面提供了一套跨平台接口。</p>
       </span>
       <span class="post-meta-item-text">In</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
         </span>
           , 
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
         </span>
     </span>
 
@@ -823,11 +917,11 @@ pthread，而是在标准层面提供了一套跨平台接口。</p>
       </span>
       <span class="post-meta-item-text">In</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
         </span>
           , 
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
         </span>
     </span>
 
@@ -923,11 +1017,11 @@ links）。</p>
       </span>
       <span class="post-meta-item-text">In</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
         </span>
           , 
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
         </span>
     </span>
 
@@ -1022,11 +1116,11 @@ Lab
       </span>
       <span class="post-meta-item-text">In</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
         </span>
           , 
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
         </span>
     </span>
 
@@ -1044,103 +1138,6 @@ Lab
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2026/03/27/6-s081-lab6/#more" rel="contents">
-                Read more &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/03/20/6-s081-lab5/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="Quan Zhou">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Quan Zhou 的 blog">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content=" | Quan Zhou 的 blog">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2026/03/20/6-s081-lab5/" class="post-title-link" itemprop="url">6.s081 Lab5 Copy-on-Write Fork for xv6 实现</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">Posted on</span>
-
-      <time title="Created: 2026-03-20 20:00:00" itemprop="dateCreated datePublished" datetime="2026-03-20T20:00:00+08:00">2026-03-20</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2026-07-06 11:54:30" itemprop="dateModified" datetime="2026-07-06T11:54:30+08:00">2026-07-06</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">In</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
-        </span>
-          , 
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
-        </span>
-    </span>
-
-  
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <p>在前几个lab中提到过COW（写时复制），比如fork一个进程后，子进程与父进程使用同样的指令和数据。如果每次都复制一份父进程的数据，在一些情况下子进程创建后调用exec，原本被复制的数据根本没有被使用过就被直接覆盖，在这种情况下就白白浪费了这次复制，并且复制也会有很大的开销，会拖慢系统执行的速度。</p>
-<p>为了提高系统执行效率，避免资源浪费，引入了COW（写时复制）机制，需要依赖缺页中断机制。当进行用户虚拟内存复制（uvmcopy）时，对相同的物理地址进行pte映射，使多个进程的pte指向同一片物理内存，并且这部分内容是只读的，如果有任何一个指向共享物理内存的进程需要对这部分内存进行写操作时，触发缺页中断，此时将需要进行写操作的页面进行真正的复制。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2026/03/20/6-s081-lab5/#more" rel="contents">
                 Read more &raquo;
               </a>
             </div>

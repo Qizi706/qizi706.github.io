@@ -155,7 +155,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">14</span>
+          <span class="site-state-item-count">15</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
@@ -166,7 +166,7 @@
       </div>
       <div class="site-state-item site-state-tags">
           <a href="/tags/">
-        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-count">10</span>
         <span class="site-state-item-name">tags</span></a>
       </div>
   </nav>
@@ -187,6 +187,103 @@
     </div>
 
     <div class="main-inner index posts-expand">
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/03/20/6-s081-lab5/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content=" | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2026/03/20/6-s081-lab5/" class="post-title-link" itemprop="url">6.s081 Lab5 Copy-on-Write Fork for xv6 实现</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+
+      <time title="Created: 2026-03-20 20:00:00" itemprop="dateCreated datePublished" datetime="2026-03-20T20:00:00+08:00">2026-03-20</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">Edited on</span>
+      <time title="Modified: 2026-07-06 11:54:30" itemprop="dateModified" datetime="2026-07-06T11:54:30+08:00">2026-07-06</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
+        </span>
+          , 
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <p>在前几个lab中提到过COW（写时复制），比如fork一个进程后，子进程与父进程使用同样的指令和数据。如果每次都复制一份父进程的数据，在一些情况下子进程创建后调用exec，原本被复制的数据根本没有被使用过就被直接覆盖，在这种情况下就白白浪费了这次复制，并且复制也会有很大的开销，会拖慢系统执行的速度。</p>
+<p>为了提高系统执行效率，避免资源浪费，引入了COW（写时复制）机制，需要依赖缺页中断机制。当进行用户虚拟内存复制（uvmcopy）时，对相同的物理地址进行pte映射，使多个进程的pte指向同一片物理内存，并且这部分内容是只读的，如果有任何一个指向共享物理内存的进程需要对这部分内存进行写操作时，触发缺页中断，此时将需要进行写操作的页面进行真正的复制。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2026/03/20/6-s081-lab5/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
 
     
 
@@ -240,11 +337,11 @@
       </span>
       <span class="post-meta-item-text">In</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
         </span>
           , 
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
         </span>
     </span>
 
@@ -336,11 +433,11 @@
       </span>
       <span class="post-meta-item-text">In</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
         </span>
           , 
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
         </span>
     </span>
 
@@ -434,11 +531,11 @@
       </span>
       <span class="post-meta-item-text">In</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
         </span>
           , 
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
         </span>
     </span>
 
@@ -535,11 +632,11 @@ target="_blank" rel="noopener" href="https://pdos.csail.mit.edu/6.828/2021/xv6/b
       </span>
       <span class="post-meta-item-text">In</span>
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
+          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
         </span>
           , 
         <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
+          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
         </span>
     </span>
 
