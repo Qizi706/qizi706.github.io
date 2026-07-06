@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.css" integrity="sha256-gkQVf8UKZgQ0HyuxL/VnacadJ+D2Kox2TCEBuNQg5+w=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Muse","darkmode":true,"version":"8.28.0","exturl":false,"sidebar":{"position":"right","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":false,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="背景 刚开始实习时，组内方向是训练-推理一体存储，尤其是围绕 KV Cache 做存储、调度、迁移或复用，那么“分布式”不是一个单独的理论章节，而是会贯穿在每一次请求、每一份缓存、每一次节点故障和每一个性能指标里。 我目前的目标不是一下子掌握所有分布式系统，而是先建立一张够用的地图： 123451. 计算任务为什么要分布到多台机器上？2. 数据为什么要分片、复制和迁移？3. 多副本之间如何保证一致">
+<meta property="og:type" content="article">
+<meta property="og:title" content="分布式基础：初步学习路径">
+<meta property="og:url" content="http://qizi706.github.io/2026/07/06/distributed-algorithms/index.html">
+<meta property="og:site_name" content="Quan Zhou 的 blog">
+<meta property="og:description" content="背景 刚开始实习时，组内方向是训练-推理一体存储，尤其是围绕 KV Cache 做存储、调度、迁移或复用，那么“分布式”不是一个单独的理论章节，而是会贯穿在每一次请求、每一份缓存、每一次节点故障和每一个性能指标里。 我目前的目标不是一下子掌握所有分布式系统，而是先建立一张够用的地图： 123451. 计算任务为什么要分布到多台机器上？2. 数据为什么要分片、复制和迁移？3. 多副本之间如何保证一致">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-07-06T07:59:28.000Z">
+<meta property="article:modified_time" content="2026-07-06T14:28:48.394Z">
+<meta property="article:author" content="Quan Zhou">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="算法">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="http://qizi706.github.io/2026/07/06/distributed-algorithms/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/07/06/distributed-algorithms/","path":"2026/07/06/distributed-algorithms/","title":"分布式基础：初步学习路径"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>分布式基础：初步学习路径 | Quan Zhou 的 blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/next-theme-pjax/0.6.0/pjax.min.js" integrity="sha256-vxLn1tSKWD4dqbMRyv940UYw4sXgMtYcK6reefzZrao=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.umd.js" integrity="sha256-a+H7FYzJv6oU2hfsfDGM2Ohw/cR9v+hPfxHCLdmCrE8=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pangu/7.2.0/pangu.umd.js" integrity="sha256-JnmRRnJK7DC6RQJbAJb6AXOM9OmWzS6z8eYultk/48Y=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script><script src="/js/pjax.js" defer></script>
+
+  
+
+  <script class="next-config" data-name="mermaid" type="application/json">{"enable":true,"theme":{"light":"default","dark":"dark"},"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.10.1/mermaid.min.js","integrity":"sha256-BmQmdWDS8X2OTbrwELWK366LV6escyWhHHe0XCTU/Hk="}}</script>
+  <script src="/js/third-party/tags/mermaid.js" defer></script>
+
+  <script class="next-config" data-name="wavedrom" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/wavedrom.min.js","integrity":"sha256-INLAoJc6quTNfiMWkGZniYO2cxE8mHpddnLow1m6RFs="}}</script>
+  <script class="next-config" data-name="wavedrom_skin" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/skins/default.js","integrity":"sha256-fduc/Zszk5ezWws2uInY/ALWVmIrmV6VTgXbsYSReFI="}}</script>
+  <script src="/js/third-party/tags/wavedrom.js" defer></script>
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">false</script><script class="next-config" data-name="mathjax" type="application/json">{"enable":true,"tags":"ams","js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js","integrity":"sha256-MASABpB4tYktI2Oitl4t+78w/lyA+D7b/s9GEP0JOGI="}}</script>
+<script src="/js/third-party/math/mathjax.js" defer></script>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quicklink/3.0.1/quicklink.umd.js" integrity="sha256-44BednzIpUeQJcY8qtLyarFu0UCCTbgmWOvaoehiFQQ=" crossorigin="anonymous" defer></script>
+  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/07/06/distributed-algorithms/"}</script>
+  <script src="/js/third-party/quicklink.js" defer></script>
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Quan Zhou 的 blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="Search" role="button">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a></li>
+  </ul>
+</nav>
+
+
+
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-text">背景</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88-kv-cache-%E4%BC%9A%E9%81%87%E5%88%B0%E5%88%86%E5%B8%83%E5%BC%8F%E9%97%AE%E9%A2%98"><span class="nav-text">为什么 KV Cache
+会遇到分布式问题？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%AC%AC%E4%B8%80%E4%B8%AA%E6%9C%88%E5%BA%94%E8%AF%A5%E6%8E%8C%E6%8F%A1%E7%9A%84%E5%88%86%E5%B8%83%E5%BC%8F%E7%9F%A5%E8%AF%86%E5%9C%B0%E5%9B%BE"><span class="nav-text">第一个月应该掌握的分布式知识地图</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BD%91%E7%BB%9C%E9%80%9A%E4%BF%A1%E5%9F%BA%E7%A1%80"><span class="nav-text">网络通信基础</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#tcprdma-%E5%92%8C-gpu-%E9%80%9A%E4%BF%A1"><span class="nav-text">TCP、RDMA 和 GPU 通信</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#rpc%E8%BF%9C%E7%A8%8B%E8%B0%83%E7%94%A8%E4%B8%8D%E6%98%AF%E6%9C%AC%E5%9C%B0%E8%B0%83%E7%94%A8"><span class="nav-text">RPC：远程调用不是本地调用</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%88%86%E7%89%87%E6%95%B0%E6%8D%AE%E5%A6%82%E4%BD%95%E5%88%86%E5%B8%83%E5%88%B0%E5%A4%9A%E5%8F%B0%E6%9C%BA%E5%99%A8"><span class="nav-text">分片：数据如何分布到多台机器？</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%93%88%E5%B8%8C%E5%88%86%E7%89%87"><span class="nav-text">哈希分片</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C"><span class="nav-text">一致性哈希</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#range-%E5%88%86%E7%89%87"><span class="nav-text">Range 分片</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#kv-cache-%E7%9A%84%E5%88%86%E7%89%87%E7%BB%B4%E5%BA%A6"><span class="nav-text">KV Cache 的分片维度</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#block-group%E6%AF%94-block-%E6%9B%B4%E9%AB%98%E4%B8%80%E5%B1%82%E7%9A%84%E7%AE%A1%E7%90%86%E5%8D%95%E4%BD%8D"><span class="nav-text">Block Group：比 block
+更高一层的管理单位</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#block-group-%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88%E9%97%AE%E9%A2%98"><span class="nav-text">Block Group 解决什么问题？</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#block-group-%E7%9A%84%E5%B8%B8%E8%A7%81%E5%85%83%E6%95%B0%E6%8D%AE"><span class="nav-text">Block Group 的常见元数据</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%B7%AF%E7%94%B1%E4%B8%8E%E5%85%83%E6%95%B0%E6%8D%AE"><span class="nav-text">路由与元数据</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%AF%E6%9C%AC%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%A4%8D%E5%88%B6%E6%95%B0%E6%8D%AE"><span class="nav-text">副本：为什么要复制数据？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B"><span class="nav-text">一致性模型</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%BC%BA%E4%B8%80%E8%87%B4%E6%80%A7"><span class="nav-text">强一致性</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%9C%80%E7%BB%88%E4%B8%80%E8%87%B4%E6%80%A7"><span class="nav-text">最终一致性</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%AF%BB%E5%86%99%E4%B8%80%E8%87%B4%E6%80%A7"><span class="nav-text">读写一致性</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#cap-%E4%B8%8E-pacelc"><span class="nav-text">CAP 与 PACELC</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%85%B1%E8%AF%86%E7%AE%97%E6%B3%95raftpaxos-%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88%E9%97%AE%E9%A2%98"><span class="nav-text">共识算法：Raft&#x2F;Paxos
+解决什么问题？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#leaderlease-%E5%92%8C-fencing"><span class="nav-text">Leader、Lease 和 Fencing</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%97%B6%E9%97%B4%E6%97%B6%E9%92%9F%E5%92%8C%E9%A1%BA%E5%BA%8F"><span class="nav-text">时间、时钟和顺序</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%95%85%E9%9A%9C%E6%A8%A1%E5%9E%8B"><span class="nav-text">故障模型</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%AF%E7%94%A8%E6%80%A7%E8%B6%85%E6%97%B6%E9%87%8D%E8%AF%95%E5%92%8C%E9%99%8D%E7%BA%A7"><span class="nav-text">可用性：超时、重试和降级</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%B6%85%E6%97%B6"><span class="nav-text">超时</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%87%8D%E8%AF%95"><span class="nav-text">重试</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%99%8D%E7%BA%A7"><span class="nav-text">降级</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E5%92%8C%E8%B0%83%E5%BA%A6"><span class="nav-text">负载均衡和调度</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%83%AD%E7%82%B9%E9%97%AE%E9%A2%98"><span class="nav-text">热点问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%95%B0%E6%8D%AE%E8%BF%81%E7%A7%BB"><span class="nav-text">数据迁移</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BC%93%E5%AD%98%E6%B7%98%E6%B1%B0"><span class="nav-text">缓存淘汰</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%AE%AD%E7%BB%83-%E6%8E%A8%E7%90%86%E4%B8%80%E4%BD%93%E7%9A%84%E7%89%B9%E6%AE%8A%E7%82%B9"><span class="nav-text">训练-推理一体的特殊点</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E5%88%86%E5%B8%83%E5%BC%8F%E7%AE%97%E6%B3%95%E5%92%8C%E7%BB%84%E4%BB%B6"><span class="nav-text">常见分布式算法和组件</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#raftpaxos"><span class="nav-text">Raft&#x2F;Paxos</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#gossip"><span class="nav-text">Gossip</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#consistent-hashing"><span class="nav-text">Consistent Hashing</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#two-phase-commit"><span class="nav-text">Two Phase Commit</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#leader-election"><span class="nav-text">Leader Election</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#heartbeat-%E5%92%8C-failure-detector"><span class="nav-text">Heartbeat 和 Failure
+Detector</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7"><span class="nav-text">可观测性</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%88%91%E5%BA%94%E8%AF%A5%E5%A6%82%E4%BD%95%E5%AD%A6%E4%B9%A0"><span class="nav-text">我应该如何学习？</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%AC%AC%E4%B8%80%E9%98%B6%E6%AE%B5%E8%83%BD%E7%9C%8B%E6%87%82%E7%B3%BB%E7%BB%9F%E5%9C%A8%E5%81%9A%E4%BB%80%E4%B9%88"><span class="nav-text">第一阶段：能看懂系统在做什么</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%AC%AC%E4%BA%8C%E9%98%B6%E6%AE%B5%E8%83%BD%E5%88%86%E6%9E%90%E4%B8%80%E4%B8%AA%E8%AF%B7%E6%B1%82%E8%B7%AF%E5%BE%84"><span class="nav-text">第二阶段：能分析一个请求路径</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%AC%AC%E4%B8%89%E9%98%B6%E6%AE%B5%E8%83%BD%E5%AE%9A%E4%BD%8D%E6%80%A7%E8%83%BD%E7%93%B6%E9%A2%88"><span class="nav-text">第三阶段：能定位性能瓶颈</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%80%E4%B8%AA-kv-cache-%E7%B3%BB%E7%BB%9F%E7%9A%84%E7%AE%80%E5%8C%96%E8%AE%BE%E8%AE%A1"><span class="nav-text">一个 KV Cache 系统的简化设计</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AD%A6%E4%B9%A0%E6%97%B6%E5%AE%B9%E6%98%93%E5%BF%BD%E7%95%A5%E7%9A%84%E7%82%B9"><span class="nav-text">学习时容易忽略的点</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%88%86%E5%B8%83%E5%BC%8F-bug-%E5%BE%80%E5%BE%80%E6%98%AF%E7%8A%B6%E6%80%81-bug"><span class="nav-text">分布式 bug 往往是状态 bug</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%8D%E8%A6%81%E5%8F%AA%E7%9C%8B%E5%B9%B3%E5%9D%87%E5%BB%B6%E8%BF%9F"><span class="nav-text">不要只看平均延迟</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%9C%AC%E5%9C%B0%E7%BC%93%E5%AD%98%E4%BC%9A%E5%B8%A6%E6%9D%A5%E4%B8%80%E8%87%B4%E6%80%A7%E9%97%AE%E9%A2%98"><span class="nav-text">本地缓存会带来一致性问题</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%95%85%E9%9A%9C%E6%A3%80%E6%B5%8B%E4%B8%8D%E6%98%AF%E6%95%85%E9%9A%9C%E8%AF%81%E6%98%8E"><span class="nav-text">故障检测不是故障证明</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%9D%A2%E5%90%91%E5%AE%9E%E4%B9%A0%E5%B7%A5%E4%BD%9C%E7%9A%84%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95"><span class="nav-text">面向实习工作的检查清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-text">总结</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Quan Zhou</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">14</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+        </div>
+      </div>
+        <div class="back-to-top animated" role="button" aria-label="Back to top">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/06/distributed-algorithms/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="分布式基础：初步学习路径 | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          分布式基础：初步学习路径
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-07-06 15:59:28 / Modified: 22:28:48" itemprop="dateCreated datePublished" datetime="2026-07-06T15:59:28+08:00">2026-07-06</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/" itemprop="url" rel="index"><span itemprop="name">分布式</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h2 id="背景">背景</h2>
+<p>刚开始实习时，组内方向是训练-推理一体存储，尤其是围绕
+<code>KV Cache</code>
+做存储、调度、迁移或复用，那么“分布式”不是一个单独的理论章节，而是会贯穿在每一次请求、每一份缓存、每一次节点故障和每一个性能指标里。</p>
+<p>我目前的目标不是一下子掌握所有分布式系统，而是先建立一张够用的地图：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">1. 计算任务为什么要分布到多台机器上？</span><br><span class="line">2. 数据为什么要分片、复制和迁移？</span><br><span class="line">3. 多副本之间如何保证一致性？</span><br><span class="line">4. 节点故障、网络抖动、慢节点出现时系统如何继续工作？</span><br><span class="line">5. KV Cache 这种数据在训练和推理场景下有什么特殊性？</span><br></pre></td></tr></table></figure>
+<p>这篇博客先从这些问题出发，总结作为初学者最应该掌握的分布式基础。</p>
+<span id="more"></span>
+<h2 id="为什么-kv-cache-会遇到分布式问题">为什么 KV Cache
+会遇到分布式问题？</h2>
+<p>大模型推理中，<code>KV Cache</code> 保存的是 Transformer Attention
+计算中已经生成 token 的 Key 和 Value。对于自回归生成任务，后续 token
+可以复用历史 token 的 K/V，避免重复计算。</p>
+<p>它的特点是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">1. 数据量大：长上下文、多 batch、多并发请求都会迅速放大 KV Cache 占用。</span><br><span class="line">2. 访问频繁：每生成一个 token 都可能访问历史 KV。</span><br><span class="line">3. 生命周期复杂：有的请求很快结束，有的会长时间占用缓存。</span><br><span class="line">4. 强依赖位置：KV Cache 往往和某个模型层、某个序列、某个设备上的计算绑定。</span><br><span class="line">5. 成本敏感：GPU HBM 很贵，KV Cache 放哪里、何时迁移、何时淘汰都会影响吞吐和延迟。</span><br></pre></td></tr></table></figure>
+<p>当单机 GPU
+显存无法承载全部请求，系统就需要把计算和缓存放到多张卡、多台机器，甚至多级存储中。这时就进入了典型的分布式系统问题：数据如何分布、如何找到、如何迁移、如何保持一致、故障时如何恢复。</p>
+<h2
+id="第一个月应该掌握的分布式知识地图">第一个月应该掌握的分布式知识地图</h2>
+<p>我认为可以按下面这条主线学习：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">网络通信 -&gt; RPC -&gt; 分片与路由 -&gt; 副本与一致性 -&gt; 共识与元数据</span><br><span class="line">         -&gt; 故障处理 -&gt; 调度与负载均衡 -&gt; 可观测性 -&gt; 性能优化</span><br></pre></td></tr></table></figure>
+<p>这条线不是严格的先后关系，但它基本覆盖了一个分布式存储/推理系统每天都会遇到的问题。</p>
+<h2 id="网络通信基础">网络通信基础</h2>
+<p>分布式系统的第一层现实是：跨机器通信远比本地函数调用慢，也更容易失败。</p>
+<p>需要先理解几个基本概念：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">延迟 latency：一次请求从发出到收到响应的时间。</span><br><span class="line">吞吐 throughput：单位时间内能处理多少数据或请求。</span><br><span class="line">带宽 bandwidth：单位时间内网络最多传输多少数据。</span><br><span class="line">尾延迟 tail latency：P99、P999 这类极端慢请求的延迟。</span><br></pre></td></tr></table></figure>
+<p>在 KV Cache
+场景里，尾延迟非常重要。推理服务往往面向在线请求，一个请求卡住可能会拖慢整个
+batch，甚至影响调度器继续合批。</p>
+<h3 id="tcprdma-和-gpu-通信">TCP、RDMA 和 GPU 通信</h3>
+<p>普通服务里，常见通信基于
+TCP。大模型训练和推理系统里，还经常会看到：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">RDMA：绕过内核、低延迟、高带宽的远程内存访问。</span><br><span class="line">NCCL：多 GPU 通信库，常用于 all-reduce、broadcast、all-gather 等集合通信。</span><br><span class="line">InfiniBand/RoCE：高性能网络方案。</span><br><span class="line">GPUDirect RDMA：让网卡直接访问 GPU 显存，减少 CPU 拷贝。</span><br></pre></td></tr></table></figure>
+<p>不要求第一个月就能调优这些组件，但至少要知道：在训练和推理一体系统里，网络不是透明的。KV
+Cache 如果频繁跨机迁移，就会受到网络带宽和延迟的强约束。</p>
+<h2 id="rpc远程调用不是本地调用">RPC：远程调用不是本地调用</h2>
+<p><code>RPC</code> 是 Remote Procedure
+Call，也就是像调用本地函数一样调用远程服务。</p>
+<p>但是远程调用和本地调用有本质区别：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">1. 远程调用可能超时。</span><br><span class="line">2. 请求可能发出去了，但响应丢了。</span><br><span class="line">3. 服务端可能执行成功，但客户端以为失败。</span><br><span class="line">4. 重试可能导致重复执行。</span><br><span class="line">5. 网络分区时，双方可能都无法确认对方状态。</span><br></pre></td></tr></table></figure>
+<p>所以设计 RPC 接口时要关注：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">超时 timeout：不能无限等待。</span><br><span class="line">重试 retry：失败后是否重试，重试几次。</span><br><span class="line">幂等 idempotent：重复请求是否会产生副作用。</span><br><span class="line">限流 rate limit：避免下游被打爆。</span><br><span class="line">熔断 circuit breaker：下游异常时快速失败，保护系统。</span><br></pre></td></tr></table></figure>
+<p>对于 KV Cache 服务，典型 RPC 可能包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">put_cache(seq_id, layer_id, block_id, data)</span><br><span class="line">get_cache(seq_id, layer_id, block_id)</span><br><span class="line">move_cache(src_node, dst_node, cache_id)</span><br><span class="line">evict_cache(cache_id)</span><br><span class="line">pin_cache(cache_id)</span><br><span class="line">unpin_cache(cache_id)</span><br></pre></td></tr></table></figure>
+<p>其中
+<code>move_cache</code>、<code>evict_cache</code>、<code>pin_cache</code>
+这类操作尤其需要想清楚幂等性。例如客户端重试一次
+<code>evict_cache</code>，系统不应该因为缓存已经被删而进入异常状态。</p>
+<h2 id="分片数据如何分布到多台机器">分片：数据如何分布到多台机器？</h2>
+<p>当一台机器放不下所有数据，就需要分片。分片的核心问题是：给定一个
+key，应该去哪个节点找？</p>
+<p>常见方式有三类。</p>
+<h3 id="哈希分片">哈希分片</h3>
+<p>最简单的方式是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">node = hash(key) % N</span><br></pre></td></tr></table></figure>
+<p>优点是实现简单，数据分布相对均匀。缺点是节点数量 <code>N</code>
+变化时，大量 key 的归属会改变，导致大规模数据迁移。</p>
+<h3 id="一致性哈希">一致性哈希</h3>
+<p>一致性哈希把节点和 key 都映射到一个环上，key
+顺时针找到第一个节点。增加或删除节点时，只影响环上一小段 key。</p>
+<p>它适合缓存系统，因为缓存节点扩缩容比较常见。</p>
+<h3 id="range-分片">Range 分片</h3>
+<p>Range 分片按照 key 的范围切分，例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[0, 1000)      -&gt; node A</span><br><span class="line">[1000, 2000)   -&gt; node B</span><br><span class="line">[2000, 3000)   -&gt; node C</span><br></pre></td></tr></table></figure>
+<p>优点是方便范围扫描，缺点是容易出现热点。例如某一段 key
+被频繁访问，就会打爆某个节点。</p>
+<h3 id="kv-cache-的分片维度">KV Cache 的分片维度</h3>
+<p>KV Cache 的 key 通常不只是一个简单字符串，它可能由多个维度组成：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">model_id</span><br><span class="line">request_id / session_id</span><br><span class="line">sequence_id</span><br><span class="line">layer_id</span><br><span class="line">head_id</span><br><span class="line">block_id</span><br><span class="line">token_range</span><br></pre></td></tr></table></figure>
+<p>因此分片策略也有很多选择：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">按请求分片：同一个请求的 cache 尽量放在一起，访问简单。</span><br><span class="line">按 layer 分片：不同层的 cache 分到不同设备，配合 pipeline parallelism。</span><br><span class="line">按 block 分片：长序列切成块，方便迁移和淘汰。</span><br><span class="line">按租户/模型分片：隔离不同业务或不同模型。</span><br></pre></td></tr></table></figure>
+<p>一个好的分片策略通常要同时考虑：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 访问局部性：计算在哪里，cache 最好也在哪里。</span><br><span class="line">2. 负载均衡：不能让少数节点承载绝大多数请求。</span><br><span class="line">3. 迁移成本：扩缩容或调度变化时，搬运数据不能太贵。</span><br><span class="line">4. 故障影响面：单个节点挂掉时，影响的请求越少越好。</span><br></pre></td></tr></table></figure>
+<h3 id="block-group比-block-更高一层的管理单位">Block Group：比 block
+更高一层的管理单位</h3>
+<p>在 KV Cache 系统里，最小的数据管理单位常常是 <code>block</code>。一个
+block 可以表示一段连续 token 的 K/V，例如第 0 到 15 个 token、第 16 到
+31 个
+token。这样做的好处是：长序列不用一次性分配一整块连续空间，而是可以按
+block 逐步增长、复用和释放。</p>
+<p>但是如果系统只管理单个 block，会遇到几个问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 元数据太碎：一个长上下文请求可能对应大量 block。</span><br><span class="line">2. 调度成本高：每次迁移、淘汰、查询都要处理很多小对象。</span><br><span class="line">3. 局部性难保证：相邻 block 可能被打散到很多节点，访问时网络开销变大。</span><br><span class="line">4. 状态管理复杂：每个 block 都维护 pin、ref_count、version，开销较高。</span><br></pre></td></tr></table></figure>
+<p>因此很多系统会引入
+<code>Block Group</code>，把一组逻辑上相关、访问模式相近的 block
+作为一个更大的管理单位。</p>
+<p>可以简单理解为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">block：KV Cache 的基本存储单元。</span><br><span class="line">block group：一组 block 的逻辑集合，也是调度、迁移、淘汰、预取时更常用的管理单位。</span><br></pre></td></tr></table></figure>
+<p>一个 block group 可能按照下面这些维度组织：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">同一个 request/session 的一段连续 token。</span><br><span class="line">同一个 layer 的多个连续 block。</span><br><span class="line">同一个 prefill 阶段产生的一批 block。</span><br><span class="line">未来 decode 阶段很可能一起访问的一组 block。</span><br><span class="line">具有相同生命周期或相同优先级的一组 block。</span><br></pre></td></tr></table></figure>
+<p>举个简化例子：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">request_id = req_1</span><br><span class="line">sequence length = 128</span><br><span class="line">block size = 16 tokens</span><br><span class="line"></span><br><span class="line">block_0: token [0, 16)</span><br><span class="line">block_1: token [16, 32)</span><br><span class="line">block_2: token [32, 48)</span><br><span class="line">block_3: token [48, 64)</span><br><span class="line">block_4: token [64, 80)</span><br><span class="line">block_5: token [80, 96)</span><br><span class="line">block_6: token [96, 112)</span><br><span class="line">block_7: token [112, 128)</span><br><span class="line"></span><br><span class="line">block_group_0: block_0, block_1, block_2, block_3</span><br><span class="line">block_group_1: block_4, block_5, block_6, block_7</span><br></pre></td></tr></table></figure>
+<p>这样调度器或 Cache Manager 可以以 group 为单位做决策。例如
+<code>block_group_0</code> 最近一直被访问，就把它 pin 在 GPU
+HBM；<code>block_group_1</code> 暂时不会访问，就可以迁移到 CPU memory 或
+remote store。</p>
+<h3 id="block-group-解决什么问题">Block Group 解决什么问题？</h3>
+<p><code>Block Group</code>
+的核心价值是降低管理粒度和访问粒度之间的矛盾。</p>
+<p>单个 block
+粒度细，适合内存分配和局部释放；但系统决策通常不希望太细，否则元数据、RPC、锁竞争和调度开销都会上升。</p>
+<p>以 group 为单位可以带来几个好处：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">1. 降低元数据开销：group 维护公共状态，block 只保留必要索引。</span><br><span class="line">2. 提升访问局部性：一起访问的 block 尽量放在同一节点或同一存储层。</span><br><span class="line">3. 减少迁移次数：迁移一组 block，而不是为每个 block 单独发起迁移。</span><br><span class="line">4. 改善淘汰决策：根据 group 的整体热度、大小、重算成本做判断。</span><br><span class="line">5. 简化生命周期管理：请求结束、取消或切换阶段时，可以批量释放。</span><br></pre></td></tr></table></figure>
+<p>但是 group 不能无限大。group 太大会导致：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 迁移成本变高，一次搬运太多数据。</span><br><span class="line">2. 淘汰不够精细，可能把仍然有用的 block 一起淘汰。</span><br><span class="line">3. 负载均衡变差，大 group 容易形成热点。</span><br><span class="line">4. 内存碎片和空间浪费变严重。</span><br></pre></td></tr></table></figure>
+<p>因此 block group 的设计本质上是一个粒度权衡：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">block 太小：灵活，但管理开销大。</span><br><span class="line">group 太大：管理简单，但调度和淘汰不够精细。</span><br><span class="line">合适的 group：让经常一起访问、一起迁移、一起释放的数据放在一起。</span><br></pre></td></tr></table></figure>
+<h3 id="block-group-的常见元数据">Block Group 的常见元数据</h3>
+<p>一个 block group 通常需要维护这些字段：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">block_group_id：group 的唯一标识。</span><br><span class="line">model_id：所属模型。</span><br><span class="line">request_id / session_id：所属请求或会话。</span><br><span class="line">layer_id：所属模型层。</span><br><span class="line">token_range：覆盖的 token 范围。</span><br><span class="line">block_list：包含哪些 block。</span><br><span class="line">location：当前所在节点、设备和存储层。</span><br><span class="line">state：当前状态，例如 LOCAL、MIGRATING、REMOTE、EVICTED。</span><br><span class="line">version / epoch：状态版本，用于处理并发更新和过期写入。</span><br><span class="line">ref_count：引用计数，判断是否仍被使用。</span><br><span class="line">pin_count：pin 计数，防止正在使用的数据被淘汰。</span><br><span class="line">last_access_time：最近访问时间，用于 LRU。</span><br><span class="line">access_count：访问次数，用于 LFU 或热度判断。</span><br><span class="line">recompute_cost：重算成本，用于淘汰决策。</span><br><span class="line">size_bytes：占用空间。</span><br><span class="line">priority：优先级。</span><br></pre></td></tr></table></figure>
+<p>其中最关键的是
+<code>state</code>、<code>version/epoch</code>、<code>ref_count</code>
+和 <code>pin_count</code>。</p>
+<p>例如当一个 group 正在从 GPU 迁移到 CPU 时，状态可能从：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">LOCAL</span><br><span class="line">-&gt; MIGRATING_OUT</span><br><span class="line">-&gt; REMOTE</span><br></pre></td></tr></table></figure>
+<p>如果这时有 decode 请求要读取它，就必须根据状态决定：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">等待迁移完成。</span><br><span class="line">取消迁移，继续在本地读取。</span><br><span class="line">从目标位置读取。</span><br><span class="line">重新计算。</span><br></pre></td></tr></table></figure>
+<p>这个决策必须和 version/epoch
+绑定，否则旧的迁移任务可能覆盖新的状态。</p>
+<h2 id="路由与元数据">路由与元数据</h2>
+<p>分片之后，系统必须知道每份数据在哪里。这个信息就是元数据。</p>
+<p>KV Cache 系统里可能维护类似这样的映射：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">cache_id -&gt; node_id</span><br><span class="line">cache_id -&gt; device_id</span><br><span class="line">cache_id -&gt; memory_tier</span><br><span class="line">cache_id -&gt; block_state</span><br><span class="line">block_id -&gt; block_group_id</span><br><span class="line">block_group_id -&gt; group_location</span><br><span class="line">block_group_id -&gt; group_state</span><br><span class="line">request_id -&gt; cache_block_list</span><br><span class="line">request_id -&gt; block_group_list</span><br></pre></td></tr></table></figure>
+<p>其中 <code>memory_tier</code> 可能表示：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">GPU HBM</span><br><span class="line">CPU Memory</span><br><span class="line">Local SSD</span><br><span class="line">Remote Memory</span><br><span class="line">Remote SSD</span><br></pre></td></tr></table></figure>
+<p>元数据服务需要解决的问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 元数据本身如何高可用？</span><br><span class="line">2. 元数据更新和数据迁移如何保持一致？</span><br><span class="line">3. 客户端缓存了旧路由怎么办？</span><br><span class="line">4. 多个调度器同时修改同一份 cache 状态怎么办？</span><br></pre></td></tr></table></figure>
+<p>这就引出了一致性和共识问题。</p>
+<h2 id="副本为什么要复制数据">副本：为什么要复制数据？</h2>
+<p>副本的目的主要有两个：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">1. 高可用：某个节点挂了，还有其他副本可以继续服务。</span><br><span class="line">2. 读扩展：多个副本可以分摅读请求。</span><br></pre></td></tr></table></figure>
+<p>但是副本会带来一致性问题。比如同一个 <code>cache_id</code> 在 A、B
+两个节点都有副本，如果 A 更新了，B 还没更新，那么客户端读 B
+就会读到旧数据。</p>
+<p>在 KV Cache 场景中，要先区分数据类型：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">不可变 cache：某个 token range 的 K/V 一旦生成就不再修改。</span><br><span class="line">可变状态：cache 的位置、引用计数、pin 状态、生命周期状态会变化。</span><br></pre></td></tr></table></figure>
+<p>这一区分很重要。KV 数据本身很多时候可以看作 immutable
+block，而元数据状态是 mutable
+的。对不可变数据，复制相对容易；对可变元数据，必须认真处理一致性。</p>
+<h2 id="一致性模型">一致性模型</h2>
+<p>一致性回答的是：多个副本存在时，读写操作应该表现出什么语义？</p>
+<h3 id="强一致性">强一致性</h3>
+<p>强一致性要求读操作总能读到最近一次成功写入的结果。</p>
+<p>优点是语义简单，缺点是性能和可用性成本更高。跨机强一致往往需要等待多个副本确认。</p>
+<p>适合：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">元数据主状态</span><br><span class="line">任务归属</span><br><span class="line">cache 所有权</span><br><span class="line">引用计数</span><br><span class="line">资源配额</span><br></pre></td></tr></table></figure>
+<h3 id="最终一致性">最终一致性</h3>
+<p>最终一致性允许短时间内读到旧数据，但只要没有新的写入，副本最终会收敛到相同状态。</p>
+<p>适合：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">统计指标</span><br><span class="line">非关键缓存副本</span><br><span class="line">异步预热数据</span><br><span class="line">可重算的数据</span><br></pre></td></tr></table></figure>
+<h3 id="读写一致性">读写一致性</h3>
+<p>更细的模型还包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Read Your Writes：自己写入后，自己后续一定能读到。</span><br><span class="line">Monotonic Reads：同一个客户端不会先读到新值，再读到旧值。</span><br><span class="line">Causal Consistency：有因果关系的操作按因果顺序可见。</span><br></pre></td></tr></table></figure>
+<p>对于推理服务，用户请求内部通常需要比较强的语义。例如同一个 request 的
+KV Cache 已经生成了前 100 个 token，后续 decode 阶段不能读到只包含前 80
+个 token 的旧状态。</p>
+<h2 id="cap-与-pacelc">CAP 与 PACELC</h2>
+<p>CAP 说的是，在网络分区发生时，一个分布式系统不能同时满足：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">C：Consistency，一致性。</span><br><span class="line">A：Availability，可用性。</span><br><span class="line">P：Partition tolerance，分区容忍性。</span><br></pre></td></tr></table></figure>
+<p>现实系统必须容忍网络分区，所以关键取舍通常是：分区发生时优先一致性还是可用性。</p>
+<p>但 CAP 只讨论故障时的取舍，不够完整。<code>PACELC</code>
+更贴近日常系统设计：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">P: if Partition occurs</span><br><span class="line">A/C: choose Availability or Consistency</span><br><span class="line">E: Else, normally</span><br><span class="line">L/C: choose Latency or Consistency</span><br></pre></td></tr></table></figure>
+<p>也就是说，即使没有网络分区，系统也经常要在低延迟和强一致之间取舍。</p>
+<p>KV Cache 场景中，常见选择是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">元数据：更偏一致性。</span><br><span class="line">数据块副本：根据是否可重算，可能偏可用性或低延迟。</span><br><span class="line">监控指标：最终一致即可。</span><br><span class="line">在线请求路径：通常优先低延迟，但不能破坏请求正确性。</span><br></pre></td></tr></table></figure>
+<h2 id="共识算法raftpaxos-解决什么问题">共识算法：Raft/Paxos
+解决什么问题？</h2>
+<p>共识算法解决的是：多个节点如何对同一个操作顺序达成一致。</p>
+<p>典型问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">谁是 leader？</span><br><span class="line">某个 cache block 当前归谁管理？</span><br><span class="line">某个请求是否已经被调度到某个 worker？</span><br><span class="line">某个节点是否已经被判定为不可用？</span><br></pre></td></tr></table></figure>
+<p>常见共识算法包括 <code>Paxos</code> 和
+<code>Raft</code>。工程上更常见的是 Raft，因为它更容易理解和实现。</p>
+<p>Raft 的核心角色：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Leader：处理写请求，复制日志。</span><br><span class="line">Follower：接受 leader 的日志。</span><br><span class="line">Candidate：选举过程中的候选者。</span><br></pre></td></tr></table></figure>
+<p>Raft 的核心机制：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. Leader election：选主。</span><br><span class="line">2. Log replication：日志复制。</span><br><span class="line">3. Commit index：多数派确认后提交。</span><br><span class="line">4. Term：任期，用来识别过期 leader。</span><br></pre></td></tr></table></figure>
+<p>在实际工作中，不一定要自己实现 Raft，但要理解 etcd、ZooKeeper、Consul
+这类系统为什么可以作为可靠元数据存储或分布式协调服务。</p>
+<h2 id="leaderlease-和-fencing">Leader、Lease 和 Fencing</h2>
+<p>很多分布式系统会有 leader，例如一个调度器 leader
+负责分配请求，一个元数据 leader 负责处理写入。</p>
+<p>但是 leader 会遇到一个经典问题：旧 leader 以为自己还是 leader。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 节点 A 是 leader。</span><br><span class="line">2. A 因为 GC 或网络抖动卡住。</span><br><span class="line">3. 系统选出 B 作为新 leader。</span><br><span class="line">4. A 恢复后继续对外写元数据。</span><br></pre></td></tr></table></figure>
+<p>这会导致脑裂。解决方式通常包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Lease：leader 只有在租约有效期内才能工作。</span><br><span class="line">Fencing token：每次选主产生递增 token，下游只接受最新 token 的写入。</span><br><span class="line">Epoch：给每一轮所有权变化分配版本号。</span><br></pre></td></tr></table></figure>
+<p>KV Cache 调度中，如果 cache block 的所有权会转移，那么
+<code>epoch</code> 或 <code>fencing token</code> 非常重要。否则旧 owner
+可能在迁移后继续写状态，覆盖新 owner 的结果。</p>
+<h2 id="时间时钟和顺序">时间、时钟和顺序</h2>
+<p>分布式系统不能轻易相信机器本地时间。</p>
+<p>原因是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 不同机器的时钟可能不一致。</span><br><span class="line">2. NTP 同步也有误差。</span><br><span class="line">3. 网络延迟不确定。</span><br><span class="line">4. “先看到”不一定代表“先发生”。</span><br></pre></td></tr></table></figure>
+<p>需要理解三个概念：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">物理时钟：机器上的真实时间。</span><br><span class="line">逻辑时钟：用递增计数表达事件顺序。</span><br><span class="line">Lamport Clock：如果 A happens-before B，则 clock(A) &lt; clock(B)。</span><br><span class="line">Vector Clock：能表达更细的并发关系，但成本更高。</span><br></pre></td></tr></table></figure>
+<p>工程中更常见的是版本号、epoch、递增 revision。例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">cache_metadata.version += 1</span><br><span class="line">owner_epoch += 1</span><br><span class="line">placement_revision += 1</span><br></pre></td></tr></table></figure>
+<p>这些字段可以帮助系统判断某个状态更新是否过期。</p>
+<h2 id="故障模型">故障模型</h2>
+<p>分布式系统设计必须先问：我们假设会发生什么故障？</p>
+<p>常见故障包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">节点宕机：机器直接不可用。</span><br><span class="line">进程崩溃：服务退出，但机器还在。</span><br><span class="line">网络分区：节点之间互相不可达。</span><br><span class="line">网络抖动：请求偶尔超时或变慢。</span><br><span class="line">慢节点：节点没挂，但响应非常慢。</span><br><span class="line">磁盘故障：本地数据损坏或读写失败。</span><br><span class="line">GPU 故障：设备不可用、显存错误、驱动异常。</span><br><span class="line">数据损坏：bit flip、错误写入、版本错乱。</span><br></pre></td></tr></table></figure>
+<p>KV Cache 系统还会遇到一些更具体的问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">GPU 显存不足导致 cache 分配失败。</span><br><span class="line">某个 worker 仍在 decode，但其 cache 被错误淘汰。</span><br><span class="line">cache 迁移过程中源节点或目标节点故障。</span><br><span class="line">调度器认为 cache 在 A，实际已经迁移到 B。</span><br><span class="line">请求取消后，cache 引用计数没有正确释放。</span><br></pre></td></tr></table></figure>
+<p>这些问题大多不是靠单个算法解决，而是靠状态机设计、幂等接口、超时重试、版本校验、后台修复和监控告警一起解决。</p>
+<h2 id="可用性超时重试和降级">可用性：超时、重试和降级</h2>
+<p>系统不可能保证所有依赖永远正常，所以要设计失败路径。</p>
+<h3 id="超时">超时</h3>
+<p>每个远程调用都应该有明确超时。没有超时的调用会把线程、连接、协程或请求上下文卡死。</p>
+<h3 id="重试">重试</h3>
+<p>重试可以提高成功率，但也可能放大故障。</p>
+<p>需要注意：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. 只对幂等操作安全重试。</span><br><span class="line">2. 使用指数退避，避免同时重试造成流量尖峰。</span><br><span class="line">3. 设置最大重试次数。</span><br><span class="line">4. 区分快速失败和慢失败。</span><br></pre></td></tr></table></figure>
+<h3 id="降级">降级</h3>
+<p>如果远程 KV Cache 不可用，系统可以考虑：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">重新计算 cache。</span><br><span class="line">只使用本地 cache。</span><br><span class="line">拒绝长上下文请求。</span><br><span class="line">降低 batch size。</span><br><span class="line">把请求迁移到健康节点。</span><br><span class="line">返回明确错误，让上层重试。</span><br></pre></td></tr></table></figure>
+<p>降级策略取决于业务目标：是优先保正确性、优先低延迟，还是优先吞吐。</p>
+<h2 id="负载均衡和调度">负载均衡和调度</h2>
+<p>训练和推理系统里的调度比普通 Web 服务复杂，因为任务和资源强绑定。</p>
+<p>调度器需要考虑：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">GPU 显存余量</span><br><span class="line">GPU 利用率</span><br><span class="line">KV Cache 已占用大小</span><br><span class="line">请求上下文长度</span><br><span class="line">decode 阶段预计剩余长度</span><br><span class="line">模型副本位置</span><br><span class="line">cache 是否已经在某个节点上</span><br><span class="line">网络拓扑</span><br><span class="line">节点健康状态</span><br></pre></td></tr></table></figure>
+<p>常见策略：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Round Robin：轮询，简单但不感知负载。</span><br><span class="line">Least Loaded：选择负载最低节点。</span><br><span class="line">Power of Two Choices：随机选两个节点，再选更空的。</span><br><span class="line">Locality-aware Scheduling：优先选择已有 cache 的节点。</span><br><span class="line">Cost-based Scheduling：估算计算、迁移、等待成本后决策。</span><br></pre></td></tr></table></figure>
+<p>KV Cache 场景下，调度不应该只看 GPU 当前空不空，还要看 cache
+的位置。把请求调度到没有 cache 的节点，可能需要跨机拉取大量
+KV，反而更慢。</p>
+<h2 id="热点问题">热点问题</h2>
+<p>热点是分布式系统里非常常见的性能问题。</p>
+<p>热点可能来自：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">某个模型特别热门。</span><br><span class="line">某个长会话持续占用大量 cache。</span><br><span class="line">某个租户请求量突然升高。</span><br><span class="line">某个分片承载了过多活跃序列。</span><br><span class="line">某个元数据 key 被高频更新。</span><br></pre></td></tr></table></figure>
+<p>常见处理方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">1. 拆分热点 key。</span><br><span class="line">2. 增加只读副本。</span><br><span class="line">3. 本地缓存元数据。</span><br><span class="line">4. 对热点请求限流。</span><br><span class="line">5. 重新分片或迁移部分数据。</span><br><span class="line">6. 把全局锁改成细粒度锁或无锁结构。</span><br></pre></td></tr></table></figure>
+<p>判断热点不能靠感觉，要看指标。比如单节点 QPS、P99 延迟、GPU HBM
+使用率、网络出入带宽、cache 命中率、迁移流量等。</p>
+<h2 id="数据迁移">数据迁移</h2>
+<p>KV Cache 迁移是训练-推理一体存储里很核心的问题。</p>
+<p>迁移可能发生在：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">GPU 显存不足，需要把 cache 下沉到 CPU 或 SSD。</span><br><span class="line">请求被调度到其他节点，需要把 cache 搬过去。</span><br><span class="line">某个节点负载过高，需要迁出部分 cache。</span><br><span class="line">节点即将下线，需要 drain。</span><br><span class="line">推理阶段需要复用训练阶段产生的中间状态。</span><br></pre></td></tr></table></figure>
+<p>迁移要考虑：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">一致性：迁移过程中读写请求怎么办？</span><br><span class="line">原子性：不能出现源和目标都认为自己拥有，或都认为没有。</span><br><span class="line">性能：迁移不能占满网络，影响在线请求。</span><br><span class="line">失败恢复：迁移中断后如何回滚或继续？</span><br><span class="line">版本：客户端拿着旧位置访问怎么办？</span><br></pre></td></tr></table></figure>
+<p>一种常见状态机可以是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">LOCAL</span><br><span class="line">MIGRATING_OUT</span><br><span class="line">MIGRATING_IN</span><br><span class="line">REMOTE</span><br><span class="line">EVICTING</span><br><span class="line">EVICTED</span><br></pre></td></tr></table></figure>
+<p>每次状态变化都带上版本号。客户端访问时，如果发现版本过期，需要重新拉取元数据。</p>
+<p>如果系统引入了 <code>Block Group</code>，迁移通常会优先以 group
+为单位决策，而不是完全以单个 block 为单位决策。</p>
+<p>原因是 decode 阶段访问 KV Cache 往往有连续性。把同一个 group 内的
+block 一起迁移，可以减少远程访问次数，也能降低元数据更新频率。</p>
+<p>一个简化的 group 迁移流程可以是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. Scheduler 或 Cache Manager 选择要迁移的 block_group_id。</span><br><span class="line">2. 检查 group 的 pin_count 和 ref_count，确认它是否允许迁移。</span><br><span class="line">3. 将 group_state 从 LOCAL 改为 MIGRATING_OUT，并递增 epoch。</span><br><span class="line">4. 将 group 内 block 数据复制到目标节点或目标存储层。</span><br><span class="line">5. 目标节点校验 block 数量、大小、checksum 和 epoch。</span><br><span class="line">6. 元数据更新为新 location，并将 group_state 改为 REMOTE 或 LOCAL。</span><br><span class="line">7. 源节点延迟释放旧副本，避免客户端持有旧路由时立即读失败。</span><br></pre></td></tr></table></figure>
+<p>这里要注意：group
+迁移不是简单的批量拷贝，而是一个带状态的分布式操作。它至少要回答几个问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">group 内部分 block 迁移成功，部分失败怎么办？</span><br><span class="line">迁移期间新的 decode 请求应该读源位置还是目标位置？</span><br><span class="line">源节点释放旧副本前要等待多久？</span><br><span class="line">客户端拿着旧 epoch 访问时如何重定向？</span><br><span class="line">迁移任务重试时如何避免重复创建副本？</span><br></pre></td></tr></table></figure>
+<p>一种保守做法是让元数据中的
+<code>block_group_id -&gt; location/epoch/state</code>
+成为事实来源。客户端每次发现 epoch
+不匹配，就重新查询元数据，而不是继续相信本地缓存的路由。</p>
+<h2 id="缓存淘汰">缓存淘汰</h2>
+<p>缓存淘汰解决的是：空间不够时删谁？</p>
+<p>常见策略：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">LRU：淘汰最近最少使用的数据。</span><br><span class="line">LFU：淘汰访问频率最低的数据。</span><br><span class="line">FIFO：先进入的先淘汰。</span><br><span class="line">TTL：超过生存时间就淘汰。</span><br><span class="line">Cost-aware：综合大小、重算成本、迁移成本、未来访问概率。</span><br></pre></td></tr></table></figure>
+<p>KV Cache 的淘汰更复杂，因为有些 cache 正在被 decode
+使用，不能删；有些 cache 虽然暂时不用，但重算成本很高。</p>
+<p>因此通常需要：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">pin/unpin：正在使用的 cache 被 pin 住，不能淘汰。</span><br><span class="line">reference count：引用计数为 0 才能释放。</span><br><span class="line">priority：不同请求或租户有不同优先级。</span><br><span class="line">watermark：显存达到高水位触发淘汰，降到低水位停止。</span><br></pre></td></tr></table></figure>
+<p>引入 <code>Block Group</code> 后，淘汰策略也可以从单个 block 上升到
+group 级别。这样可以避免只淘汰了某个 group 中的一小部分
+block，结果后续访问仍然需要频繁跨层读取，局部性被破坏。</p>
+<p>一个 group 级别的淘汰打分可以考虑：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">score = group_size</span><br><span class="line">      + coldness</span><br><span class="line">      + migration_cost</span><br><span class="line">      - recompute_cost</span><br><span class="line">      - priority</span><br><span class="line">      - locality_value</span><br></pre></td></tr></table></figure>
+<p>这不是固定公式，而是表达一种思路：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">越大、越冷、越容易迁移的 group，越适合淘汰或下沉。</span><br><span class="line">重算成本越高、优先级越高、局部性价值越高的 group，越应该保留。</span><br><span class="line">pin_count &gt; 0 的 group 不能淘汰。</span><br><span class="line">ref_count &gt; 0 的 group 通常不能直接释放，只能降级或延迟处理。</span><br></pre></td></tr></table></figure>
+<p>因此，Block Group 会直接影响缓存淘汰的质量。好的 group
+划分能让淘汰更接近“删掉未来最不需要的一组数据”，差的 group
+划分则可能导致误删热点 block 或保留大量冷数据。</p>
+<h2 id="训练-推理一体的特殊点">训练-推理一体的特殊点</h2>
+<p>训练和推理对系统的要求不一样。</p>
+<p>训练更关注：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">吞吐</span><br><span class="line">大规模并行</span><br><span class="line">checkpoint</span><br><span class="line">梯度同步</span><br><span class="line">容错恢复</span><br><span class="line">资源利用率</span><br></pre></td></tr></table></figure>
+<p>推理更关注：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">首 token 延迟 TTFT</span><br><span class="line">每 token 延迟 TPOT</span><br><span class="line">整体吞吐</span><br><span class="line">尾延迟</span><br><span class="line">cache 命中率</span><br><span class="line">请求隔离</span><br></pre></td></tr></table></figure>
+<p>训练-推理一体会让两类目标同时出现。例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">训练产生的数据是否能被推理复用？</span><br><span class="line">推理的 KV Cache 是否能跨请求复用？</span><br><span class="line">训练和推理是否共享同一套存储层？</span><br><span class="line">在线推理是否会被训练任务挤占带宽和显存？</span><br><span class="line">同一个模型不同版本的 cache 如何隔离？</span><br></pre></td></tr></table></figure>
+<p>这里需要特别关注资源隔离和优先级。在线推理通常对延迟敏感，不能被后台训练任务的大流量写入拖垮。</p>
+<h2 id="常见分布式算法和组件">常见分布式算法和组件</h2>
+<p>第一个月不需要手写所有算法，但要知道它们解决什么问题。</p>
+<h3 id="raftpaxos">Raft/Paxos</h3>
+<p>解决多节点对操作顺序达成一致的问题，常用于元数据、选主、配置管理。</p>
+<h3 id="gossip">Gossip</h3>
+<p>节点之间随机交换信息，最终让集群内所有节点知道某些状态。适合传播节点健康、负载、成员信息。</p>
+<h3 id="consistent-hashing">Consistent Hashing</h3>
+<p>解决缓存和分片系统扩缩容时的数据迁移问题。</p>
+<h3 id="two-phase-commit">Two Phase Commit</h3>
+<p><code>2PC</code> 用来做分布式事务提交，分为 prepare 和 commit
+两个阶段。它能保证多个参与者要么都提交，要么都不提交，但阻塞风险和性能成本较高。</p>
+<p>KV Cache
+系统通常会尽量避免把在线路径做成重型分布式事务，而是通过状态机、幂等操作、补偿任务来降低复杂度。</p>
+<h3 id="leader-election">Leader Election</h3>
+<p>选出一个节点负责全局协调。常依赖 etcd/ZooKeeper/Consul 实现。</p>
+<h3 id="heartbeat-和-failure-detector">Heartbeat 和 Failure
+Detector</h3>
+<p>通过心跳判断节点是否健康。但要注意：心跳超时只能说明“暂时联系不上”，不一定说明对方真的死了。</p>
+<h2 id="可观测性">可观测性</h2>
+<p>分布式系统排查问题非常依赖可观测性。需要掌握三类工具：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Metrics：指标，例如 QPS、延迟、错误率、显存使用率。</span><br><span class="line">Logs：日志，用来还原事件细节。</span><br><span class="line">Traces：链路追踪，用来观察请求经过了哪些服务。</span><br></pre></td></tr></table></figure>
+<p>KV Cache 相关指标可以包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">cache_hit_rate</span><br><span class="line">cache_miss_rate</span><br><span class="line">cache_eviction_count</span><br><span class="line">cache_migration_bytes</span><br><span class="line">cache_migration_latency</span><br><span class="line">cache_pin_count</span><br><span class="line">cache_ref_count</span><br><span class="line">gpu_memory_used_bytes</span><br><span class="line">cpu_memory_used_bytes</span><br><span class="line">remote_read_latency</span><br><span class="line">metadata_update_latency</span><br><span class="line">request_ttft</span><br><span class="line">request_tpot</span><br><span class="line">p99_decode_latency</span><br></pre></td></tr></table></figure>
+<p>日志里最好带上统一的关联字段：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">request_id</span><br><span class="line">session_id</span><br><span class="line">cache_id</span><br><span class="line">block_id</span><br><span class="line">model_id</span><br><span class="line">node_id</span><br><span class="line">device_id</span><br><span class="line">epoch</span><br><span class="line">revision</span><br></pre></td></tr></table></figure>
+<p>否则线上问题发生时，很难把一次请求、一次 cache
+迁移、一次元数据更新串起来。</p>
+<h2 id="我应该如何学习">我应该如何学习？</h2>
+<p>第一个月可以按“问题驱动”的方式学习，不必一开始就啃完所有分布式论文。</p>
+<h3 id="第一阶段能看懂系统在做什么">第一阶段：能看懂系统在做什么</h3>
+<p>重点掌握：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">RPC、超时、重试、幂等</span><br><span class="line">分片、路由、元数据</span><br><span class="line">副本、一致性、最终一致</span><br><span class="line">心跳、故障检测、leader</span><br><span class="line">基本监控指标</span><br></pre></td></tr></table></figure>
+<p>目标是能看懂组内文档和代码里的核心词汇。</p>
+<h3 id="第二阶段能分析一个请求路径">第二阶段：能分析一个请求路径</h3>
+<p>尝试画出一次推理请求的完整路径：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">client</span><br><span class="line">-&gt; gateway</span><br><span class="line">-&gt; scheduler</span><br><span class="line">-&gt; model worker</span><br><span class="line">-&gt; KV Cache manager</span><br><span class="line">-&gt; local/remote storage</span><br><span class="line">-&gt; metadata service</span><br></pre></td></tr></table></figure>
+<p>然后问自己：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">请求的 cache key 是什么？</span><br><span class="line">cache 放在哪里？</span><br><span class="line">如果 miss 了怎么办？</span><br><span class="line">如果节点挂了怎么办？</span><br><span class="line">如果 cache 正在迁移怎么办？</span><br><span class="line">如果元数据是旧的怎么办？</span><br></pre></td></tr></table></figure>
+<h3 id="第三阶段能定位性能瓶颈">第三阶段：能定位性能瓶颈</h3>
+<p>重点关注：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">P50/P99/P999 延迟</span><br><span class="line">首 token 延迟</span><br><span class="line">每 token 延迟</span><br><span class="line">cache 命中率</span><br><span class="line">显存水位</span><br><span class="line">网络带宽</span><br><span class="line">迁移流量</span><br><span class="line">队列长度</span><br><span class="line">调度等待时间</span><br></pre></td></tr></table></figure>
+<p>性能问题通常不是单点原因，而是调度、网络、显存、元数据和请求模式共同作用的结果。</p>
+<h2 id="一个-kv-cache-系统的简化设计">一个 KV Cache 系统的简化设计</h2>
+<p>可以先用一个简单模型帮助理解：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">Metadata Server：</span><br><span class="line">  维护 cache_id -&gt; location/version/state</span><br><span class="line"></span><br><span class="line">Scheduler：</span><br><span class="line">  根据模型、请求长度、cache 位置、GPU 负载选择 worker</span><br><span class="line"></span><br><span class="line">Worker：</span><br><span class="line">  执行 prefill/decode，并向 Cache Manager 读写 KV Cache</span><br><span class="line"></span><br><span class="line">Cache Manager：</span><br><span class="line">  管理本地 GPU/CPU/SSD cache，负责淘汰和迁移</span><br><span class="line"></span><br><span class="line">Remote Store：</span><br><span class="line">  存放被下沉或共享的 cache block</span><br></pre></td></tr></table></figure>
+<p>一次 cache 读取可能是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">1. Worker 根据 request_id 和 token range 生成 cache_id。</span><br><span class="line">2. 先查本地 Cache Manager。</span><br><span class="line">3. 本地 miss，则查 Metadata Server。</span><br><span class="line">4. Metadata Server 返回 cache 位置和 version。</span><br><span class="line">5. Worker 从远端拉取 cache。</span><br><span class="line">6. 拉取成功后放入本地，并更新本地索引。</span><br></pre></td></tr></table></figure>
+<p>这里每一步都可能失败，所以要考虑：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">元数据查不到：cache 不存在还是元数据过期？</span><br><span class="line">远程拉取超时：重试还是重新计算？</span><br><span class="line">拉取过程中 cache 被迁移：如何发现 version 不一致？</span><br><span class="line">本地空间不足：淘汰谁？</span><br><span class="line">请求取消：已经拉取的 cache 如何释放？</span><br></pre></td></tr></table></figure>
+<h2 id="学习时容易忽略的点">学习时容易忽略的点</h2>
+<h3 id="分布式-bug-往往是状态-bug">分布式 bug 往往是状态 bug</h3>
+<p>很多问题不是算法不懂，而是状态没有定义清楚。例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">cache block 到底有哪些状态？</span><br><span class="line">谁有权修改状态？</span><br><span class="line">状态变化是否有版本号？</span><br><span class="line">失败后是重试、回滚还是补偿？</span><br><span class="line">后台任务和在线请求是否会同时修改？</span><br></pre></td></tr></table></figure>
+<h3 id="不要只看平均延迟">不要只看平均延迟</h3>
+<p>平均延迟会掩盖尾延迟。在线推理尤其要看
+P99，因为用户感受到的是慢请求，而不是平均值。</p>
+<h3 id="本地缓存会带来一致性问题">本地缓存会带来一致性问题</h3>
+<p>为了性能，客户端经常会缓存元数据。但元数据一旦更新，本地缓存就可能变旧。需要有版本校验、TTL
+或 invalidation 机制。</p>
+<h3 id="故障检测不是故障证明">故障检测不是故障证明</h3>
+<p>心跳超时不等于节点死亡。一个节点可能只是网络慢、GC 卡顿或 CPU
+被打满。所以涉及所有权转移时，需要 fencing token 或 epoch
+防止旧节点恢复后继续写。</p>
+<h2 id="面向实习工作的检查清单">面向实习工作的检查清单</h2>
+<p>后续看组内代码或文档时，我可以用下面的问题自查：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">1. 这个模块维护了什么状态？</span><br><span class="line">2. 状态的 owner 是谁？</span><br><span class="line">3. 状态是否有版本号或 epoch？</span><br><span class="line">4. 远程调用是否设置了 timeout？</span><br><span class="line">5. 失败后是否会 retry？retry 是否幂等？</span><br><span class="line">6. 数据如何分片？扩缩容时如何迁移？</span><br><span class="line">7. 是否有副本？副本之间是什么一致性？</span><br><span class="line">8. 元数据存在哪里？如何保证高可用？</span><br><span class="line">9. cache 正在迁移时，读写请求如何处理？</span><br><span class="line">10. cache 被淘汰时，如何避免删掉正在使用的数据？</span><br><span class="line">11. 节点故障后，如何恢复请求和 cache？</span><br><span class="line">12. 有没有指标能证明系统正常工作？</span><br><span class="line">13. P99 延迟变差时，应该先看哪些指标？</span><br></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>对刚开始实习的我来说，分布式基础不应该只停留在 Raft、Paxos、CAP
+这些名词上，而要和实际系统里的问题对应起来。</p>
+<p>在训练-推理一体存储和 KV Cache 场景下，最核心的是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">1. 数据怎么分布：分片、路由、元数据。</span><br><span class="line">2. 数据怎么可靠：副本、一致性、故障恢复。</span><br><span class="line">3. 数据怎么高效：局部性、调度、迁移、淘汰。</span><br><span class="line">4. 状态怎么正确：版本、epoch、幂等、状态机。</span><br><span class="line">5. 问题怎么定位：metrics、logs、traces。</span><br></pre></td></tr></table></figure>
+<p>掌握这些之后，再继续深入具体算法、系统实现和论文，会更容易把知识和真实工作联系起来。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+              <a href="/tags/%E7%AE%97%E6%B3%95/" rel="tag"># 算法</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/05/22/cast/" rel="prev" title="C++ 类型转换：从 C 风格强转到四种 cast">
+                  <i class="fa fa-angle-left"></i> C++ 类型转换：从 C 风格强转到四种 cast
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>
