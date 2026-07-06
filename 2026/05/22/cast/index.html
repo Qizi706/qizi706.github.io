@@ -29,7 +29,7 @@
 <meta property="og:description" content="在 C++ 中，类型转换是一个很常见但也很容易写出隐患的知识点。对于初学者来说，最熟悉的可能是 C 风格强转： 1int x &#x3D; (int)3.14; 但是在 C++ 项目中，更推荐使用 C++ 提供的四种显式类型转换： 1234static_cast&lt;T&gt;(expr);dynamic_cast&lt;T&gt;(expr);const_cast&lt;T&gt;(expr);rein">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2026-05-22T12:39:00.000Z">
-<meta property="article:modified_time" content="2026-07-06T07:12:45.578Z">
+<meta property="article:modified_time" content="2026-07-06T07:32:59.435Z">
 <meta property="article:author" content="Quan Zhou">
 <meta property="article:tag" content="C++特性">
 <meta name="twitter:card" content="summary">
@@ -242,7 +242,7 @@ reinterpret_cast：最底层的重新解释</span></a><ol class="nav-child"><li 
         <i class="far fa-calendar-check"></i>
       </span>
       <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2026-07-06 15:12:45" itemprop="dateModified" datetime="2026-07-06T15:12:45+08:00">2026-07-06</time>
+      <time title="Modified: 2026-07-06 15:32:59" itemprop="dateModified" datetime="2026-07-06T15:32:59+08:00">2026-07-06</time>
     </span>
     <span class="post-meta-item">
       <span class="post-meta-item-icon">
@@ -273,8 +273,7 @@ C 风格强转：</p>
 风格强转更清晰，也更容易在代码审查和调试时发现问题。</p>
 <p>本文会从 C 风格强转的问题开始，依次介绍
 <code>static_cast</code>、<code>dynamic_cast</code>、<code>const_cast</code>
-和 <code>reinterpret_cast</code>
-的使用场景、底层含义、常见坑以及面试回答方式。</p>
+和 <code>reinterpret_cast</code> 的使用场景、底层含义以及常见坑。</p>
 <span id="more"></span>
 <h2 id="为什么不推荐-c-风格强转">1. 为什么不推荐 C 风格强转？</h2>
 <p>C 风格强转写法如下：</p>
