@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.css" integrity="sha256-gkQVf8UKZgQ0HyuxL/VnacadJ+D2Kox2TCEBuNQg5+w=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Muse","darkmode":true,"version":"8.28.0","exturl":false,"sidebar":{"position":"right","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":false,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="背景 前面学习了两组基础： 12第一组：操作系统、网络、并发与存储。第二组：RPC 和远程调用。 这两组解决的是底层问题：系统为什么会慢、远程调用为什么会失败、为什么接口要考虑 timeout、retry 和幂等。 接下来这一组更贴近 KV Cache 系统本身： 12第三组：并发状态和状态机。第四组：分片、路由和元数据。 之所以把这两组放在一起，是因为它们在真实系统里经常不能分开看。 以 Blo">
+<meta property="og:type" content="article">
+<meta property="og:title" content="分布式基础：状态机、分片、路由与元数据">
+<meta property="og:url" content="http://qizi706.github.io/2026/07/07/distributed-foundation-state-machine-sharding-metadata/index.html">
+<meta property="og:site_name" content="Quan Zhou 的 blog">
+<meta property="og:description" content="背景 前面学习了两组基础： 12第一组：操作系统、网络、并发与存储。第二组：RPC 和远程调用。 这两组解决的是底层问题：系统为什么会慢、远程调用为什么会失败、为什么接口要考虑 timeout、retry 和幂等。 接下来这一组更贴近 KV Cache 系统本身： 12第三组：并发状态和状态机。第四组：分片、路由和元数据。 之所以把这两组放在一起，是因为它们在真实系统里经常不能分开看。 以 Blo">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-07-07T08:30:00.000Z">
+<meta property="article:modified_time" content="2026-07-07T08:23:13.618Z">
+<meta property="article:author" content="Quan Zhou">
+<meta property="article:tag" content="KV Cache">
+<meta property="article:tag" content="元数据">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="并发">
+<meta property="article:tag" content="状态机">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="http://qizi706.github.io/2026/07/07/distributed-foundation-state-machine-sharding-metadata/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/07/07/distributed-foundation-state-machine-sharding-metadata/","path":"2026/07/07/distributed-foundation-state-machine-sharding-metadata/","title":"分布式基础：状态机、分片、路由与元数据"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>分布式基础：状态机、分片、路由与元数据 | Quan Zhou 的 blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/next-theme-pjax/0.6.0/pjax.min.js" integrity="sha256-vxLn1tSKWD4dqbMRyv940UYw4sXgMtYcK6reefzZrao=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.umd.js" integrity="sha256-a+H7FYzJv6oU2hfsfDGM2Ohw/cR9v+hPfxHCLdmCrE8=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pangu/7.2.0/pangu.umd.js" integrity="sha256-JnmRRnJK7DC6RQJbAJb6AXOM9OmWzS6z8eYultk/48Y=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script><script src="/js/pjax.js" defer></script>
+
+  
+
+  <script class="next-config" data-name="mermaid" type="application/json">{"enable":true,"theme":{"light":"default","dark":"dark"},"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.10.1/mermaid.min.js","integrity":"sha256-BmQmdWDS8X2OTbrwELWK366LV6escyWhHHe0XCTU/Hk="}}</script>
+  <script src="/js/third-party/tags/mermaid.js" defer></script>
+
+  <script class="next-config" data-name="wavedrom" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/wavedrom.min.js","integrity":"sha256-INLAoJc6quTNfiMWkGZniYO2cxE8mHpddnLow1m6RFs="}}</script>
+  <script class="next-config" data-name="wavedrom_skin" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/skins/default.js","integrity":"sha256-fduc/Zszk5ezWws2uInY/ALWVmIrmV6VTgXbsYSReFI="}}</script>
+  <script src="/js/third-party/tags/wavedrom.js" defer></script>
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">false</script><script class="next-config" data-name="mathjax" type="application/json">{"enable":true,"tags":"ams","js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js","integrity":"sha256-MASABpB4tYktI2Oitl4t+78w/lyA+D7b/s9GEP0JOGI="}}</script>
+<script src="/js/third-party/math/mathjax.js" defer></script>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quicklink/3.0.1/quicklink.umd.js" integrity="sha256-44BednzIpUeQJcY8qtLyarFu0UCCTbgmWOvaoehiFQQ=" crossorigin="anonymous" defer></script>
+  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/07/07/distributed-foundation-state-machine-sharding-metadata/"}</script>
+  <script src="/js/third-party/quicklink.js" defer></script>
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Quan Zhou 的 blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="Search" role="button">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a></li>
+  </ul>
+</nav>
+
+
+
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-text">背景</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AD%A6%E4%B9%A0%E7%9B%AE%E6%A0%87"><span class="nav-text">学习目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%85%88%E5%AD%A6%E7%8A%B6%E6%80%81%E6%9C%BA"><span class="nav-text">为什么要先学状态机？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#blockgroup-%E6%98%AF%E4%B8%80%E4%B8%AA%E7%8A%B6%E6%80%81%E5%AF%B9%E8%B1%A1"><span class="nav-text">BlockGroup 是一个状态对象</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#blockgroup-%E7%9A%84%E7%8A%B6%E6%80%81%E6%9C%BA"><span class="nav-text">BlockGroup 的状态机</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%8A%B6%E6%80%81%E8%BD%AC%E7%A7%BB"><span class="nav-text">状态转移</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%93%AA%E4%BA%9B%E7%8A%B6%E6%80%81%E5%8F%AF%E4%BB%A5%E8%AF%BB"><span class="nav-text">哪些状态可以读？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%93%AA%E4%BA%9B%E7%8A%B6%E6%80%81%E5%8F%AF%E4%BB%A5%E8%BF%81%E7%A7%BB"><span class="nav-text">哪些状态可以迁移？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%93%AA%E4%BA%9B%E7%8A%B6%E6%80%81%E5%8F%AF%E4%BB%A5%E6%B7%98%E6%B1%B0"><span class="nav-text">哪些状态可以淘汰？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%BC%95%E7%94%A8%E8%AE%A1%E6%95%B0-ref_count"><span class="nav-text">引用计数 ref_count</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#pinunpin"><span class="nav-text">pin&#x2F;unpin</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#cas"><span class="nav-text">CAS</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%89%88%E6%9C%AC%E5%8F%B7%E5%92%8C-epoch"><span class="nav-text">版本号和 epoch</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%97%A7-owner-%E6%81%A2%E5%A4%8D%E5%90%8E%E8%BF%98%E8%83%BD%E4%B8%8D%E8%83%BD%E7%BB%A7%E7%BB%AD%E5%86%99"><span class="nav-text">旧 owner
+恢复后还能不能继续写？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%BF%81%E7%A7%BB%E5%A4%B1%E8%B4%A5%E6%80%8E%E4%B9%88%E5%8A%9E"><span class="nav-text">迁移失败怎么办？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%B7%98%E6%B1%B0%E8%BF%87%E7%A8%8B%E4%B8%AD%E5%8F%88%E8%A2%AB%E8%AE%BF%E9%97%AE%E6%80%8E%E4%B9%88%E5%8A%9E"><span class="nav-text">淘汰过程中又被访问怎么办？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%AD%A6%E5%88%86%E7%89%87"><span class="nav-text">为什么要学分片？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%93%88%E5%B8%8C%E5%88%86%E7%89%87"><span class="nav-text">哈希分片</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C"><span class="nav-text">一致性哈希</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#range-%E5%88%86%E7%89%87"><span class="nav-text">Range 分片</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%88%86%E7%89%87%E7%BB%B4%E5%BA%A6%E6%80%8E%E4%B9%88%E9%80%89"><span class="nav-text">分片维度怎么选？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%B7%AF%E7%94%B1%E8%A1%A8"><span class="nav-text">路由表</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%85%83%E6%95%B0%E6%8D%AE%E6%9C%8D%E5%8A%A1"><span class="nav-text">元数据服务</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%9C%B0%E5%85%83%E6%95%B0%E6%8D%AE%E7%BC%93%E5%AD%98"><span class="nav-text">本地元数据缓存</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%85%83%E6%95%B0%E6%8D%AE%E5%A4%B1%E6%95%88"><span class="nav-text">元数据失效</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#ttl"><span class="nav-text">TTL</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%BB%E5%8A%A8%E5%A4%B1%E6%95%88"><span class="nav-text">主动失效</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%89%88%E6%9C%AC%E6%A0%A1%E9%AA%8C"><span class="nav-text">版本校验</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%BF%81%E7%A7%BB%E8%BF%87%E7%A8%8B%E4%B8%AD%E8%B7%AF%E7%94%B1%E6%80%8E%E4%B9%88%E6%9B%B4%E6%96%B0"><span class="nav-text">迁移过程中路由怎么更新？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%95%B0%E6%8D%AE%E5%9C%A8%E5%93%AA%E9%87%8C"><span class="nav-text">数据在哪里？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%B0%81%E8%AF%B4%E4%BA%86%E7%AE%97"><span class="nav-text">谁说了算？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AE%A2%E6%88%B7%E7%AB%AF%E7%9C%8B%E5%88%B0%E7%9A%84%E6%98%AF%E4%B8%8D%E6%98%AF%E6%97%A7%E4%BD%8D%E7%BD%AE"><span class="nav-text">客户端看到的是不是旧位置？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%80%E4%B8%AA%E8%AF%B7%E6%B1%82%E5%A6%82%E4%BD%95%E6%89%BE%E5%88%B0-kv-cache"><span class="nav-text">一个请求如何找到 KV Cache？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%80%E4%B8%AA%E7%AE%80%E5%8C%96%E7%9A%84-blockgroup-%E5%85%83%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="nav-text">一个简化的 BlockGroup
+元数据结构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E9%94%99%E8%AF%AF%E8%AE%BE%E8%AE%A1"><span class="nav-text">常见错误设计</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%8A%B6%E6%80%81%E6%B2%A1%E6%9C%89%E4%B8%AD%E9%97%B4%E6%80%81"><span class="nav-text">状态没有中间态</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%86%99%E7%8A%B6%E6%80%81%E4%B8%8D%E5%B8%A6-epoch"><span class="nav-text">写状态不带 epoch</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ref_count-%E5%92%8C-pin_count-%E4%B8%8D%E6%98%AF%E5%8E%9F%E5%AD%90%E6%9B%B4%E6%96%B0"><span class="nav-text">ref_count 和 pin_count
+不是原子更新</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%9C%AC%E5%9C%B0%E7%BC%93%E5%AD%98%E8%B7%AF%E7%94%B1%E4%BD%86%E4%B8%8D%E6%A0%A1%E9%AA%8C-epoch"><span class="nav-text">本地缓存路由但不校验 epoch</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%BF%81%E7%A7%BB%E5%AE%8C%E6%88%90%E5%90%8E%E7%AB%8B%E5%88%BB%E5%88%A0%E9%99%A4%E6%BA%90%E5%89%AF%E6%9C%AC"><span class="nav-text">迁移完成后立刻删除源副本</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%A6%82%E4%BD%95%E6%8E%92%E6%9F%A5%E7%8A%B6%E6%80%81%E5%92%8C%E8%B7%AF%E7%94%B1%E9%97%AE%E9%A2%98"><span class="nav-text">如何排查状态和路由问题？</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%97%A5%E5%BF%97%E5%AD%97%E6%AE%B5"><span class="nav-text">日志字段</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%8C%87%E6%A0%87"><span class="nav-text">指标</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E6%8E%92%E6%9F%A5%E9%97%AE%E9%A2%98"><span class="nav-text">常见排查问题</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%9D%A2%E5%90%91-kv-cache-%E7%9A%84%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95"><span class="nav-text">面向 KV Cache 的检查清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%8E%A8%E8%8D%90%E5%AD%A6%E4%B9%A0%E9%A1%BA%E5%BA%8F"><span class="nav-text">推荐学习顺序</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-text">总结</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Quan Zhou</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">17</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">15</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+        </div>
+      </div>
+        <div class="back-to-top animated" role="button" aria-label="Back to top">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/07/distributed-foundation-state-machine-sharding-metadata/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="分布式基础：状态机、分片、路由与元数据 | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          分布式基础：状态机、分片、路由与元数据
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-07-07 16:30:00 / Modified: 16:23:13" itemprop="dateCreated datePublished" datetime="2026-07-07T16:30:00+08:00">2026-07-07</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/" itemprop="url" rel="index"><span itemprop="name">分布式</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h2 id="背景">背景</h2>
+<p>前面学习了两组基础：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">第一组：操作系统、网络、并发与存储。</span><br><span class="line">第二组：RPC 和远程调用。</span><br></pre></td></tr></table></figure>
+<p>这两组解决的是底层问题：系统为什么会慢、远程调用为什么会失败、为什么接口要考虑
+<code>timeout</code>、<code>retry</code> 和幂等。</p>
+<p>接下来这一组更贴近 KV Cache 系统本身：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">第三组：并发状态和状态机。</span><br><span class="line">第四组：分片、路由和元数据。</span><br></pre></td></tr></table></figure>
+<p>之所以把这两组放在一起，是因为它们在真实系统里经常不能分开看。</p>
+<p>以 <code>BlockGroup</code> 为例，它不仅是一组 KV Cache block
+的集合，还是一个有生命周期、有位置、有
+owner、有版本的分布式对象。系统不仅要知道它是什么状态，还要知道它在哪里、谁能修改它、客户端看到的位置是不是最新的。</p>
+<p>这一篇的目标是：能把一个分布式对象的生命周期讲清楚，并理解一个请求如何找到它需要的
+KV Cache。</p>
+<span id="more"></span>
+<h2 id="学习目标">学习目标</h2>
+<p>这一组需要掌握：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">状态机</span><br><span class="line">状态转移</span><br><span class="line">并发读写</span><br><span class="line">CAS</span><br><span class="line">锁</span><br><span class="line">版本号</span><br><span class="line">epoch</span><br><span class="line">引用计数</span><br><span class="line">pin/unpin</span><br><span class="line">哈希分片</span><br><span class="line">一致性哈希</span><br><span class="line">Range 分片</span><br><span class="line">路由表</span><br><span class="line">元数据服务</span><br><span class="line">本地元数据缓存</span><br><span class="line">元数据失效</span><br></pre></td></tr></table></figure>
+<p>放到 KV Cache 场景里，最核心的问题是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">这个 block group 当前在哪里？</span><br><span class="line">它现在是什么状态？</span><br><span class="line">谁拥有它？</span><br><span class="line">谁能修改它？</span><br><span class="line">它能不能读？</span><br><span class="line">它能不能迁移？</span><br><span class="line">它能不能淘汰？</span><br><span class="line">客户端看到的位置是不是旧的？</span><br><span class="line">迁移过程中路由怎么更新？</span><br></pre></td></tr></table></figure>
+<p>这些问题的答案，最终都会落到状态机和元数据设计上。</p>
+<h2 id="为什么要先学状态机">为什么要先学状态机？</h2>
+<p>分布式系统里很多 bug 都不是算法 bug，而是状态 bug。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">一个 block group 正在迁移，另一个线程把它淘汰了。</span><br><span class="line">一个请求正在读取 cache，后台任务释放了这块内存。</span><br><span class="line">源节点认为迁移失败，目标节点认为迁移成功。</span><br><span class="line">客户端拿着旧路由继续访问旧 owner。</span><br><span class="line">旧 owner 恢复后继续写状态，覆盖了新 owner 的结果。</span><br></pre></td></tr></table></figure>
+<p>这些问题的共同点是：对象状态没有定义清楚，状态转移没有被保护。</p>
+<p>所以学习分布式对象时，第一步不是先看它怎么存，而是先问：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">这个对象有哪些状态？</span><br><span class="line">状态之间怎么转移？</span><br><span class="line">哪些状态允许读？</span><br><span class="line">哪些状态允许写？</span><br><span class="line">哪些状态允许迁移？</span><br><span class="line">哪些状态允许淘汰？</span><br><span class="line">失败后进入什么状态？</span><br><span class="line">谁有权改变状态？</span><br></pre></td></tr></table></figure>
+<h2 id="blockgroup-是一个状态对象">BlockGroup 是一个状态对象</h2>
+<p>在 KV Cache 系统里，<code>Block</code> 通常表示一段连续 token 的 K/V
+数据，<code>BlockGroup</code> 则是一组访问模式相近、生命周期相近的
+block。</p>
+<p>可以简单理解为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Block：KV Cache 的基本存储单元。</span><br><span class="line">BlockGroup：调度、迁移、淘汰和生命周期管理的逻辑单位。</span><br></pre></td></tr></table></figure>
+<p>一个 BlockGroup 至少包含两类信息：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">数据本身：一组 block 的 K/V 内容。</span><br><span class="line">元数据：位置、状态、epoch、ref_count、pin_count、owner 等。</span><br></pre></td></tr></table></figure>
+<p>很多时候，KV 数据本身生成后不再修改，可以近似看作
+immutable；但元数据会频繁变化。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">block_group_id = bg_1</span><br><span class="line">location = node_a / gpu_0 / HBM</span><br><span class="line">state = LOCAL</span><br><span class="line">epoch = 10</span><br><span class="line">ref_count = 2</span><br><span class="line">pin_count = 1</span><br><span class="line">owner = worker_a</span><br></pre></td></tr></table></figure>
+<p>系统真正复杂的地方，往往在这些元数据状态上。</p>
+<h2 id="blockgroup-的状态机">BlockGroup 的状态机</h2>
+<p>一个简化的 BlockGroup 状态机可以是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">CREATED</span><br><span class="line">LOCAL</span><br><span class="line">PINNED</span><br><span class="line">MIGRATING_OUT</span><br><span class="line">MIGRATING_IN</span><br><span class="line">REMOTE</span><br><span class="line">EVICTING</span><br><span class="line">EVICTED</span><br><span class="line">FAILED</span><br></pre></td></tr></table></figure>
+<p>这些状态的含义可以这样理解：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">CREATED：元数据已创建，但数据可能还未完全写入。</span><br><span class="line">LOCAL：数据在本地，可以正常访问。</span><br><span class="line">PINNED：正在被请求使用，不能淘汰，通常也不能随意迁移。</span><br><span class="line">MIGRATING_OUT：正在从本节点迁出。</span><br><span class="line">MIGRATING_IN：正在迁入本节点。</span><br><span class="line">REMOTE：数据不在本地，需要远程访问或拉取。</span><br><span class="line">EVICTING：正在淘汰或释放。</span><br><span class="line">EVICTED：已经被淘汰，不再可读。</span><br><span class="line">FAILED：进入异常状态，需要后台修复或重新计算。</span><br></pre></td></tr></table></figure>
+<p>状态机的价值在于：它把系统行为变成明确规则。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">LOCAL 可以读。</span><br><span class="line">PINNED 可以读，但不能淘汰。</span><br><span class="line">MIGRATING_OUT 是否可以读，要看系统策略。</span><br><span class="line">MIGRATING_IN 通常不能直接读，除非迁入完成。</span><br><span class="line">EVICTING 通常不能发起新读。</span><br><span class="line">EVICTED 不能读，只能 miss、重算或从远端恢复。</span><br><span class="line">FAILED 不能直接使用，需要修复。</span><br></pre></td></tr></table></figure>
+<h2 id="状态转移">状态转移</h2>
+<p>有了状态，还要定义状态之间允许怎么转移。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">CREATED -&gt; LOCAL</span><br><span class="line">LOCAL -&gt; PINNED</span><br><span class="line">PINNED -&gt; LOCAL</span><br><span class="line">LOCAL -&gt; MIGRATING_OUT</span><br><span class="line">MIGRATING_OUT -&gt; REMOTE</span><br><span class="line">REMOTE -&gt; MIGRATING_IN</span><br><span class="line">MIGRATING_IN -&gt; LOCAL</span><br><span class="line">LOCAL -&gt; EVICTING</span><br><span class="line">EVICTING -&gt; EVICTED</span><br><span class="line">任意中间态 -&gt; FAILED</span><br><span class="line">FAILED -&gt; LOCAL</span><br><span class="line">FAILED -&gt; EVICTED</span><br></pre></td></tr></table></figure>
+<p>不是所有转移都应该被允许。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">PINNED -&gt; EVICTED 通常不应该允许。</span><br><span class="line">EVICTED -&gt; LOCAL 需要重新加载或重新计算，不能直接改状态。</span><br><span class="line">MIGRATING_OUT -&gt; EVICTING 需要非常小心，否则可能迁移和释放冲突。</span><br><span class="line">REMOTE -&gt; EVICTED 要确认本地是否只是元数据引用，不能误删远端数据。</span><br></pre></td></tr></table></figure>
+<p>状态转移最好集中管理，而不是散落在各个函数里。</p>
+<p>例如可以抽象成：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">transition(block_group_id, from_state, to_state, epoch)</span><br></pre></td></tr></table></figure>
+<p>服务端检查：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">当前 state 是否等于 from_state？</span><br><span class="line">当前 epoch 是否匹配？</span><br><span class="line">from_state -&gt; to_state 是否被允许？</span><br><span class="line">调用方是否是当前 owner？</span><br></pre></td></tr></table></figure>
+<p>如果检查失败，就拒绝更新。</p>
+<h2 id="哪些状态可以读">哪些状态可以读？</h2>
+<p>读能力可以按状态定义：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">CREATED：通常不能读，数据还不完整。</span><br><span class="line">LOCAL：可以读。</span><br><span class="line">PINNED：可以读。</span><br><span class="line">MIGRATING_OUT：可选，可以读源，也可以要求刷新路由。</span><br><span class="line">MIGRATING_IN：通常不能读，除非迁入完成。</span><br><span class="line">REMOTE：不能本地读，需要远程读或拉取。</span><br><span class="line">EVICTING：通常拒绝新读。</span><br><span class="line">EVICTED：不能读。</span><br><span class="line">FAILED：不能读，需要修复或重算。</span><br></pre></td></tr></table></figure>
+<p>这里没有唯一标准，取决于系统设计。</p>
+<p>例如 <code>MIGRATING_OUT</code> 有两种策略：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">策略一：迁移期间仍允许从源节点读，迁移完成后切换路由。</span><br><span class="line">策略二：迁移期间拒绝新读，让客户端等待或刷新路由。</span><br></pre></td></tr></table></figure>
+<p>策略一可用性更好，但源节点释放旧副本要更谨慎。策略二状态更简单，但可能增加请求延迟。</p>
+<h2 id="哪些状态可以迁移">哪些状态可以迁移？</h2>
+<p>迁移通常只应该从稳定状态发起。</p>
+<p>比较安全的规则是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">LOCAL 且 pin_count == 0：可以迁移。</span><br><span class="line">REMOTE：本地没有数据，不需要迁出，但可以发起拉取。</span><br><span class="line">PINNED：不迁移，避免影响正在使用的请求。</span><br><span class="line">EVICTING / EVICTED：不迁移。</span><br><span class="line">FAILED：先修复，再决定是否迁移。</span><br></pre></td></tr></table></figure>
+<p>实际系统可能允许 pinned
+数据迁移，但需要更复杂的协议，例如读写双路径、引用转移、迁移期间冻结状态等。</p>
+<p>初学阶段可以先掌握保守设计：正在使用的数据不迁移，正在迁移的数据不淘汰。</p>
+<h2 id="哪些状态可以淘汰">哪些状态可以淘汰？</h2>
+<p>淘汰比迁移更危险，因为淘汰意味着释放数据。</p>
+<p>基本规则可以是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">LOCAL 且 ref_count == 0 且 pin_count == 0：可以淘汰。</span><br><span class="line">REMOTE：本地没有数据，可以释放本地占位或元数据缓存。</span><br><span class="line">PINNED：不能淘汰。</span><br><span class="line">MIGRATING_OUT / MIGRATING_IN：不能直接淘汰。</span><br><span class="line">EVICTING：已经在淘汰中，不重复发起。</span><br><span class="line">EVICTED：已经淘汰，重复 evict 应该返回成功。</span><br><span class="line">FAILED：由修复任务决定释放还是恢复。</span><br></pre></td></tr></table></figure>
+<p>注意最后一点：<code>EVICTED</code> 再次收到 <code>evict</code>
+请求时，最好返回成功。这是幂等设计。</p>
+<h2 id="引用计数-ref_count">引用计数 ref_count</h2>
+<p><code>ref_count</code> 表示当前有多少使用者正在引用这个 block
+group。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">decode 请求开始读取 block group：ref_count += 1</span><br><span class="line">decode 请求读取结束：ref_count -= 1</span><br></pre></td></tr></table></figure>
+<p>规则通常是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ref_count &gt; 0：不能释放。</span><br><span class="line">ref_count == 0：可以考虑淘汰，但还要看 pin_count 和状态。</span><br></pre></td></tr></table></figure>
+<p><code>ref_count</code> 必须原子更新，否则可能出现读释放冲突。</p>
+<p>典型错误：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">线程 A 准备读取 bg_1。</span><br><span class="line">线程 B 看到 ref_count == 0，开始释放 bg_1。</span><br><span class="line">线程 A 还没来得及增加 ref_count，就读到了已释放的数据。</span><br></pre></td></tr></table></figure>
+<p>所以读请求通常要先通过一个受保护的流程获取引用：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">1. 加锁或 CAS 检查 state。</span><br><span class="line">2. 如果 state 允许读，ref_count += 1。</span><br><span class="line">3. 解锁。</span><br><span class="line">4. 执行读取。</span><br><span class="line">5. 读取完成后 ref_count -= 1。</span><br></pre></td></tr></table></figure>
+<h2 id="pinunpin">pin/unpin</h2>
+<p><code>pin</code> 表示把某个 block group
+固定住，防止它被淘汰，通常也防止它被迁移。</p>
+<p>它适合这些场景：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">一个请求即将进入 decode，需要保证相关 KV Cache 不被释放。</span><br><span class="line">迁移任务需要确保源数据在复制完成前不被淘汰。</span><br><span class="line">预取任务希望短时间保留一批热数据。</span><br></pre></td></tr></table></figure>
+<p><code>pin/unpin</code> 不能简单设计成：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">pin_count += 1</span><br><span class="line">pin_count -= 1</span><br></pre></td></tr></table></figure>
+<p>因为 RPC 可能超时重试，重复执行会导致计数错误。</p>
+<p>更好的方式是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">pin(block_group_id, request_id, epoch)</span><br><span class="line">unpin(block_group_id, request_id, epoch)</span><br></pre></td></tr></table></figure>
+<p>服务端维护：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">block_group_id -&gt; pinned_request_set</span><br></pre></td></tr></table></figure>
+<p>这样同一个 <code>request_id</code> 重复 pin 只算一次，重复 unpin
+也只释放一次。</p>
+<h2 id="cas">CAS</h2>
+<p><code>CAS</code> 是 Compare-And-Swap，比较并交换。</p>
+<p>它的语义可以理解为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">如果当前值等于 expected，就把它改成 new_value。</span><br><span class="line">否则修改失败。</span><br></pre></td></tr></table></figure>
+<p>在状态机里，CAS 很适合做条件更新。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">CAS(state, LOCAL, MIGRATING_OUT)</span><br></pre></td></tr></table></figure>
+<p>含义是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">只有当前 state 仍然是 LOCAL 时，才能改成 MIGRATING_OUT。</span><br><span class="line">如果已经被其他线程改成 PINNED 或 EVICTING，则迁移失败。</span><br></pre></td></tr></table></figure>
+<p>但分布式场景里，只比较 state 还不够，通常还要比较 epoch：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">CAS((state, epoch), (LOCAL, 10), (MIGRATING_OUT, 11))</span><br></pre></td></tr></table></figure>
+<p>这样可以避免旧请求覆盖新状态。</p>
+<h2 id="版本号和-epoch">版本号和 epoch</h2>
+<p><code>version</code> 或 <code>epoch</code> 用来表示状态版本。</p>
+<p>每次关键状态变化时，epoch 递增：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">LOCAL(epoch=10)</span><br><span class="line">-&gt; MIGRATING_OUT(epoch=11)</span><br><span class="line">-&gt; REMOTE(epoch=12)</span><br></pre></td></tr></table></figure>
+<p>客户端发起写操作时必须携带自己看到的 epoch：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">evict(block_group_id=bg_1, epoch=10)</span><br></pre></td></tr></table></figure>
+<p>服务端检查当前 epoch：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">如果 current_epoch != request_epoch，拒绝请求。</span><br></pre></td></tr></table></figure>
+<p>这样可以防止旧客户端、旧 owner、旧迁移任务继续写入。</p>
+<h2 id="旧-owner-恢复后还能不能继续写">旧 owner
+恢复后还能不能继续写？</h2>
+<p>不能直接继续写。</p>
+<p>这是分布式系统里非常关键的问题。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. worker A 是 bg_1 的 owner，epoch=10。</span><br><span class="line">2. A 因为网络抖动和集群失联。</span><br><span class="line">3. 系统把 bg_1 的 owner 转移给 worker B，epoch=11。</span><br><span class="line">4. A 恢复后，以为自己还是 owner，继续写 bg_1 状态。</span><br></pre></td></tr></table></figure>
+<p>如果没有 epoch 或 fencing token，A 可能覆盖 B 的新状态。</p>
+<p>正确做法是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">每次 owner 变化，epoch 递增。</span><br><span class="line">所有写操作必须携带 epoch。</span><br><span class="line">元数据服务只接受当前 epoch 的写入。</span><br><span class="line">旧 epoch 的写入直接拒绝。</span><br></pre></td></tr></table></figure>
+<p>这就是 fencing 的基本思想。</p>
+<h2 id="迁移失败怎么办">迁移失败怎么办？</h2>
+<p>迁移是长操作，失败是常态。</p>
+<p>例如迁移流程：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. bg_1: LOCAL(epoch=10)</span><br><span class="line">2. 源节点设置 MIGRATING_OUT(epoch=11)</span><br><span class="line">3. 目标节点设置 MIGRATING_IN(epoch=11)</span><br><span class="line">4. 拷贝数据</span><br><span class="line">5. 校验数据</span><br><span class="line">6. 更新 location</span><br><span class="line">7. 源节点释放旧副本</span><br></pre></td></tr></table></figure>
+<p>失败可能发生在任何一步：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">源节点设置状态后崩溃。</span><br><span class="line">目标节点空间不足。</span><br><span class="line">数据拷贝到一半网络断开。</span><br><span class="line">目标校验失败。</span><br><span class="line">元数据更新成功，但源节点释放失败。</span><br><span class="line">客户端仍然持有旧路由。</span><br></pre></td></tr></table></figure>
+<p>一种保守处理方式是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">迁移开始前记录 operation_id。</span><br><span class="line">迁移状态写入元数据。</span><br><span class="line">源副本延迟删除。</span><br><span class="line">目标校验成功后再更新 location。</span><br><span class="line">客户端发现 epoch 不匹配时刷新元数据。</span><br><span class="line">后台 repair 任务扫描 MIGRATING 状态并修复。</span><br></pre></td></tr></table></figure>
+<p>中间态不能无限停留。系统需要后台任务处理这些状态：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">MIGRATING_OUT 超时：回滚到 LOCAL，或继续完成迁移。</span><br><span class="line">MIGRATING_IN 超时：清理目标临时数据，或重新拉取。</span><br><span class="line">元数据和实际数据不一致：以元数据 epoch 为准做修复。</span><br></pre></td></tr></table></figure>
+<h2 id="淘汰过程中又被访问怎么办">淘汰过程中又被访问怎么办？</h2>
+<p>淘汰过程中被访问也很常见。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. bg_1 ref_count=0，pin_count=0，被选中淘汰。</span><br><span class="line">2. 状态从 LOCAL 变成 EVICTING。</span><br><span class="line">3. 一个新的 decode 请求需要读取 bg_1。</span><br></pre></td></tr></table></figure>
+<p>这时有几种策略：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">策略一：拒绝新读，让请求 miss 或重新计算。</span><br><span class="line">策略二：取消淘汰，把状态改回 LOCAL。</span><br><span class="line">策略三：等待淘汰完成，再从下一级存储拉回。</span><br></pre></td></tr></table></figure>
+<p>哪种策略更好，取决于系统目标。</p>
+<p>在线推理通常更关注延迟，所以如果淘汰还没真正释放数据，取消淘汰可能更合适。但这要求淘汰状态机能支持回滚。</p>
+<p>一个保守状态转移可以是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">LOCAL -&gt; EVICTING</span><br><span class="line">EVICTING -&gt; LOCAL</span><br><span class="line">EVICTING -&gt; EVICTED</span><br></pre></td></tr></table></figure>
+<p>但前提是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">数据还没释放时才能回滚。</span><br><span class="line">数据一旦释放，只能进入 EVICTED。</span><br><span class="line">回滚和释放必须互斥。</span><br></pre></td></tr></table></figure>
+<h2 id="为什么要学分片">为什么要学分片？</h2>
+<p>当数据放不下一台机器，就要分片。</p>
+<p>分片要解决的问题是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">给定一个 key，应该去哪个节点找数据？</span><br></pre></td></tr></table></figure>
+<p>在 KV Cache 系统中，这个 key 可能是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">block_id</span><br><span class="line">block_group_id</span><br><span class="line">request_id</span><br><span class="line">session_id</span><br><span class="line">model_id</span><br><span class="line">layer_id</span><br><span class="line">token_range</span><br></pre></td></tr></table></figure>
+<p>分片策略决定了数据如何分布，也决定了负载、迁移成本和故障影响面。</p>
+<h2 id="哈希分片">哈希分片</h2>
+<p>最简单的方式是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">node = hash(key) % N</span><br></pre></td></tr></table></figure>
+<p>优点：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">实现简单。</span><br><span class="line">数据分布相对均匀。</span><br><span class="line">查询路径清晰。</span><br></pre></td></tr></table></figure>
+<p>缺点：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">节点数量 N 改变时，大量 key 会重新映射。</span><br><span class="line">扩容或缩容会触发大量迁移。</span><br><span class="line">不容易表达物理拓扑和负载差异。</span><br></pre></td></tr></table></figure>
+<p>如果用 <code>block_group_id</code> 做哈希分片：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">node = hash(block_group_id) % N</span><br></pre></td></tr></table></figure>
+<p>系统可以快速找到某个 group 的默认归属节点。但如果节点扩容，很多 group
+的位置都可能变化。</p>
+<h2 id="一致性哈希">一致性哈希</h2>
+<p>一致性哈希把 key 和节点都映射到一个环上。key
+顺时针找到的第一个节点，就是它的归属节点。</p>
+<p>它的优点是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">增加或删除节点时，只影响环上的一小段 key。</span><br><span class="line">比 hash(key) % N 更适合缓存系统扩缩容。</span><br><span class="line">可以通过虚拟节点改善负载均衡。</span><br></pre></td></tr></table></figure>
+<p>它适合这些场景：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">cache 节点会动态扩缩容。</span><br><span class="line">允许少量数据迁移。</span><br><span class="line">希望路由计算比较简单。</span><br></pre></td></tr></table></figure>
+<p>但一致性哈希也不是万能的。</p>
+<p>在 KV Cache 场景中，如果某些 block group
+特别大或特别热，单纯靠一致性哈希仍然可能产生热点。</p>
+<p>所以还需要结合：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">节点负载。</span><br><span class="line">GPU HBM 余量。</span><br><span class="line">网络拓扑。</span><br><span class="line">请求局部性。</span><br><span class="line">block group 热度。</span><br><span class="line">迁移成本。</span><br></pre></td></tr></table></figure>
+<h2 id="range-分片">Range 分片</h2>
+<p>Range 分片按照 key 的范围切分。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[0, 1000)      -&gt; node A</span><br><span class="line">[1000, 2000)   -&gt; node B</span><br><span class="line">[2000, 3000)   -&gt; node C</span><br></pre></td></tr></table></figure>
+<p>优点：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">适合范围查询。</span><br><span class="line">方便按时间、token range、sequence range 组织数据。</span><br><span class="line">有利于顺序扫描和批量迁移。</span><br></pre></td></tr></table></figure>
+<p>缺点：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">容易产生热点。</span><br><span class="line">范围切分不均时，部分节点压力过大。</span><br><span class="line">需要 split/merge 机制维护范围。</span><br></pre></td></tr></table></figure>
+<p>KV Cache 中，如果按 token range 组织 block group，Range
+分片可以让连续 token 的 cache 更容易放在一起。</p>
+<p>但如果某些长上下文请求特别多，相关 range 可能成为热点。</p>
+<h2 id="分片维度怎么选">分片维度怎么选？</h2>
+<p>KV Cache 的分片维度不是固定的。</p>
+<p>可以按：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">按 request/session 分片：同一个请求的数据尽量放一起。</span><br><span class="line">按 block_group_id 分片：实现简单，分布较均匀。</span><br><span class="line">按 layer 分片：配合 pipeline parallelism 或模型层级调度。</span><br><span class="line">按 model_id 分片：隔离不同模型。</span><br><span class="line">按租户分片：做资源隔离。</span><br><span class="line">按 token range 分片：保留连续访问局部性。</span><br></pre></td></tr></table></figure>
+<p>不同维度的取舍：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">按请求分片：局部性好，但长请求可能很大。</span><br><span class="line">按 block_group 分片：负载均衡较好，但一次请求可能跨多个节点。</span><br><span class="line">按 layer 分片：适合模型并行，但路由更复杂。</span><br><span class="line">按模型分片：隔离性好，但热门模型容易形成热点。</span><br><span class="line">按 token range 分片：顺序访问友好，但需要处理长序列热点。</span><br></pre></td></tr></table></figure>
+<p>一个好的分片策略要同时考虑：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">访问局部性。</span><br><span class="line">负载均衡。</span><br><span class="line">迁移成本。</span><br><span class="line">故障影响面。</span><br><span class="line">元数据复杂度。</span><br><span class="line">调度策略。</span><br></pre></td></tr></table></figure>
+<h2 id="路由表">路由表</h2>
+<p>分片之后，系统需要知道数据在哪里。这个信息通常通过路由表表达。</p>
+<p>一个简化路由表可以是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">block_group_id -&gt; node_id</span><br><span class="line">block_group_id -&gt; device_id</span><br><span class="line">block_group_id -&gt; memory_tier</span><br><span class="line">block_group_id -&gt; epoch</span><br><span class="line">block_group_id -&gt; state</span><br></pre></td></tr></table></figure>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">bg_1 -&gt; node_a / gpu_0 / HBM / epoch=10 / LOCAL</span><br><span class="line">bg_2 -&gt; node_b / cpu_memory / epoch=7 / REMOTE</span><br><span class="line">bg_3 -&gt; node_c / ssd / epoch=3 / EVICTED</span><br></pre></td></tr></table></figure>
+<p>客户端访问 <code>bg_1</code> 时，先查路由：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">1. bg_1 在 node_a。</span><br><span class="line">2. 数据在 gpu_0 HBM。</span><br><span class="line">3. 当前 epoch=10。</span><br><span class="line">4. 当前状态 LOCAL，可以读。</span><br></pre></td></tr></table></figure>
+<p>然后客户端发起读取：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">get_block_group(bg_1, epoch=10)</span><br></pre></td></tr></table></figure>
+<p>如果服务端发现当前 epoch 已经不是
+10，就说明客户端路由过期，需要刷新元数据。</p>
+<h2 id="元数据服务">元数据服务</h2>
+<p>元数据服务维护系统的事实来源。</p>
+<p>在 KV Cache 中，元数据可能包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">block_id -&gt; block_group_id</span><br><span class="line">block_group_id -&gt; node_id</span><br><span class="line">block_group_id -&gt; device_id</span><br><span class="line">block_group_id -&gt; memory_tier</span><br><span class="line">block_group_id -&gt; state</span><br><span class="line">block_group_id -&gt; epoch</span><br><span class="line">block_group_id -&gt; owner</span><br><span class="line">block_group_id -&gt; ref_count</span><br><span class="line">block_group_id -&gt; pin_count</span><br><span class="line">request_id -&gt; block_group_list</span><br></pre></td></tr></table></figure>
+<p>它回答的问题是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">数据在哪里？</span><br><span class="line">数据现在是什么状态？</span><br><span class="line">谁是 owner？</span><br><span class="line">当前版本是多少？</span><br><span class="line">这个请求需要哪些 block group？</span><br></pre></td></tr></table></figure>
+<p>元数据服务需要更强的一致性，因为它决定系统行为。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">block group 当前 owner 是谁。</span><br><span class="line">block group 当前 epoch 是多少。</span><br><span class="line">block group 是否可以被淘汰。</span><br><span class="line">block group 是否正在迁移。</span><br></pre></td></tr></table></figure>
+<p>这些状态如果错了，可能导致读错位置、重复迁移、误删 cache 或旧 owner
+写入。</p>
+<h2 id="本地元数据缓存">本地元数据缓存</h2>
+<p>每次访问都查元数据服务会很慢，所以客户端通常会缓存元数据。</p>
+<p>例如 worker 本地缓存：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">bg_1 -&gt; node_a / gpu_0 / HBM / epoch=10</span><br></pre></td></tr></table></figure>
+<p>这样下一次访问 <code>bg_1</code> 时，不用再远程查询 metadata
+server。</p>
+<p>但本地缓存会带来一个问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">缓存可能过期。</span><br></pre></td></tr></table></figure>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. worker 本地缓存 bg_1 在 node_a，epoch=10。</span><br><span class="line">2. bg_1 被迁移到 node_b，epoch=11。</span><br><span class="line">3. worker 继续向 node_a 读取 bg_1。</span><br></pre></td></tr></table></figure>
+<p>如果没有校验，worker 就会访问旧位置。</p>
+<p>所以本地元数据缓存必须配合：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">epoch 校验。</span><br><span class="line">TTL。</span><br><span class="line">主动失效通知。</span><br><span class="line">访问失败后刷新。</span><br></pre></td></tr></table></figure>
+<h2 id="元数据失效">元数据失效</h2>
+<p>元数据失效有几种方式。</p>
+<h3 id="ttl">TTL</h3>
+<p>给缓存一个过期时间。</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">bg_1 route cache TTL = 100ms</span><br></pre></td></tr></table></figure>
+<p>优点：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">实现简单。</span><br><span class="line">不需要服务端主动通知。</span><br></pre></td></tr></table></figure>
+<p>缺点：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">TTL 内可能读到旧路由。</span><br><span class="line">TTL 太短会增加 metadata server 压力。</span><br><span class="line">TTL 太长会增加过期风险。</span><br></pre></td></tr></table></figure>
+<h3 id="主动失效">主动失效</h3>
+<p>元数据变化时，服务端通知客户端删除旧缓存。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">bg_1 location changed: node_a -&gt; node_b</span><br><span class="line">notify clients invalidate bg_1</span><br></pre></td></tr></table></figure>
+<p>优点：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">旧缓存失效更及时。</span><br><span class="line">可以降低错误路由概率。</span><br></pre></td></tr></table></figure>
+<p>缺点：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">客户端列表难维护。</span><br><span class="line">通知可能丢失。</span><br><span class="line">通知顺序可能乱。</span><br><span class="line">实现复杂度更高。</span><br></pre></td></tr></table></figure>
+<h3 id="版本校验">版本校验</h3>
+<p>每次请求都带上 epoch：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">get_block_group(bg_1, epoch=10)</span><br></pre></td></tr></table></figure>
+<p>服务端检查当前 epoch：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">如果 current_epoch == 10，正常处理。</span><br><span class="line">如果 current_epoch &gt; 10，返回 STALE_METADATA。</span><br></pre></td></tr></table></figure>
+<p>客户端收到 <code>STALE_METADATA</code> 后重新查元数据。</p>
+<p>版本校验是非常关键的兜底机制。即使 TTL
+或主动失效没有及时生效，也能防止旧路由继续写状态。</p>
+<h2 id="迁移过程中路由怎么更新">迁移过程中路由怎么更新？</h2>
+<p>迁移是状态机和元数据最容易出问题的地方。</p>
+<p>一种简化流程：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">1. bg_1 当前在 node_a，state=LOCAL，epoch=10。</span><br><span class="line">2. 调度器决定迁移到 node_b。</span><br><span class="line">3. 元数据更新为 state=MIGRATING_OUT，epoch=11。</span><br><span class="line">4. node_b 创建临时状态 MIGRATING_IN，epoch=11。</span><br><span class="line">5. node_a 将数据复制到 node_b。</span><br><span class="line">6. node_b 校验数据成功。</span><br><span class="line">7. 元数据更新 location=node_b，state=LOCAL，epoch=12。</span><br><span class="line">8. node_a 延迟释放旧副本。</span><br></pre></td></tr></table></figure>
+<p>迁移期间，客户端可能看到不同状态。</p>
+<p>如果客户端拿着旧路由访问 node_a：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">get_block_group(bg_1, epoch=10)</span><br></pre></td></tr></table></figure>
+<p>node_a 可以返回：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">STALE_METADATA(current_epoch=11)</span><br></pre></td></tr></table></figure>
+<p>客户端重新查询元数据后，发现正在迁移，可以选择：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">等待迁移完成。</span><br><span class="line">继续从源节点读。</span><br><span class="line">转向目标节点。</span><br><span class="line">重新计算。</span><br></pre></td></tr></table></figure>
+<p>不同系统会有不同策略，但核心原则是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">路由更新必须和 epoch 绑定。</span><br><span class="line">客户端必须能识别旧路由。</span><br><span class="line">源副本不要过早删除。</span><br><span class="line">中间态必须能被后台修复。</span><br></pre></td></tr></table></figure>
+<h2 id="数据在哪里">数据在哪里？</h2>
+<p>这是路由和元数据要回答的第一个问题。</p>
+<p>一个 block group 可能在：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">本地 GPU HBM。</span><br><span class="line">本地 CPU Memory。</span><br><span class="line">本地 SSD。</span><br><span class="line">远端 GPU HBM。</span><br><span class="line">远端 CPU Memory。</span><br><span class="line">远端 SSD。</span><br><span class="line">已经被淘汰。</span><br><span class="line">正在迁移。</span><br></pre></td></tr></table></figure>
+<p>所以 location 不应该只是一个简单的 <code>node_id</code>。</p>
+<p>更完整的 location 可以包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">node_id</span><br><span class="line">device_id</span><br><span class="line">memory_tier</span><br><span class="line">offset</span><br><span class="line">size_bytes</span><br><span class="line">replica_role</span><br></pre></td></tr></table></figure>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">node_id = node_a</span><br><span class="line">device_id = gpu_0</span><br><span class="line">memory_tier = HBM</span><br><span class="line">offset = 1024MB</span><br><span class="line">size_bytes = 256MB</span><br><span class="line">replica_role = primary</span><br></pre></td></tr></table></figure>
+<h2 id="谁说了算">谁说了算？</h2>
+<p>分布式系统里必须明确事实来源。</p>
+<p>对于 BlockGroup 元数据，通常应该有一个权威来源：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">metadata server</span><br></pre></td></tr></table></figure>
+<p>worker 本地缓存、scheduler 缓存、cache manager
+本地索引都只能是副本或缓存。</p>
+<p>如果出现冲突，例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">metadata server 说 bg_1 在 node_b，epoch=12。</span><br><span class="line">node_a 本地还认为 bg_1 在自己这里，epoch=10。</span><br></pre></td></tr></table></figure>
+<p>应该以 metadata server 的高版本状态为准。</p>
+<p>这也是为什么 epoch 很重要：它让系统能够比较哪个状态更新。</p>
+<h2 id="客户端看到的是不是旧位置">客户端看到的是不是旧位置？</h2>
+<p>客户端几乎一定可能看到旧位置。</p>
+<p>原因包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">本地缓存未失效。</span><br><span class="line">迁移刚刚完成。</span><br><span class="line">失效通知丢失。</span><br><span class="line">网络延迟导致消息乱序。</span><br><span class="line">客户端长时间没有刷新路由。</span><br></pre></td></tr></table></figure>
+<p>所以系统不能假设客户端永远拿到最新位置。</p>
+<p>更现实的设计是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">允许客户端缓存路由。</span><br><span class="line">请求携带 epoch。</span><br><span class="line">服务端拒绝旧 epoch 请求。</span><br><span class="line">客户端收到 STALE_METADATA 后刷新。</span><br></pre></td></tr></table></figure>
+<p>也就是说，缓存可以过期，但过期缓存不能破坏正确性。</p>
+<h2 id="一个请求如何找到-kv-cache">一个请求如何找到 KV Cache？</h2>
+<p>假设 worker 需要读取 <code>bg_1</code>。</p>
+<p>路径可能是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">1. worker 查询本地路由缓存。</span><br><span class="line">2. 如果命中，拿到 node_id、device_id、memory_tier、epoch。</span><br><span class="line">3. worker 向对应 cache manager 发起 get_block_group(bg_1, epoch)。</span><br><span class="line">4. cache manager 检查 state 和 epoch。</span><br><span class="line">5. 如果可以读，返回数据或数据通道信息。</span><br><span class="line">6. 如果 epoch 过期，返回 STALE_METADATA。</span><br><span class="line">7. worker 重新查 metadata server。</span><br><span class="line">8. metadata server 返回新 location、state、epoch。</span><br><span class="line">9. worker 根据新状态决定读取、等待、拉取或重算。</span><br></pre></td></tr></table></figure>
+<p>这条路径串起了：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">本地元数据缓存。</span><br><span class="line">路由表。</span><br><span class="line">元数据服务。</span><br><span class="line">epoch 校验。</span><br><span class="line">状态机。</span><br><span class="line">RPC。</span><br><span class="line">数据读取。</span><br></pre></td></tr></table></figure>
+<p>所以一个请求“找到 KV Cache”不是简单 map
+查询，而是一套带版本、状态和失败处理的流程。</p>
+<h2 id="一个简化的-blockgroup-元数据结构">一个简化的 BlockGroup
+元数据结构</h2>
+<p>可以用下面的结构帮助理解：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">BlockGroupMetadata &#123;</span><br><span class="line">    block_group_id</span><br><span class="line">    model_id</span><br><span class="line">    request_id</span><br><span class="line">    layer_id</span><br><span class="line">    token_range</span><br><span class="line">    block_list</span><br><span class="line"></span><br><span class="line">    node_id</span><br><span class="line">    device_id</span><br><span class="line">    memory_tier</span><br><span class="line">    offset</span><br><span class="line">    size_bytes</span><br><span class="line"></span><br><span class="line">    state</span><br><span class="line">    epoch</span><br><span class="line">    owner</span><br><span class="line">    ref_count</span><br><span class="line">    pin_count</span><br><span class="line"></span><br><span class="line">    last_access_time</span><br><span class="line">    access_count</span><br><span class="line">    priority</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里可以分成三类：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">身份信息：block_group_id、model_id、request_id、layer_id、token_range。</span><br><span class="line">位置信息：node_id、device_id、memory_tier、offset、size_bytes。</span><br><span class="line">状态信息：state、epoch、owner、ref_count、pin_count。</span><br></pre></td></tr></table></figure>
+<p>其中状态信息最需要并发保护，位置信息最容易因为迁移而过期。</p>
+<h2 id="常见错误设计">常见错误设计</h2>
+<h3 id="状态没有中间态">状态没有中间态</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">LOCAL -&gt; REMOTE</span><br></pre></td></tr></table></figure>
+<p>中间没有 <code>MIGRATING_OUT</code> 或
+<code>MIGRATING_IN</code>。</p>
+<p>问题是迁移过程中系统不知道数据处于什么阶段。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">LOCAL -&gt; MIGRATING_OUT -&gt; REMOTE</span><br><span class="line">REMOTE -&gt; MIGRATING_IN -&gt; LOCAL</span><br></pre></td></tr></table></figure>
+<h3 id="写状态不带-epoch">写状态不带 epoch</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">set_state(bg_1, EVICTED)</span><br></pre></td></tr></table></figure>
+<p>问题是旧 owner 也可以写。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">set_state(bg_1, from_state=EVICTING, to_state=EVICTED, epoch=12)</span><br></pre></td></tr></table></figure>
+<h3 id="ref_count-和-pin_count-不是原子更新">ref_count 和 pin_count
+不是原子更新</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">if ref_count == 0:</span><br><span class="line">    free(block_group)</span><br></pre></td></tr></table></figure>
+<p>但没有锁或 CAS 保护。</p>
+<p>问题是另一个线程可能正在增加引用。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">在同一个临界区里检查 state、ref_count、pin_count，并更新状态。</span><br></pre></td></tr></table></figure>
+<h3 id="本地缓存路由但不校验-epoch">本地缓存路由但不校验 epoch</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">route = local_cache[bg_1]</span><br><span class="line">send_request(route.node)</span><br></pre></td></tr></table></figure>
+<p>问题是路由可能过期。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">route = local_cache[bg_1]</span><br><span class="line">send_request(route.node, bg_1, route.epoch)</span><br></pre></td></tr></table></figure>
+<p>服务端校验 epoch，过期则返回 <code>STALE_METADATA</code>。</p>
+<h3 id="迁移完成后立刻删除源副本">迁移完成后立刻删除源副本</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">更新元数据到 node_b 后，node_a 立即删除数据。</span><br></pre></td></tr></table></figure>
+<p>问题是客户端可能还拿着旧路由访问 node_a。</p>
+<p>更保守的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">源副本延迟删除。</span><br><span class="line">旧 epoch 请求返回 STALE_METADATA。</span><br><span class="line">一段时间后或确认没有旧引用后再释放。</span><br></pre></td></tr></table></figure>
+<h2 id="如何排查状态和路由问题">如何排查状态和路由问题？</h2>
+<p>状态和路由问题通常需要同时看日志、指标和元数据快照。</p>
+<h3 id="日志字段">日志字段</h3>
+<p>日志里最好带上：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">request_id</span><br><span class="line">operation_id</span><br><span class="line">block_group_id</span><br><span class="line">old_state</span><br><span class="line">new_state</span><br><span class="line">epoch</span><br><span class="line">old_location</span><br><span class="line">new_location</span><br><span class="line">owner</span><br><span class="line">ref_count</span><br><span class="line">pin_count</span><br><span class="line">error_code</span><br></pre></td></tr></table></figure>
+<p>否则排查迁移、淘汰和旧路由问题会很困难。</p>
+<h3 id="指标">指标</h3>
+<p>可以关注：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">metadata_query_latency</span><br><span class="line">metadata_update_latency</span><br><span class="line">metadata_stale_count</span><br><span class="line">route_cache_hit_rate</span><br><span class="line">route_cache_stale_count</span><br><span class="line">state_transition_failure_count</span><br><span class="line">cas_failure_count</span><br><span class="line">block_group_migrating_count</span><br><span class="line">block_group_evicting_count</span><br><span class="line">stale_epoch_reject_count</span><br><span class="line">repair_task_count</span><br></pre></td></tr></table></figure>
+<h3 id="常见排查问题">常见排查问题</h3>
+<p>遇到一次读失败，可以问：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">客户端看到的 epoch 是多少？</span><br><span class="line">服务端当前 epoch 是多少？</span><br><span class="line">block group 当前 state 是什么？</span><br><span class="line">客户端访问的是不是旧 location？</span><br><span class="line">是否正在迁移？</span><br><span class="line">ref_count 和 pin_count 是否异常？</span><br><span class="line">是否有旧 owner 写入被拒绝？</span><br><span class="line">是否有后台 repair 任务处理过这个 group？</span><br></pre></td></tr></table></figure>
+<h2 id="面向-kv-cache-的检查清单">面向 KV Cache 的检查清单</h2>
+<p>看组内代码或设计文档时，可以用下面的问题检查：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">1. BlockGroup 有哪些状态？</span><br><span class="line">2. 每个状态是否有明确含义？</span><br><span class="line">3. 哪些状态可以读？</span><br><span class="line">4. 哪些状态可以迁移？</span><br><span class="line">5. 哪些状态可以淘汰？</span><br><span class="line">6. 状态转移是否合法校验？</span><br><span class="line">7. 状态更新是否带 epoch？</span><br><span class="line">8. owner 变化时 epoch 是否递增？</span><br><span class="line">9. 旧 epoch 写入是否会被拒绝？</span><br><span class="line">10. ref_count 是否原子更新？</span><br><span class="line">11. pin/unpin 是否按 request_id 幂等？</span><br><span class="line">12. 迁移失败是否有中间态恢复机制？</span><br><span class="line">13. 淘汰过程中被访问是否有明确策略？</span><br><span class="line">14. 分片 key 是什么？</span><br><span class="line">15. 路由表是否包含 state 和 epoch？</span><br><span class="line">16. 本地元数据缓存如何失效？</span><br><span class="line">17. 客户端访问旧位置时如何刷新路由？</span><br><span class="line">18. 元数据服务是不是事实来源？</span><br></pre></td></tr></table></figure>
+<h2 id="推荐学习顺序">推荐学习顺序</h2>
+<p>这一组可以按下面顺序学：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">1. 状态机：理解对象生命周期。</span><br><span class="line">2. 状态转移：定义哪些变化合法。</span><br><span class="line">3. 锁和 CAS：保护并发状态更新。</span><br><span class="line">4. ref_count 和 pin/unpin：保护正在使用的数据。</span><br><span class="line">5. version/epoch：防止旧请求和旧 owner 写入。</span><br><span class="line">6. BlockGroup 迁移状态机：理解中间态和失败恢复。</span><br><span class="line">7. BlockGroup 淘汰状态机：理解释放和回滚。</span><br><span class="line">8. 哈希分片：理解最基础的数据分布。</span><br><span class="line">9. 一致性哈希：理解扩缩容时减少迁移。</span><br><span class="line">10. Range 分片：理解范围访问和热点。</span><br><span class="line">11. 路由表：理解请求如何找到数据。</span><br><span class="line">12. 元数据服务：理解谁是事实来源。</span><br><span class="line">13. 本地元数据缓存：理解性能和过期风险。</span><br><span class="line">14. 元数据失效：理解 TTL、主动通知和 epoch 校验。</span><br></pre></td></tr></table></figure>
+<p>最后要把这些内容串成一条链路：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">BlockGroup 创建</span><br><span class="line">-&gt; 写入元数据</span><br><span class="line">-&gt; 分片决定归属</span><br><span class="line">-&gt; 路由表记录位置</span><br><span class="line">-&gt; 客户端缓存路由</span><br><span class="line">-&gt; 请求携带 epoch 读取</span><br><span class="line">-&gt; 状态机判断是否可读</span><br><span class="line">-&gt; 迁移时更新 state/location/epoch</span><br><span class="line">-&gt; 客户端发现旧路由后刷新</span><br><span class="line">-&gt; ref_count/pin_count 归零后淘汰</span><br></pre></td></tr></table></figure>
+<p>如果能把这条链路讲清楚，就说明已经初步理解了分布式对象的生命周期。</p>
+<h2 id="总结">总结</h2>
+<p>并发状态、状态机、分片、路由和元数据，是 KV Cache
+系统里非常核心的一组基础。</p>
+<p>状态机回答：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">这个对象现在能做什么？</span><br></pre></td></tr></table></figure>
+<p>元数据回答：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">这个对象在哪里？谁拥有它？当前版本是多少？</span><br></pre></td></tr></table></figure>
+<p>分片和路由回答：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">给定一个 key，应该去哪里找？</span><br></pre></td></tr></table></figure>
+<p>对 BlockGroup 来说，最重要的是建立下面几个意识：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. BlockGroup 是有生命周期的状态对象。</span><br><span class="line">2. 状态转移必须被保护，不能随意修改。</span><br><span class="line">3. ref_count 和 pin_count 决定数据是否能释放或迁移。</span><br><span class="line">4. epoch 用来防止旧 owner 和旧客户端写入。</span><br><span class="line">5. 路由可以缓存，但必须能识别过期。</span><br><span class="line">6. 元数据服务应该是事实来源。</span><br><span class="line">7. 迁移和淘汰都必须有中间态和失败恢复机制。</span><br></pre></td></tr></table></figure>
+<p>掌握这些之后，再学习一致性、副本、故障恢复和调度，会更容易理解为什么分布式系统设计总是围绕状态、版本和所有权展开。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+              <a href="/tags/%E5%B9%B6%E5%8F%91/" rel="tag"># 并发</a>
+              <a href="/tags/%E7%8A%B6%E6%80%81%E6%9C%BA/" rel="tag"># 状态机</a>
+              <a href="/tags/%E5%85%83%E6%95%B0%E6%8D%AE/" rel="tag"># 元数据</a>
+              <a href="/tags/KV-Cache/" rel="tag"># KV Cache</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/07/07/distributed-foundation-rpc-remote-call/" rel="prev" title="分布式基础：RPC 和远程调用">
+                  <i class="fa fa-angle-left"></i> 分布式基础：RPC 和远程调用
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>
