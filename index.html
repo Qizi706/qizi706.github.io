@@ -155,7 +155,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">15</span>
+          <span class="site-state-item-count">16</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
@@ -166,7 +166,7 @@
       </div>
       <div class="site-state-item site-state-tags">
           <a href="/tags/">
-        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-count">12</span>
         <span class="site-state-item-name">tags</span></a>
       </div>
   </nav>
@@ -187,6 +187,102 @@
     </div>
 
     <div class="main-inner index posts-expand">
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/07/distributed-foundation-rpc-remote-call/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content=" | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2026/07/07/distributed-foundation-rpc-remote-call/" class="post-title-link" itemprop="url">分布式基础：RPC 和远程调用</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-07-07 10:30:00 / Modified: 15:12:31" itemprop="dateCreated datePublished" datetime="2026-07-07T10:30:00+08:00">2026-07-07</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/" itemprop="url" rel="index"><span itemprop="name">分布式</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <h2 id="背景">背景</h2>
+<p>学习分布式系统时，一个非常重要的转变是：不能再把函数调用理解成本地调用。</p>
+<p>在单机程序里，调用一个函数通常是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">参数已经在本地内存里。</span><br><span class="line">函数要么返回结果，要么抛出异常。</span><br><span class="line">调用成本很低。</span><br><span class="line">失败边界相对清晰。</span><br></pre></td></tr></table></figure>
+<p>但在分布式系统里，调用另一个模块经常意味着通过网络访问另一台机器上的服务。这时一次“函数调用”会变成：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">序列化请求</span><br><span class="line">通过网络发送</span><br><span class="line">远端排队</span><br><span class="line">远端执行</span><br><span class="line">序列化响应</span><br><span class="line">通过网络返回</span><br><span class="line">本地反序列化</span><br></pre></td></tr></table></figure>
+<p>因此，远程调用不是本地调用。它更慢，也更容易失败。</p>
+<p>对训练-推理一体存储和 <code>KV Cache</code> 系统来说，RPC
+会出现在很多关键路径上：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">worker 查询 metadata server。</span><br><span class="line">scheduler 调度 model worker。</span><br><span class="line">cache manager 读取远端 block group。</span><br><span class="line">cache manager 迁移 block group。</span><br><span class="line">worker pin/unpin 某份 KV Cache。</span><br><span class="line">后台任务淘汰或预取 cache。</span><br></pre></td></tr></table></figure>
+<p>这一篇重点学习第二组基础：<code>RPC</code> 和远程调用。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2026/07/07/distributed-foundation-rpc-remote-call/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
 
     
 
@@ -1048,102 +1144,6 @@ Lab
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2026/04/03/6-s081-lab7/#more" rel="contents">
-                Read more &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/03/27/6-s081-lab6/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="Quan Zhou">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Quan Zhou 的 blog">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content=" | Quan Zhou 的 blog">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2026/03/27/6-s081-lab6/" class="post-title-link" itemprop="url">6.s081 Lab6 Multithreading 实现</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">Posted on</span>
-
-      <time title="Created: 2026-03-27 20:00:00" itemprop="dateCreated datePublished" datetime="2026-03-27T20:00:00+08:00">2026-03-27</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2026-07-06 11:54:30" itemprop="dateModified" datetime="2026-07-06T11:54:30+08:00">2026-07-06</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">In</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/MIT-courses/" itemprop="url" rel="index"><span itemprop="name">MIT courses</span></a>
-        </span>
-          , 
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/OS/" itemprop="url" rel="index"><span itemprop="name">OS</span></a>
-        </span>
-    </span>
-
-  
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <p>一个操作系统运行的进程可能比这个计算机的CPU数量多，因此操作系统需要规划如何在进程间共享CPU。理想状态下要让这个过程对于用户进程来说是透明的，让每个进程有一种自己单独拥有一个CPU的错觉。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2026/03/27/6-s081-lab6/#more" rel="contents">
                 Read more &raquo;
               </a>
             </div>
