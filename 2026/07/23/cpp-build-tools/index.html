@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.css" integrity="sha256-gkQVf8UKZgQ0HyuxL/VnacadJ+D2Kox2TCEBuNQg5+w=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Muse","darkmode":true,"version":"8.28.0","exturl":false,"sidebar":{"position":"right","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":false,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="之前做过 15445 Bustub、6.s081 xv6 这类项目，其实已经接触过构建工具了。 比如在 xv6 里经常执行： 12make qemumake grade 在 Bustub 里经常执行： 1234mkdir buildcd buildcmake ..make -j 但如果只是照着项目文档跑命令，很容易形成一种感觉：  我会用这些命令，但不知道它们到底在帮我做什么。  这篇文章想系统学">
+<meta property="og:type" content="article">
+<meta property="og:title" content="C++ 项目构建工具学习路线：从 Make 到 CMake">
+<meta property="og:url" content="http://qizi706.github.io/2026/07/23/cpp-build-tools/index.html">
+<meta property="og:site_name" content="Quan Zhou 的 blog">
+<meta property="og:description" content="之前做过 15445 Bustub、6.s081 xv6 这类项目，其实已经接触过构建工具了。 比如在 xv6 里经常执行： 12make qemumake grade 在 Bustub 里经常执行： 1234mkdir buildcd buildcmake ..make -j 但如果只是照着项目文档跑命令，很容易形成一种感觉：  我会用这些命令，但不知道它们到底在帮我做什么。  这篇文章想系统学">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-07-23T08:00:00.000Z">
+<meta property="article:modified_time" content="2026-07-23T09:25:35.391Z">
+<meta property="article:author" content="Quan Zhou">
+<meta property="article:tag" content="C++工程">
+<meta property="article:tag" content="CMake">
+<meta property="article:tag" content="构建工具">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="http://qizi706.github.io/2026/07/23/cpp-build-tools/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/07/23/cpp-build-tools/","path":"2026/07/23/cpp-build-tools/","title":"C++ 项目构建工具学习路线：从 Make 到 CMake"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>C++ 项目构建工具学习路线：从 Make 到 CMake | Quan Zhou 的 blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/next-theme-pjax/0.6.0/pjax.min.js" integrity="sha256-vxLn1tSKWD4dqbMRyv940UYw4sXgMtYcK6reefzZrao=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.umd.js" integrity="sha256-a+H7FYzJv6oU2hfsfDGM2Ohw/cR9v+hPfxHCLdmCrE8=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pangu/7.2.0/pangu.umd.js" integrity="sha256-JnmRRnJK7DC6RQJbAJb6AXOM9OmWzS6z8eYultk/48Y=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script><script src="/js/pjax.js" defer></script>
+
+  
+
+  <script class="next-config" data-name="mermaid" type="application/json">{"enable":true,"theme":{"light":"default","dark":"dark"},"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.10.1/mermaid.min.js","integrity":"sha256-BmQmdWDS8X2OTbrwELWK366LV6escyWhHHe0XCTU/Hk="}}</script>
+  <script src="/js/third-party/tags/mermaid.js" defer></script>
+
+  <script class="next-config" data-name="wavedrom" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/wavedrom.min.js","integrity":"sha256-INLAoJc6quTNfiMWkGZniYO2cxE8mHpddnLow1m6RFs="}}</script>
+  <script class="next-config" data-name="wavedrom_skin" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/skins/default.js","integrity":"sha256-fduc/Zszk5ezWws2uInY/ALWVmIrmV6VTgXbsYSReFI="}}</script>
+  <script src="/js/third-party/tags/wavedrom.js" defer></script>
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">false</script><script class="next-config" data-name="mathjax" type="application/json">{"enable":true,"tags":"ams","js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js","integrity":"sha256-MASABpB4tYktI2Oitl4t+78w/lyA+D7b/s9GEP0JOGI="}}</script>
+<script src="/js/third-party/math/mathjax.js" defer></script>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quicklink/3.0.1/quicklink.umd.js" integrity="sha256-44BednzIpUeQJcY8qtLyarFu0UCCTbgmWOvaoehiFQQ=" crossorigin="anonymous" defer></script>
+  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/07/23/cpp-build-tools/"}</script>
+  <script src="/js/third-party/quicklink.js" defer></script>
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Quan Zhou 的 blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="Search" role="button">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a></li>
+  </ul>
+</nav>
+
+
+
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9E%84%E5%BB%BA%E5%B7%A5%E5%85%B7%E5%88%B0%E5%BA%95%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88%E9%97%AE%E9%A2%98"><span class="nav-text">构建工具到底解决什么问题？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%85%88%E7%90%86%E8%A7%A3%E7%BC%96%E8%AF%91%E8%BF%87%E7%A8%8B"><span class="nav-text">先理解编译过程</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%A4%B4%E6%96%87%E4%BB%B6%E5%92%8C%E6%BA%90%E6%96%87%E4%BB%B6%E7%9A%84%E5%85%B3%E7%B3%BB"><span class="nav-text">头文件和源文件的关系</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#make%E6%8A%8A%E5%91%BD%E4%BB%A4%E5%92%8C%E4%BE%9D%E8%B5%96%E5%86%99%E6%B8%85%E6%A5%9A"><span class="nav-text">Make：把命令和依赖写清楚</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#xv6-%E9%87%8C%E7%9A%84-makefile-%E5%9C%A8%E5%81%9A%E4%BB%80%E4%B9%88"><span class="nav-text">xv6 里的 Makefile 在做什么？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#make-%E7%9A%84%E5%B1%80%E9%99%90"><span class="nav-text">Make 的局限</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#cmake%E7%94%9F%E6%88%90%E6%9E%84%E5%BB%BA%E7%B3%BB%E7%BB%9F%E7%9A%84%E6%9E%84%E5%BB%BA%E7%B3%BB%E7%BB%9F"><span class="nav-text">CMake：生成构建系统的构建系统</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%80%E4%B8%AA%E6%9C%80%E5%B0%8F-cmake-%E9%A1%B9%E7%9B%AE"><span class="nav-text">一个最小 CMake 项目</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#cmake_minimum_required"><span class="nav-text">cmake_minimum_required()</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#project"><span class="nav-text">project()</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#add_executable"><span class="nav-text">add_executable()</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#target_compile_features"><span class="nav-text">target_compile_features()</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#target_include_directories"><span class="nav-text">target_include_directories()</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%8E%B0%E4%BB%A3-cmake-%E7%9A%84%E6%A0%B8%E5%BF%83target"><span class="nav-text">现代 CMake 的核心：target</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#privatepublicinterface-%E6%98%AF%E4%BB%80%E4%B9%88"><span class="nav-text">PRIVATE、PUBLIC、INTERFACE
+是什么？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%9D%99%E6%80%81%E5%BA%93%E5%92%8C%E5%8A%A8%E6%80%81%E5%BA%93"><span class="nav-text">静态库和动态库</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#debug-%E5%92%8C-release"><span class="nav-text">Debug 和 Release</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ninja%E6%9B%B4%E5%BF%AB%E7%9A%84%E6%9E%84%E5%BB%BA%E5%90%8E%E7%AB%AF"><span class="nav-text">Ninja：更快的构建后端</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#compile_commands.json"><span class="nav-text">compile_commands.json</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%AC%AC%E4%B8%89%E6%96%B9%E4%BE%9D%E8%B5%96%E6%80%8E%E4%B9%88%E5%A4%84%E7%90%86"><span class="nav-text">第三方依赖怎么处理？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#fetchcontent%E7%9B%B4%E6%8E%A5%E6%8B%89%E6%BA%90%E7%A0%81%E5%8F%82%E4%B8%8E%E6%9E%84%E5%BB%BA"><span class="nav-text">FetchContent：直接拉源码参与构建</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#bustub-%E9%87%8C%E7%9A%84-cmake-%E5%9C%A8%E5%81%9A%E4%BB%80%E4%B9%88"><span class="nav-text">Bustub 里的 CMake 在做什么？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E5%91%BD%E4%BB%A4%E9%80%9F%E6%9F%A5"><span class="nav-text">常见命令速查</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AD%A6%E4%B9%A0%E8%B7%AF%E7%BA%BF"><span class="nav-text">学习路线</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#makecmakeninja-%E6%80%8E%E4%B9%88%E5%8C%BA%E5%88%86"><span class="nav-text">Make、CMake、Ninja 怎么区分？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B0%8F%E7%BB%93"><span class="nav-text">小结</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Quan Zhou</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">21</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">25</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+        </div>
+      </div>
+        <div class="back-to-top animated" role="button" aria-label="Back to top">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/23/cpp-build-tools/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="C++ 项目构建工具学习路线：从 Make 到 CMake | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          C++ 项目构建工具学习路线：从 Make 到 CMake
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-07-23 16:00:00 / Modified: 17:25:35" itemprop="dateCreated datePublished" datetime="2026-07-23T16:00:00+08:00">2026-07-23</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/C-C/" itemprop="url" rel="index"><span itemprop="name">C/C++</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><p>之前做过 <code>15445 Bustub</code>、<code>6.s081 xv6</code>
+这类项目，其实已经接触过构建工具了。</p>
+<p>比如在 <code>xv6</code> 里经常执行：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">make qemu</span><br><span class="line">make grade</span><br></pre></td></tr></table></figure>
+<p>在 <code>Bustub</code> 里经常执行：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> build</span><br><span class="line"><span class="built_in">cd</span> build</span><br><span class="line">cmake ..</span><br><span class="line">make -j</span><br></pre></td></tr></table></figure>
+<p>但如果只是照着项目文档跑命令，很容易形成一种感觉：</p>
+<blockquote>
+<p>我会用这些命令，但不知道它们到底在帮我做什么。</p>
+</blockquote>
+<p>这篇文章想系统学习一下现代 <code>C++</code> 项目的构建工具，重点是把
+<code>Make</code>、<code>CMake</code>、<code>Ninja</code>、依赖管理这些东西放在同一张图里理解。</p>
+<span id="more"></span>
+<h2 id="构建工具到底解决什么问题">构建工具到底解决什么问题？</h2>
+<p>先不考虑工具，一个最小的 <code>C++</code> 程序可能这样编译：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">g++ main.cpp -o main</span><br></pre></td></tr></table></figure>
+<p>但真实项目不会只有一个文件。它通常会有：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">头文件</span><br><span class="line">源文件</span><br><span class="line">第三方库</span><br><span class="line">编译选项</span><br><span class="line">链接选项</span><br><span class="line">测试程序</span><br><span class="line">benchmark</span><br><span class="line">不同平台</span><br><span class="line">Debug / Release 模式</span><br><span class="line">代码生成</span><br><span class="line">安装规则</span><br></pre></td></tr></table></figure>
+<p>所以构建工具本质上解决的是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">从一堆源文件、配置和依赖，稳定地生成最终产物。</span><br></pre></td></tr></table></figure>
+<p>最终产物可能是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">可执行文件</span><br><span class="line">静态库</span><br><span class="line">动态库</span><br><span class="line">测试二进制</span><br><span class="line">编译数据库 compile_commands.json</span><br><span class="line">安装目录</span><br><span class="line">打包产物</span><br></pre></td></tr></table></figure>
+<div class="note info"><p>构建工具不是 <code>C++</code>
+语法的一部分，而是工程的一部分。它负责把“怎么把代码变成能运行的东西”这件事固定下来。</p>
+</div>
+<h2 id="先理解编译过程">先理解编译过程</h2>
+<p>学习 <code>Make</code> 和 <code>CMake</code> 之前，要先理解
+<code>C++</code> 项目的基本构建流程。</p>
+<p>一个简单项目：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">demo/</span><br><span class="line">  include/</span><br><span class="line">    add.h</span><br><span class="line">  src/</span><br><span class="line">    add.cpp</span><br><span class="line">    main.cpp</span><br></pre></td></tr></table></figure>
+<p><code>include/add.h</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">pragma</span> once</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">add</span><span class="params">(<span class="type">int</span> a, <span class="type">int</span> b)</span></span>;</span><br></pre></td></tr></table></figure>
+<p><code>src/add.cpp</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;add.h&quot;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">add</span><span class="params">(<span class="type">int</span> a, <span class="type">int</span> b)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> a + b;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>src/main.cpp</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;add.h&quot;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    std::cout &lt;&lt; <span class="built_in">add</span>(<span class="number">1</span>, <span class="number">2</span>) &lt;&lt; std::endl;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如果不用构建工具，可以手动编译：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> -p build</span><br><span class="line">g++ -std=c++20 -Iinclude -c src/add.cpp -o build/add.o</span><br><span class="line">g++ -std=c++20 -Iinclude -c src/main.cpp -o build/main.o</span><br><span class="line">g++ build/add.o build/main.o -o build/demo</span><br></pre></td></tr></table></figure>
+<p>这里其实分成了两步：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">compile: .cpp -&gt; .o</span><br><span class="line">link:    .o   -&gt; executable</span><br></pre></td></tr></table></figure>
+<p><code>-Iinclude</code> 表示告诉编译器去哪里找头文件。</p>
+<p><code>-std=c++20</code> 表示使用 <code>C++20</code> 标准。</p>
+<p><code>-c</code> 表示只编译，不链接。</p>
+<p>最后一步把多个 <code>.o</code> 文件链接成可执行文件。</p>
+<p>所以构建工具做的第一件事就是把这些命令自动化。</p>
+<h2 id="头文件和源文件的关系">头文件和源文件的关系</h2>
+<p>刚开始学构建系统时，很容易以为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.h 和 .cpp 是一一对应的。</span><br></pre></td></tr></table></figure>
+<p>但从编译器视角看，不是这样。</p>
+<p>编译器真正编译的是 <code>.cpp</code> 文件。每个 <code>.cpp</code>
+文件加上它 <code>#include</code>
+进来的所有头文件，形成一个编译单元，也叫
+<code>translation unit</code>。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">main.cpp</span><br><span class="line">  -&gt; iostream</span><br><span class="line">  -&gt; add.h</span><br></pre></td></tr></table></figure>
+<p><code>main.cpp</code> 被编译时，<code>add.h</code>
+的内容会被预处理器展开进去。</p>
+<p>因此，头文件变化也可能导致 <code>.cpp</code> 需要重新编译。</p>
+<p>这就是构建工具需要追踪依赖的原因：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">main.cpp 依赖 add.h</span><br><span class="line">add.cpp  依赖 add.h</span><br></pre></td></tr></table></figure>
+<p>如果 <code>add.h</code> 变了，<code>main.cpp</code> 和
+<code>add.cpp</code> 对应的 <code>.o</code> 都应该重新生成。</p>
+<h2 id="make把命令和依赖写清楚">Make：把命令和依赖写清楚</h2>
+<p><code>Make</code> 是非常经典的构建工具。它的核心思想是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">目标文件依赖哪些文件。</span><br><span class="line">如果依赖比目标更新，就执行对应命令。</span><br></pre></td></tr></table></figure>
+<p>一个最小的 <code>Makefile</code>：</p>
+<figure class="highlight makefile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">CXX := g++</span><br><span class="line">CXXFLAGS := -std=c++20 -Iinclude -Wall -Wextra</span><br><span class="line"></span><br><span class="line"><span class="section">build/demo: build/main.o build/add.o</span></span><br><span class="line">	<span class="variable">$(CXX)</span> build/main.o build/add.o -o build/demo</span><br><span class="line"></span><br><span class="line"><span class="section">build/main.o: src/main.cpp include/add.h</span></span><br><span class="line">	mkdir -p build</span><br><span class="line">	<span class="variable">$(CXX)</span> <span class="variable">$(CXXFLAGS)</span> -c src/main.cpp -o build/main.o</span><br><span class="line"></span><br><span class="line"><span class="section">build/add.o: src/add.cpp include/add.h</span></span><br><span class="line">	mkdir -p build</span><br><span class="line">	<span class="variable">$(CXX)</span> <span class="variable">$(CXXFLAGS)</span> -c src/add.cpp -o build/add.o</span><br><span class="line"></span><br><span class="line"><span class="meta"><span class="keyword">.PHONY</span>: clean</span></span><br><span class="line"><span class="section">clean:</span></span><br><span class="line">	rm -rf build</span><br></pre></td></tr></table></figure>
+<p>执行：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">make</span><br></pre></td></tr></table></figure>
+<p><code>make</code> 会默认构建第一个目标，也就是
+<code>build/demo</code>。</p>
+<p>这条规则：</p>
+<figure class="highlight makefile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">build/demo: build/main.o build/add.o</span></span><br><span class="line">	<span class="variable">$(CXX)</span> build/main.o build/add.o -o build/demo</span><br></pre></td></tr></table></figure>
+<p>意思是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">想得到 build/demo，必须先有 build/main.o 和 build/add.o。</span><br><span class="line">如果它们不存在，或者它们比 build/demo 更新，就执行下面的链接命令。</span><br></pre></td></tr></table></figure>
+<p>这里最关键的语法是：</p>
+<figure class="highlight makefile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">target: prerequisites</span></span><br><span class="line">	recipe</span><br></pre></td></tr></table></figure>
+<p>也就是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">目标: 依赖</span><br><span class="line">	生成目标的命令</span><br></pre></td></tr></table></figure>
+<p>注意 <code>recipe</code> 前面通常必须是
+<code>tab</code>，不是普通空格。</p>
+<div class="note info"><p><code>Make</code>
+的核心不是“运行脚本”，而是“维护一张依赖图”。它知道哪些文件过期了，只重新构建必要的部分。</p>
+</div>
+<h2 id="xv6-里的-makefile-在做什么">xv6 里的 Makefile 在做什么？</h2>
+<p><code>6.s081 xv6</code> 里直接用
+<code>make qemu</code>，背后大致包含几类工作：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">编译 kernel 代码。</span><br><span class="line">编译 user 程序。</span><br><span class="line">把 user 程序打包进文件系统镜像。</span><br><span class="line">链接 kernel。</span><br><span class="line">启动 qemu。</span><br></pre></td></tr></table></figure>
+<p>所以 <code>make qemu</code> 不是一个单纯的“运行
+qemu”命令，它会先确保内核、用户程序、文件系统镜像都已经是最新的。</p>
+<p>这也解释了为什么改了某个 <code>.c</code> 文件后，再执行
+<code>make qemu</code>，它不一定会全部重编译，而是只重编译受影响的部分。</p>
+<p>在这类教学项目里，直接写 <code>Makefile</code> 很合适，因为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">项目结构固定。</span><br><span class="line">目标平台固定。</span><br><span class="line">构建规则需要显式展示。</span><br><span class="line">很多步骤不是标准 C++ 项目流程，比如生成镜像、启动模拟器。</span><br></pre></td></tr></table></figure>
+<h2 id="make-的局限">Make 的局限</h2>
+<p><code>Make</code> 很直接，但大型 <code>C++</code> 项目完全手写
+<code>Makefile</code> 会遇到很多问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">跨平台困难。</span><br><span class="line">依赖库查找麻烦。</span><br><span class="line">头文件依赖维护麻烦。</span><br><span class="line">Debug / Release 配置容易混乱。</span><br><span class="line">不同编译器选项差异很大。</span><br><span class="line">项目拆成多个库后规则重复。</span><br><span class="line">IDE 和语言服务器支持不够直接。</span><br></pre></td></tr></table></figure>
+<p>例如一个项目要同时支持：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Linux + GCC</span><br><span class="line">macOS + Clang</span><br><span class="line">Windows + MSVC</span><br><span class="line">Ninja</span><br><span class="line">Unix Makefiles</span><br><span class="line">Visual Studio</span><br></pre></td></tr></table></figure>
+<p>这时如果只用手写 <code>Makefile</code>，复杂度会很快上升。</p>
+<p>于是现代 <code>C++</code> 项目通常会引入 <code>CMake</code>。</p>
+<h2 id="cmake生成构建系统的构建系统">CMake：生成构建系统的构建系统</h2>
+<p><code>CMake</code> 不是直接替代编译器，也不一定直接替代
+<code>make</code>。</p>
+<p>更准确地说：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">CMake 是 meta build system。</span><br></pre></td></tr></table></figure>
+<p>它读取
+<code>CMakeLists.txt</code>，然后生成真正执行构建的后端文件。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">CMakeLists.txt</span><br><span class="line">  -&gt; Unix Makefiles</span><br><span class="line">  -&gt; Ninja files</span><br><span class="line">  -&gt; Visual Studio project</span><br><span class="line">  -&gt; Xcode project</span><br></pre></td></tr></table></figure>
+<p>所以平时执行：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cmake ..</span><br><span class="line">make -j</span><br></pre></td></tr></table></figure>
+<p>可以理解成两步：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cmake ..  生成 Makefile。</span><br><span class="line">make -j   根据 Makefile 真正编译。</span><br></pre></td></tr></table></figure>
+<p>如果使用 <code>Ninja</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build -G Ninja</span><br><span class="line">cmake --build build -j</span><br></pre></td></tr></table></figure>
+<p>可以理解成：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build -G Ninja  生成 Ninja 构建文件。</span><br><span class="line">cmake --build build -j        调用 Ninja 真正编译。</span><br></pre></td></tr></table></figure>
+<h2 id="一个最小-cmake-项目">一个最小 CMake 项目</h2>
+<p>对前面的 <code>demo</code> 项目，可以写一个
+<code>CMakeLists.txt</code>：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">cmake_minimum_required</span>(VERSION <span class="number">3.20</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">project</span>(demo LANGUAGES CXX)</span><br><span class="line"></span><br><span class="line"><span class="keyword">add_executable</span>(demo</span><br><span class="line">    src/main.cpp</span><br><span class="line">    src/add.cpp</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">target_compile_features</span>(demo PRIVATE cxx_std_20)</span><br><span class="line"></span><br><span class="line"><span class="keyword">target_include_directories</span>(demo</span><br><span class="line">    PRIVATE</span><br><span class="line">        <span class="variable">$&#123;PROJECT_SOURCE_DIR&#125;</span>/<span class="keyword">include</span></span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>构建：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build</span><br><span class="line">cmake --build build -j</span><br></pre></td></tr></table></figure>
+<p>这里几个概念很重要。</p>
+<h3 id="cmake_minimum_required">cmake_minimum_required()</h3>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">cmake_minimum_required</span>(VERSION <span class="number">3.20</span>)</span><br></pre></td></tr></table></figure>
+<p>表示当前项目至少需要哪个版本的 <code>CMake</code>。</p>
+<p>不要把这个版本写得特别老，因为新版本 <code>CMake</code>
+的行为更清晰，现代写法也更多。</p>
+<h3 id="project">project()</h3>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">project</span>(demo LANGUAGES CXX)</span><br></pre></td></tr></table></figure>
+<p>定义项目名，并说明这个项目使用 <code>C++</code>。</p>
+<h3 id="add_executable">add_executable()</h3>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">add_executable</span>(demo</span><br><span class="line">    src/main.cpp</span><br><span class="line">    src/add.cpp</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>定义一个可执行文件目标，名字叫 <code>demo</code>。</p>
+<p>这里的 <code>demo</code> 不是普通变量，而是一个
+<code>target</code>。</p>
+<p>现代 <code>CMake</code> 的核心就是围绕 <code>target</code>
+组织工程。</p>
+<h3 id="target_compile_features">target_compile_features()</h3>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">target_compile_features</span>(demo PRIVATE cxx_std_20)</span><br></pre></td></tr></table></figure>
+<p>表示 <code>demo</code> 这个目标需要 <code>C++20</code>。</p>
+<p>这比直接写：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">set</span>(CMAKE_CXX_STANDARD <span class="number">20</span>)</span><br></pre></td></tr></table></figure>
+<p>更贴近现代 <code>CMake</code>
+的风格，因为它把需求绑定到具体目标上。</p>
+<h3 id="target_include_directories">target_include_directories()</h3>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">target_include_directories</span>(demo</span><br><span class="line">    PRIVATE</span><br><span class="line">        <span class="variable">$&#123;PROJECT_SOURCE_DIR&#125;</span>/<span class="keyword">include</span></span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>表示编译 <code>demo</code> 时，需要把 <code>include/</code>
+加入头文件搜索路径。</p>
+<p>这对应手写命令里的：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-Iinclude</span><br></pre></td></tr></table></figure>
+<h2 id="现代-cmake-的核心target">现代 CMake 的核心：target</h2>
+<p>刚开始写 <code>CMake</code> 时，最容易写成全局变量风格：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">include_directories</span>(<span class="keyword">include</span>)</span><br><span class="line"><span class="keyword">add_compile_options</span>(-Wall -Wextra)</span><br><span class="line"><span class="keyword">link_libraries</span>(...)</span><br></pre></td></tr></table></figure>
+<p>这些写法不是完全不能用，但大型项目里容易污染全局配置。</p>
+<p>现代 <code>CMake</code> 更推荐围绕 <code>target</code> 写：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">target_include_directories</span>(...)</span><br><span class="line"><span class="keyword">target_compile_options</span>(...)</span><br><span class="line"><span class="keyword">target_compile_definitions</span>(...)</span><br><span class="line"><span class="keyword">target_link_libraries</span>(...)</span><br><span class="line"><span class="keyword">target_compile_features</span>(...)</span><br></pre></td></tr></table></figure>
+<p>原因是一个项目里可能有很多目标：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">核心库</span><br><span class="line">命令行工具</span><br><span class="line">单元测试</span><br><span class="line">benchmark</span><br><span class="line">示例程序</span><br><span class="line">代码生成工具</span><br></pre></td></tr></table></figure>
+<p>每个目标需要的头文件、编译选项、链接库都可能不同。</p>
+<p>所以更好的组织方式是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">不要把选项撒到全局。</span><br><span class="line">把选项挂到需要它的 target 上。</span><br></pre></td></tr></table></figure>
+<div class="note info"><p>现代 <code>CMake</code> 的学习重点不是背命令，而是理解
+<code>target</code>。一个工程由多个 <code>target</code>
+组成，<code>target</code> 之间通过依赖关系连接起来。</p>
+</div>
+<h2 id="privatepublicinterface-是什么">PRIVATE、PUBLIC、INTERFACE
+是什么？</h2>
+<p><code>CMake</code> 里经常看到：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">PRIVATE</span><br><span class="line">PUBLIC</span><br><span class="line">INTERFACE</span><br></pre></td></tr></table></figure>
+<p>这三个词是在描述“属性是否传递给依赖者”。</p>
+<p>假设有一个库：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">add_library</span>(math_utils src/add.cpp)</span><br><span class="line"></span><br><span class="line"><span class="keyword">target_include_directories</span>(math_utils</span><br><span class="line">    PUBLIC</span><br><span class="line">        <span class="variable">$&#123;PROJECT_SOURCE_DIR&#125;</span>/<span class="keyword">include</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">target_compile_features</span>(math_utils PUBLIC cxx_std_20)</span><br></pre></td></tr></table></figure>
+<p>再有一个程序依赖它：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">add_executable</span>(demo src/main.cpp)</span><br><span class="line"></span><br><span class="line"><span class="keyword">target_link_libraries</span>(demo</span><br><span class="line">    PRIVATE</span><br><span class="line">        math_utils</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>如果 <code>math_utils</code> 的头文件在
+<code>include/</code>，并且使用者也需要包含这些头文件，那么
+<code>include/</code> 就应该是 <code>PUBLIC</code>。</p>
+<p>可以这样理解：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">PRIVATE:   只给自己用。</span><br><span class="line">PUBLIC:    自己用，依赖自己的目标也要用。</span><br><span class="line">INTERFACE: 自己不编译，只给依赖自己的目标用。</span><br></pre></td></tr></table></figure>
+<p>常见判断方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">如果只影响当前 target 的 .cpp，用 PRIVATE。</span><br><span class="line">如果出现在当前 target 的头文件接口里，用 PUBLIC。</span><br><span class="line">如果这个 target 本身不产生编译产物，只表达使用要求，用 INTERFACE。</span><br></pre></td></tr></table></figure>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">库内部 .cpp 需要的 include path -&gt; PRIVATE</span><br><span class="line">库 public header 需要的 include path -&gt; PUBLIC</span><br><span class="line">header-only library 的 include path -&gt; INTERFACE</span><br></pre></td></tr></table></figure>
+<h2 id="静态库和动态库">静态库和动态库</h2>
+<p><code>C++</code> 项目通常不会把所有 <code>.cpp</code>
+都直接塞进一个可执行文件，而是会拆成库。</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">add_library</span>(math_utils</span><br><span class="line">    src/add.cpp</span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">target_include_directories</span>(math_utils</span><br><span class="line">    PUBLIC</span><br><span class="line">        <span class="variable">$&#123;PROJECT_SOURCE_DIR&#125;</span>/<span class="keyword">include</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line"><span class="keyword">target_compile_features</span>(math_utils PUBLIC cxx_std_20)</span><br><span class="line"></span><br><span class="line"><span class="keyword">add_executable</span>(demo src/main.cpp)</span><br><span class="line"></span><br><span class="line"><span class="keyword">target_link_libraries</span>(demo</span><br><span class="line">    PRIVATE</span><br><span class="line">        math_utils</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>这里的依赖关系是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">demo -&gt; math_utils</span><br></pre></td></tr></table></figure>
+<p><code>CMake</code> 会知道：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">先编译 math_utils。</span><br><span class="line">再编译 demo。</span><br><span class="line">最后把 demo 链接到 math_utils。</span><br></pre></td></tr></table></figure>
+<p>如果没有特别指定，<code>add_library()</code>
+生成静态库还是动态库，可能取决于 <code>BUILD_SHARED_LIBS</code>。</p>
+<p>也可以显式指定：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">add_library</span>(math_utils STATIC src/add.cpp)</span><br><span class="line"><span class="keyword">add_library</span>(math_utils SHARED src/add.cpp)</span><br></pre></td></tr></table></figure>
+<p>静态库常见后缀：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">.a</span><br><span class="line">.lib</span><br></pre></td></tr></table></figure>
+<p>动态库常见后缀：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">.so</span><br><span class="line">.dylib</span><br><span class="line">.dll</span><br></pre></td></tr></table></figure>
+<p>对初学阶段来说，先理解一件事就够了：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">库也是 target，可执行文件通过 target_link_libraries() 依赖库。</span><br></pre></td></tr></table></figure>
+<h2 id="debug-和-release">Debug 和 Release</h2>
+<p>构建项目时经常要区分：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Debug:   保留调试信息，优化较少，方便 gdb/lldb 调试。</span><br><span class="line">Release: 开启优化，性能更接近真实运行。</span><br></pre></td></tr></table></figure>
+<p>使用 <code>CMake</code> 时，可以这样配置：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug</span><br><span class="line">cmake --build build-debug -j</span><br></pre></td></tr></table></figure>
+<p>或者：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release</span><br><span class="line">cmake --build build-release -j</span><br></pre></td></tr></table></figure>
+<p><code>Debug</code> 通常类似：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-g -O0</span><br></pre></td></tr></table></figure>
+<p><code>Release</code> 通常类似：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-O3 -DNDEBUG</span><br></pre></td></tr></table></figure>
+<p>在学习性能、并发、编译器优化时，一定要注意当前构建类型。</p>
+<p>比如一个数据竞争问题，在 <code>Debug</code> 下看起来“正常”，在
+<code>Release</code> 下可能完全变成另一种行为。</p>
+<h2 id="ninja更快的构建后端">Ninja：更快的构建后端</h2>
+<p><code>Ninja</code> 和 <code>Make</code>
+一样，是真正执行构建的工具。</p>
+<p>区别是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Makefile 通常可以人手写。</span><br><span class="line">Ninja 文件通常由 CMake / Meson 等工具生成。</span><br></pre></td></tr></table></figure>
+<p>使用方式：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build -G Ninja</span><br><span class="line">cmake --build build -j</span><br></pre></td></tr></table></figure>
+<p>或者直接：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ninja -C build</span><br></pre></td></tr></table></figure>
+<p><code>Ninja</code> 的特点是简单、快、适合作为生成器后端。</p>
+<p>很多现代 <code>C++</code> 项目会选择：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">CMake 负责描述项目。</span><br><span class="line">Ninja 负责执行构建。</span><br></pre></td></tr></table></figure>
+<p>在使用体验上，你不一定要直接写
+<code>build.ninja</code>，但要知道：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cmake --build build</span><br></pre></td></tr></table></figure>
+<p>背后可能调用的是 <code>make</code>，也可能调用的是
+<code>ninja</code>，取决于配置时选择的 generator。</p>
+<h2 id="compile_commands.json">compile_commands.json</h2>
+<p>现代 <code>C++</code> 开发里还有一个很重要的文件：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">compile_commands.json</span><br></pre></td></tr></table></figure>
+<p>它记录每个源文件真实的编译命令。</p>
+<p>例如：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">[</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;directory&quot;</span><span class="punctuation">:</span> <span class="string">&quot;/path/to/demo/build&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;command&quot;</span><span class="punctuation">:</span> <span class="string">&quot;g++ -I/path/to/demo/include -std=c++20 -c /path/to/demo/src/main.cpp&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;file&quot;</span><span class="punctuation">:</span> <span class="string">&quot;/path/to/demo/src/main.cpp&quot;</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">]</span></span><br></pre></td></tr></table></figure>
+<p>这个文件通常给这些工具使用：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">clangd</span><br><span class="line">clang-tidy</span><br><span class="line">clang-format 辅助工具</span><br><span class="line">代码跳转</span><br><span class="line">静态分析</span><br><span class="line">IDE</span><br></pre></td></tr></table></figure>
+<p>用 <code>CMake</code> 生成：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON</span><br></pre></td></tr></table></figure>
+<p>如果用
+<code>clangd</code>，这个文件非常关键。没有它，语言服务器可能不知道真实的头文件路径、宏定义和编译标准，导致跳转、补全、报错都不准确。</p>
+<h2 id="第三方依赖怎么处理">第三方依赖怎么处理？</h2>
+<p>真实项目一定会依赖外部库，例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">gtest</span><br><span class="line">fmt</span><br><span class="line">spdlog</span><br><span class="line">protobuf</span><br><span class="line">grpc</span><br><span class="line">boost</span><br><span class="line">openssl</span><br></pre></td></tr></table></figure>
+<p>在 <code>CMake</code> 里，最理想的方式是把依赖也变成
+<code>target</code>。</p>
+<p>例如：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">find_package</span>(fmt REQUIRED)</span><br><span class="line"></span><br><span class="line"><span class="keyword">add_executable</span>(demo src/main.cpp)</span><br><span class="line"></span><br><span class="line"><span class="keyword">target_link_libraries</span>(demo</span><br><span class="line">    PRIVATE</span><br><span class="line">        fmt::fmt</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>这里 <code>fmt::fmt</code> 就是一个导入的 <code>target</code>。</p>
+<p>它不仅表示链接 <code>fmt</code>，还可能携带：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">头文件路径</span><br><span class="line">编译宏</span><br><span class="line">链接选项</span><br><span class="line">依赖的其他库</span><br></pre></td></tr></table></figure>
+<p>也就是说，现代 <code>CMake</code>
+里，依赖库最好不是一串裸路径，而是一个带使用要求的
+<code>target</code>。</p>
+<p>常见依赖管理方式包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">系统包管理器：apt、brew</span><br><span class="line">C++ 包管理器：vcpkg、Conan</span><br><span class="line">源码拉取：FetchContent</span><br><span class="line">Git submodule</span><br><span class="line">公司内部依赖管理系统</span><br></pre></td></tr></table></figure>
+<p>初学阶段不需要马上精通所有方式，但要知道它们解决的是同一个问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">第三方库从哪里来，版本如何固定，如何暴露给构建系统。</span><br></pre></td></tr></table></figure>
+<h2
+id="fetchcontent直接拉源码参与构建">FetchContent：直接拉源码参与构建</h2>
+<p><code>CMake</code> 自带的 <code>FetchContent</code>
+可以在配置阶段拉取第三方源码，并让它参与当前项目构建。</p>
+<p>例如使用 <code>googletest</code>：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">include</span>(FetchContent)</span><br><span class="line"></span><br><span class="line">FetchContent_Declare(</span><br><span class="line">    googletest</span><br><span class="line">    GIT_REPOSITORY https://github.com/google/googletest.git</span><br><span class="line">    GIT_TAG v1.<span class="number">14.0</span></span><br><span class="line">)</span><br><span class="line"></span><br><span class="line">FetchContent_MakeAvailable(googletest)</span><br><span class="line"></span><br><span class="line"><span class="keyword">add_executable</span>(demo_test tests/demo_test.cpp)</span><br><span class="line"></span><br><span class="line"><span class="keyword">target_link_libraries</span>(demo_test</span><br><span class="line">    PRIVATE</span><br><span class="line">        GTest::gtest_main</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<p>这样项目就可以使用 <code>GTest::gtest_main</code> 这个
+<code>target</code>。</p>
+<p>不过 <code>FetchContent</code> 也有代价：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">配置时可能需要网络。</span><br><span class="line">依赖源码会参与当前项目构建。</span><br><span class="line">大型依赖可能拖慢配置和编译。</span><br><span class="line">版本升级需要谨慎。</span><br></pre></td></tr></table></figure>
+<p>所以真实工程里，<code>FetchContent</code>、<code>vcpkg</code>、<code>Conan</code>、系统包管理器都可能出现，取决于项目的历史和部署环境。</p>
+<h2 id="bustub-里的-cmake-在做什么">Bustub 里的 CMake 在做什么？</h2>
+<p><code>15445 Bustub</code> 是一个比较典型的教学型现代 <code>C++</code>
+项目。</p>
+<p>它使用 <code>CMake</code> 的原因大概是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">项目由多个模块组成。</span><br><span class="line">需要构建库、测试、benchmark。</span><br><span class="line">需要集成 gtest。</span><br><span class="line">需要统一编译选项。</span><br><span class="line">需要支持 clang-tidy、格式化、sanitizer 等工具。</span><br></pre></td></tr></table></figure>
+<p>平时执行：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">mkdir</span> build</span><br><span class="line"><span class="built_in">cd</span> build</span><br><span class="line">cmake ..</span><br><span class="line">make -j</span><br></pre></td></tr></table></figure>
+<p>从构建系统视角看，含义是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">创建 out-of-source build 目录。</span><br><span class="line">CMake 读取根目录和子目录里的 CMakeLists.txt。</span><br><span class="line">CMake 检查编译器、依赖和配置选项。</span><br><span class="line">CMake 生成 Makefile。</span><br><span class="line">make 根据依赖图编译库、测试和工具。</span><br></pre></td></tr></table></figure>
+<p>这里的 <code>build/</code>
+目录是构建产物目录，不应该和源码混在一起。</p>
+<p>更现代、更不容易出错的写法是：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build</span><br><span class="line">cmake --build build -j</span><br></pre></td></tr></table></figure>
+<p>这个写法不用手动 <code>cd build</code>，也更清楚地区分：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-S source directory</span><br><span class="line">-B build directory</span><br></pre></td></tr></table></figure>
+<h2 id="常见命令速查">常见命令速查</h2>
+<p>配置项目：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build</span><br></pre></td></tr></table></figure>
+<p>指定 <code>Ninja</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build -G Ninja</span><br></pre></td></tr></table></figure>
+<p>指定构建类型：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug</span><br></pre></td></tr></table></figure>
+<p>生成 <code>compile_commands.json</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON</span><br></pre></td></tr></table></figure>
+<p>编译：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cmake --build build -j</span><br></pre></td></tr></table></figure>
+<p>只构建某个目标：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cmake --build build --target demo -j</span><br></pre></td></tr></table></figure>
+<p>运行测试：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ctest --test-dir build --output-on-failure</span><br></pre></td></tr></table></figure>
+<p>清理构建目录：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">rm</span> -rf build</span><br></pre></td></tr></table></figure>
+<p>如果项目使用 <code>Makefile</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">make</span><br><span class="line">make -j</span><br><span class="line">make clean</span><br><span class="line">make target_name</span><br></pre></td></tr></table></figure>
+<p>如果项目使用 <code>Ninja</code>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ninja -C build</span><br><span class="line">ninja -C build demo</span><br></pre></td></tr></table></figure>
+<h2 id="学习路线">学习路线</h2>
+<p>如果从 <code>Bustub</code> 和 <code>xv6</code>
+的基础继续往下学，可以按这个顺序：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">1. 手写 g++ 命令，理解编译和链接。</span><br><span class="line">2. 手写一个小 Makefile，理解 target、prerequisite、recipe。</span><br><span class="line">3. 阅读 xv6 Makefile，理解 make target 如何串起编译、打包和运行。</span><br><span class="line">4. 写一个最小 CMakeLists.txt，构建一个可执行文件。</span><br><span class="line">5. 把项目拆成 library + executable，理解 target_link_libraries()。</span><br><span class="line">6. 学会 PRIVATE / PUBLIC / INTERFACE。</span><br><span class="line">7. 学会 Debug / Release、compile_commands.json、Ninja generator。</span><br><span class="line">8. 用 gtest 写测试，理解 enable_testing() 和 ctest。</span><br><span class="line">9. 学一种依赖管理方式，比如 FetchContent 或 vcpkg。</span><br><span class="line">10. 阅读 Bustub 的 CMakeLists.txt，把命令和真实工程对应起来。</span><br></pre></td></tr></table></figure>
+<p>这个顺序的关键是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">不要一上来背 CMake 语法。</span><br><span class="line">先理解编译、链接和依赖图。</span><br><span class="line">再理解 CMake 如何把这些关系抽象成 target。</span><br></pre></td></tr></table></figure>
+<h2 id="makecmakeninja-怎么区分">Make、CMake、Ninja 怎么区分？</h2>
+<p>最后把几种工具放在一起对比：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">Make:</span><br><span class="line">  直接执行构建规则。</span><br><span class="line">  适合简单项目、教学项目、系统项目、自定义流程。</span><br><span class="line"></span><br><span class="line">CMake:</span><br><span class="line">  描述 C++ 工程结构。</span><br><span class="line">  生成 Makefile、Ninja、Visual Studio 等构建文件。</span><br><span class="line">  现代 C++ 项目的主流选择。</span><br><span class="line"></span><br><span class="line">Ninja:</span><br><span class="line">  快速执行构建。</span><br><span class="line">  通常不手写，由 CMake 生成。</span><br><span class="line"></span><br><span class="line">vcpkg / Conan:</span><br><span class="line">  管理第三方 C++ 依赖。</span><br><span class="line">  负责依赖下载、版本、编译和暴露给 CMake。</span><br><span class="line"></span><br><span class="line">ctest:</span><br><span class="line">  CMake 配套测试工具。</span><br><span class="line">  负责发现和运行测试。</span><br></pre></td></tr></table></figure>
+<p>可以用一句话总结：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">CMake 描述项目，Ninja / Make 执行构建，vcpkg / Conan 管理依赖，ctest 运行测试。</span><br></pre></td></tr></table></figure>
+<h2 id="小结">小结</h2>
+<p>对 <code>C++</code> 项目来说，构建系统是工程能力的一部分。</p>
+<p>只会写 <code>C++</code>
+代码，但看不懂构建系统，会在很多真实项目里卡住：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">为什么头文件找不到？</span><br><span class="line">为什么链接失败？</span><br><span class="line">为什么 Debug 能跑 Release 崩？</span><br><span class="line">为什么 clangd 一直报错？</span><br><span class="line">为什么测试没有被编译？</span><br><span class="line">为什么加了库但链接不上？</span><br></pre></td></tr></table></figure>
+<p>学习构建工具时，最重要的是把所有问题都放回这条链路：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">源文件</span><br><span class="line">  -&gt; 编译选项</span><br><span class="line">  -&gt; 目标文件</span><br><span class="line">  -&gt; 链接选项</span><br><span class="line">  -&gt; 库</span><br><span class="line">  -&gt; 可执行文件</span><br><span class="line">  -&gt; 测试和安装</span><br></pre></td></tr></table></figure>
+<p>先掌握这条主线，再去看
+<code>Makefile</code>、<code>CMakeLists.txt</code>、<code>Ninja</code>、<code>vcpkg</code>，很多命令就不会只是黑盒了。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C-%E5%B7%A5%E7%A8%8B/" rel="tag"># C++工程</a>
+              <a href="/tags/%E6%9E%84%E5%BB%BA%E5%B7%A5%E5%85%B7/" rel="tag"># 构建工具</a>
+              <a href="/tags/CMake/" rel="tag"># CMake</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/07/14/distributed-foundation-cache-migration-eviction/" rel="prev" title="分布式基础：缓存策略、迁移与淘汰">
+                  <i class="fa fa-angle-left"></i> 分布式基础：缓存策略、迁移与淘汰
+                </a>
+            </div>
+            <div class="post-nav-item">
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

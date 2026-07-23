@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.css" integrity="sha256-gkQVf8UKZgQ0HyuxL/VnacadJ+D2Kox2TCEBuNQg5+w=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Muse","darkmode":true,"version":"8.28.0","exturl":false,"sidebar":{"position":"right","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":false,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="背景 前面已经学习了几组基础： 1234操作系统、网络、并发与存储。RPC 和远程调用。状态机、分片、路由与元数据。副本和一致性。 这些内容让我们能理解： 12345系统为什么会慢。远程调用为什么会失败。BlockGroup 如何建模成状态机。数据如何通过分片和路由找到。副本之间为什么需要一致性。 接下来要学习的是故障处理。 分布式系统和单机系统最大的区别之一是：故障是常态，不是例外。 在单机程序">
+<meta property="og:type" content="article">
+<meta property="og:title" content="分布式基础：故障处理">
+<meta property="og:url" content="http://qizi706.github.io/2026/07/14/distributed-foundation-failure-handling/index.html">
+<meta property="og:site_name" content="Quan Zhou 的 blog">
+<meta property="og:description" content="背景 前面已经学习了几组基础： 1234操作系统、网络、并发与存储。RPC 和远程调用。状态机、分片、路由与元数据。副本和一致性。 这些内容让我们能理解： 12345系统为什么会慢。远程调用为什么会失败。BlockGroup 如何建模成状态机。数据如何通过分片和路由找到。副本之间为什么需要一致性。 接下来要学习的是故障处理。 分布式系统和单机系统最大的区别之一是：故障是常态，不是例外。 在单机程序">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-07-14T07:30:00.000Z">
+<meta property="article:modified_time" content="2026-07-14T06:50:35.114Z">
+<meta property="article:author" content="Quan Zhou">
+<meta property="article:tag" content="KV Cache">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="容错">
+<meta property="article:tag" content="故障处理">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="http://qizi706.github.io/2026/07/14/distributed-foundation-failure-handling/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/07/14/distributed-foundation-failure-handling/","path":"2026/07/14/distributed-foundation-failure-handling/","title":"分布式基础：故障处理"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>分布式基础：故障处理 | Quan Zhou 的 blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/next-theme-pjax/0.6.0/pjax.min.js" integrity="sha256-vxLn1tSKWD4dqbMRyv940UYw4sXgMtYcK6reefzZrao=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.umd.js" integrity="sha256-a+H7FYzJv6oU2hfsfDGM2Ohw/cR9v+hPfxHCLdmCrE8=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pangu/7.2.0/pangu.umd.js" integrity="sha256-JnmRRnJK7DC6RQJbAJb6AXOM9OmWzS6z8eYultk/48Y=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script><script src="/js/pjax.js" defer></script>
+
+  
+
+  <script class="next-config" data-name="mermaid" type="application/json">{"enable":true,"theme":{"light":"default","dark":"dark"},"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.10.1/mermaid.min.js","integrity":"sha256-BmQmdWDS8X2OTbrwELWK366LV6escyWhHHe0XCTU/Hk="}}</script>
+  <script src="/js/third-party/tags/mermaid.js" defer></script>
+
+  <script class="next-config" data-name="wavedrom" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/wavedrom.min.js","integrity":"sha256-INLAoJc6quTNfiMWkGZniYO2cxE8mHpddnLow1m6RFs="}}</script>
+  <script class="next-config" data-name="wavedrom_skin" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/skins/default.js","integrity":"sha256-fduc/Zszk5ezWws2uInY/ALWVmIrmV6VTgXbsYSReFI="}}</script>
+  <script src="/js/third-party/tags/wavedrom.js" defer></script>
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">false</script><script class="next-config" data-name="mathjax" type="application/json">{"enable":true,"tags":"ams","js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js","integrity":"sha256-MASABpB4tYktI2Oitl4t+78w/lyA+D7b/s9GEP0JOGI="}}</script>
+<script src="/js/third-party/math/mathjax.js" defer></script>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quicklink/3.0.1/quicklink.umd.js" integrity="sha256-44BednzIpUeQJcY8qtLyarFu0UCCTbgmWOvaoehiFQQ=" crossorigin="anonymous" defer></script>
+  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/07/14/distributed-foundation-failure-handling/"}</script>
+  <script src="/js/third-party/quicklink.js" defer></script>
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Quan Zhou 的 blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="Search" role="button">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a></li>
+  </ul>
+</nav>
+
+
+
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-text">背景</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AD%A6%E4%B9%A0%E7%9B%AE%E6%A0%87"><span class="nav-text">学习目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%95%85%E9%9A%9C%E6%A8%A1%E5%9E%8B"><span class="nav-text">故障模型</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%95%85%E9%9A%9C%E4%B8%8D%E6%98%AF%E4%BA%8C%E5%85%83%E7%8A%B6%E6%80%81"><span class="nav-text">故障不是二元状态</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#heartbeat"><span class="nav-text">Heartbeat</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#failure-detector"><span class="nav-text">Failure Detector</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#timeout"><span class="nav-text">Timeout</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#retry"><span class="nav-text">Retry</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%85%A2%E8%8A%82%E7%82%B9"><span class="nav-text">慢节点</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BD%91%E7%BB%9C%E5%88%86%E5%8C%BA"><span class="nav-text">网络分区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#lease"><span class="nav-text">Lease</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#fencing-token"><span class="nav-text">Fencing Token</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#failover"><span class="nav-text">Failover</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#repair-task"><span class="nav-text">Repair Task</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%A1%A5%E5%81%BF%E6%9C%BA%E5%88%B6"><span class="nav-text">补偿机制</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%99%8D%E7%BA%A7"><span class="nav-text">降级</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#worker-%E6%8C%82%E4%BA%86%E6%80%8E%E4%B9%88%E5%8A%9E"><span class="nav-text">Worker 挂了怎么办？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%BF%81%E7%A7%BB%E5%88%B0%E4%B8%80%E5%8D%8A%E5%A4%B1%E8%B4%A5%E6%80%8E%E4%B9%88%E5%8A%9E"><span class="nav-text">迁移到一半失败怎么办？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%AF%B7%E6%B1%82%E5%8F%96%E6%B6%88%E5%90%8E%E8%B5%84%E6%BA%90%E6%80%8E%E4%B9%88%E9%87%8A%E6%94%BE"><span class="nav-text">请求取消后资源怎么释放？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%8A%82%E7%82%B9%E6%81%A2%E5%A4%8D%E5%90%8E%E6%80%8E%E4%B9%88%E5%8A%9E"><span class="nav-text">节点恢复后怎么办？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E9%94%99%E8%AF%AF%E8%AE%BE%E8%AE%A1"><span class="nav-text">常见错误设计</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80%E6%AC%A1%E8%B6%85%E6%97%B6%E5%B0%B1%E5%88%A4%E5%AE%9A%E8%8A%82%E7%82%B9%E6%AD%BB%E4%BA%A1"><span class="nav-text">一次超时就判定节点死亡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%97%A7-owner-%E6%81%A2%E5%A4%8D%E5%90%8E%E7%BB%A7%E7%BB%AD%E5%86%99"><span class="nav-text">旧 owner 恢复后继续写</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%AD%E9%97%B4%E6%80%81%E6%B2%A1%E6%9C%89%E4%BF%AE%E5%A4%8D%E4%BB%BB%E5%8A%A1"><span class="nav-text">中间态没有修复任务</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%AF%B7%E6%B1%82%E5%8F%96%E6%B6%88%E4%B8%8D%E9%87%8A%E6%94%BE-pin"><span class="nav-text">请求取消不释放 pin</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%99%8D%E7%BA%A7%E8%AF%BB%E6%97%A7%E5%89%AF%E6%9C%AC"><span class="nav-text">降级读旧副本</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%A6%82%E4%BD%95%E6%8E%92%E6%9F%A5%E6%95%85%E9%9A%9C%E5%A4%84%E7%90%86%E9%97%AE%E9%A2%98"><span class="nav-text">如何排查故障处理问题？</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%97%A5%E5%BF%97%E5%AD%97%E6%AE%B5"><span class="nav-text">日志字段</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%8C%87%E6%A0%87"><span class="nav-text">指标</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%8E%92%E6%9F%A5%E9%97%AE%E9%A2%98"><span class="nav-text">排查问题</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%9D%A2%E5%90%91-kv-cache-%E7%9A%84%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95"><span class="nav-text">面向 KV Cache 的检查清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%8E%A8%E8%8D%90%E5%AD%A6%E4%B9%A0%E9%A1%BA%E5%BA%8F"><span class="nav-text">推荐学习顺序</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-text">总结</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Quan Zhou</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">21</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">25</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+        </div>
+      </div>
+        <div class="back-to-top animated" role="button" aria-label="Back to top">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/14/distributed-foundation-failure-handling/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="分布式基础：故障处理 | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          分布式基础：故障处理
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-07-14 15:30:00 / Modified: 14:50:35" itemprop="dateCreated datePublished" datetime="2026-07-14T15:30:00+08:00">2026-07-14</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/" itemprop="url" rel="index"><span itemprop="name">分布式</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h2 id="背景">背景</h2>
+<p>前面已经学习了几组基础：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">操作系统、网络、并发与存储。</span><br><span class="line">RPC 和远程调用。</span><br><span class="line">状态机、分片、路由与元数据。</span><br><span class="line">副本和一致性。</span><br></pre></td></tr></table></figure>
+<p>这些内容让我们能理解：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">系统为什么会慢。</span><br><span class="line">远程调用为什么会失败。</span><br><span class="line">BlockGroup 如何建模成状态机。</span><br><span class="line">数据如何通过分片和路由找到。</span><br><span class="line">副本之间为什么需要一致性。</span><br></pre></td></tr></table></figure>
+<p>接下来要学习的是故障处理。</p>
+<p>分布式系统和单机系统最大的区别之一是：故障是常态，不是例外。</p>
+<p>在单机程序里，一个函数失败可能直接返回错误；但在分布式系统里，故障往往是不完整、不确定、局部发生的。例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">请求超时，但服务端可能已经执行成功。</span><br><span class="line">节点没有响应，但它可能只是网络抖动。</span><br><span class="line">迁移任务失败，但目标节点可能已经复制了一半数据。</span><br><span class="line">旧 primary 恢复后，可能还以为自己有写权限。</span><br><span class="line">客户端拿着旧路由访问已经迁移走的 BlockGroup。</span><br></pre></td></tr></table></figure>
+<p>这篇文章的目标是：理解分布式系统里会发生哪些故障，以及 KV Cache /
+BlockGroup 系统应该如何恢复、隔离和降级。</p>
+<span id="more"></span>
+<h2 id="学习目标">学习目标</h2>
+<p>这一组需要掌握：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">故障模型</span><br><span class="line">节点宕机</span><br><span class="line">进程崩溃</span><br><span class="line">网络分区</span><br><span class="line">网络抖动</span><br><span class="line">慢节点</span><br><span class="line">超时</span><br><span class="line">重试</span><br><span class="line">降级</span><br><span class="line">心跳 heartbeat</span><br><span class="line">故障检测 failure detector</span><br><span class="line">lease</span><br><span class="line">fencing token</span><br><span class="line">epoch</span><br><span class="line">failover</span><br><span class="line">repair task</span><br><span class="line">补偿机制</span><br></pre></td></tr></table></figure>
+<p>这一组的目标是：能设计“失败后系统怎么恢复”。</p>
+<p>对 KV Cache 场景，尤其要能回答：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">worker 挂了，它持有的 BlockGroup 怎么办？</span><br><span class="line">迁移到一半失败怎么办？</span><br><span class="line">调度器以为 cache 在 A，但实际已经迁到 B 怎么办？</span><br><span class="line">请求取消后 ref_count 没释放怎么办？</span><br><span class="line">节点恢复后带着旧 epoch 继续写怎么办？</span><br><span class="line">远端 cache 读不到时，是重试、等待、重算还是降级？</span><br></pre></td></tr></table></figure>
+<h2 id="故障模型">故障模型</h2>
+<p>设计故障处理前，先要明确系统假设会遇到哪些故障。</p>
+<p>常见故障包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">节点宕机：机器不可用。</span><br><span class="line">进程崩溃：服务退出，但机器可能还活着。</span><br><span class="line">网络分区：一部分节点之间互相不可达。</span><br><span class="line">网络抖动：请求偶尔超时或延迟很高。</span><br><span class="line">慢节点：节点没挂，但响应非常慢。</span><br><span class="line">磁盘故障：读写失败或数据损坏。</span><br><span class="line">GPU 故障：显存错误、驱动异常、设备不可用。</span><br><span class="line">数据损坏：checksum 不匹配、版本错乱。</span><br><span class="line">资源耗尽：CPU、内存、显存、连接池、线程池耗尽。</span><br></pre></td></tr></table></figure>
+<p>不同故障需要不同处理方式。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">节点宕机：需要 failover。</span><br><span class="line">网络抖动：可能需要 retry。</span><br><span class="line">慢节点：需要 timeout、限流或隔离。</span><br><span class="line">数据损坏：需要 checksum、重新复制或重算。</span><br><span class="line">资源耗尽：需要降级、拒绝请求或释放资源。</span><br></pre></td></tr></table></figure>
+<p>故障处理的关键不是“永远不失败”，而是失败后能保持正确性，并尽可能恢复可用性。</p>
+<h2 id="故障不是二元状态">故障不是二元状态</h2>
+<p>很多初学者容易把节点状态理解成：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">alive</span><br><span class="line">dead</span><br></pre></td></tr></table></figure>
+<p>但真实系统里，节点状态经常更复杂：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">正常。</span><br><span class="line">短暂变慢。</span><br><span class="line">只能访问部分节点。</span><br><span class="line">能收请求但处理很慢。</span><br><span class="line">能读本地数据但无法访问远端。</span><br><span class="line">进程活着但线程池满了。</span><br><span class="line">GPU 不可用但 CPU 服务还在。</span><br></pre></td></tr></table></figure>
+<p>所以“没有响应”不等于“已经死了”。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">node_a 没有回复 heartbeat。</span><br></pre></td></tr></table></figure>
+<p>可能是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">node_a 宕机。</span><br><span class="line">node_a 网络断了。</span><br><span class="line">node_a CPU 被打满。</span><br><span class="line">node_a 正在 GC 或阻塞。</span><br><span class="line">heartbeat 包丢了。</span><br><span class="line">监控链路有问题。</span><br></pre></td></tr></table></figure>
+<p>因此故障检测通常只能给出怀疑，而不是绝对证明。</p>
+<h2 id="heartbeat">Heartbeat</h2>
+<p><code>heartbeat</code> 是心跳，用来判断节点是否仍然活跃。</p>
+<p>典型方式是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">node_a 定期向 coordinator 上报心跳。</span><br><span class="line">coordinator 记录 node_a 最近一次心跳时间。</span><br><span class="line">如果超过阈值没收到心跳，就认为 node_a suspicious 或 unavailable。</span><br></pre></td></tr></table></figure>
+<p>心跳内容可以包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">node_id</span><br><span class="line">timestamp</span><br><span class="line">service_version</span><br><span class="line">cpu_usage</span><br><span class="line">memory_usage</span><br><span class="line">gpu_memory_usage</span><br><span class="line">active_requests</span><br><span class="line">block_group_count</span><br><span class="line">migration_task_count</span><br><span class="line">health_status</span><br></pre></td></tr></table></figure>
+<p>对 KV Cache
+系统来说，心跳不仅用于判断节点是否活着，还可以用于调度：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">这个节点 GPU HBM 是否充足？</span><br><span class="line">是否有大量迁移任务？</span><br><span class="line">远端读延迟是否升高？</span><br><span class="line">是否应该继续调度请求到这个节点？</span><br></pre></td></tr></table></figure>
+<h2 id="failure-detector">Failure Detector</h2>
+<p><code>failure detector</code> 是故障检测器。</p>
+<p>它根据心跳、请求失败率、延迟、连接状态等信息判断节点健康程度。</p>
+<p>一个简单的状态机可以是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">HEALTHY</span><br><span class="line">SUSPECTED</span><br><span class="line">UNAVAILABLE</span><br><span class="line">RECOVERING</span><br></pre></td></tr></table></figure>
+<p>含义：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">HEALTHY：节点正常。</span><br><span class="line">SUSPECTED：怀疑异常，但还未完全摘除。</span><br><span class="line">UNAVAILABLE：认为不可用，不再调度请求。</span><br><span class="line">RECOVERING：节点恢复中，需要重新同步状态。</span><br></pre></td></tr></table></figure>
+<p>不要一超时就立刻判死。更稳妥的做法是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">连续多次心跳失败才进入 SUSPECTED。</span><br><span class="line">错误率持续升高才降低权重。</span><br><span class="line">确认不可用后再进入 UNAVAILABLE。</span><br><span class="line">恢复后先进入 RECOVERING，不立刻承接全部流量。</span><br></pre></td></tr></table></figure>
+<p>这可以避免网络抖动导致频繁误判。</p>
+<h2 id="timeout">Timeout</h2>
+<p>故障处理里，timeout 是最基础的机制。</p>
+<p>没有 timeout，故障会扩散：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">远端服务卡住。</span><br><span class="line">调用方一直等待。</span><br><span class="line">线程或协程被占用。</span><br><span class="line">连接池被耗尽。</span><br><span class="line">上游队列堆积。</span><br><span class="line">更多请求超时。</span><br></pre></td></tr></table></figure>
+<p>在 KV Cache 场景中，例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">get_block_group(bg_1, epoch=10)</span><br></pre></td></tr></table></figure>
+<p>如果远端 cache manager 没有响应，本地 worker 不能无限等待。</p>
+<p>它需要在 timeout 后选择：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">重试。</span><br><span class="line">刷新元数据。</span><br><span class="line">从其他副本读取。</span><br><span class="line">重新计算。</span><br><span class="line">等待一小段时间。</span><br><span class="line">返回错误。</span><br></pre></td></tr></table></figure>
+<p>不同路径对应不同业务取舍。</p>
+<h2 id="retry">Retry</h2>
+<p>重试可以处理短暂故障，但也会放大故障。</p>
+<p>适合重试：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">短暂网络抖动。</span><br><span class="line">连接被重置。</span><br><span class="line">服务端返回临时错误。</span><br><span class="line">接口是幂等的。</span><br><span class="line">上游还有足够时间。</span><br></pre></td></tr></table></figure>
+<p>不适合盲目重试：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">下游已经过载。</span><br><span class="line">写操作不是幂等。</span><br><span class="line">请求体很大。</span><br><span class="line">上游剩余时间很短。</span><br><span class="line">重试会重复迁移或重复释放资源。</span><br></pre></td></tr></table></figure>
+<p>KV Cache 的写操作通常要带：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">epoch</span><br><span class="line">operation_id</span><br><span class="line">request_id</span><br></pre></td></tr></table></figure>
+<p>这样才能支持安全重试。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">migrate(block_group_id, src, dst, epoch, operation_id)</span><br><span class="line">evict(block_group_id, epoch, operation_id)</span><br><span class="line">pin(block_group_id, request_id, epoch)</span><br><span class="line">unpin(block_group_id, request_id, epoch)</span><br></pre></td></tr></table></figure>
+<h2 id="慢节点">慢节点</h2>
+<p>慢节点比直接宕机更麻烦。</p>
+<p>因为它没有完全失败，但会拖慢整个系统。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">某个 cache manager 还能响应，但 P99 很高。</span><br><span class="line">某个 metadata replica 能返回，但延迟远高于其他节点。</span><br><span class="line">某个 worker GPU 正常，但 CPU 线程池排队严重。</span><br></pre></td></tr></table></figure>
+<p>慢节点会造成：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">请求堆积。</span><br><span class="line">batch 被慢请求拖住。</span><br><span class="line">重试增加。</span><br><span class="line">连接池耗尽。</span><br><span class="line">调度误判。</span><br><span class="line">尾延迟升高。</span><br></pre></td></tr></table></figure>
+<p>处理方式包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">设置 timeout。</span><br><span class="line">降低调度权重。</span><br><span class="line">把节点标记为 SUSPECTED。</span><br><span class="line">限制发往该节点的并发。</span><br><span class="line">对慢请求做 hedged request。</span><br><span class="line">必要时摘除节点。</span><br></pre></td></tr></table></figure>
+<p><code>hedged request</code>
+是指同一个请求等待一段时间还没返回时，向另一个副本再发一个请求，谁先返回用谁。</p>
+<p>它能降低尾延迟，但会增加系统负载，所以要谨慎使用。</p>
+<h2 id="网络分区">网络分区</h2>
+<p>网络分区是指集群被分成多个互相不可达的部分。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">node_a、node_b 能互相访问。</span><br><span class="line">node_c、node_d 能互相访问。</span><br><span class="line">但两组之间网络不通。</span><br></pre></td></tr></table></figure>
+<p>网络分区最危险的地方是：不同分区都可能认为自己是正确的。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">node_a 是 primary。</span><br><span class="line">node_a 和 metadata server 失联。</span><br><span class="line">metadata server 选 node_b 为新 primary。</span><br><span class="line">node_a 仍然以为自己是 primary。</span><br></pre></td></tr></table></figure>
+<p>这就是脑裂风险。</p>
+<p>解决思路：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">关键写入必须经过多数派或权威元数据服务。</span><br><span class="line">primary 必须持有有效 lease。</span><br><span class="line">写操作必须带 epoch/fencing token。</span><br><span class="line">旧 epoch 写入必须被拒绝。</span><br></pre></td></tr></table></figure>
+<h2 id="lease">Lease</h2>
+<p><code>lease</code> 是租约。</p>
+<p>它表示某个节点在一段时间内拥有某种权限。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">worker_a owns bg_1 until time T</span><br></pre></td></tr></table></figure>
+<p>在租约有效期内，worker_a 可以作为 owner 写入状态。</p>
+<p>租约过期后，必须续约成功才能继续写。</p>
+<p>Lease 可以减少频繁协调，但它依赖时间，因此要小心：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">不同机器时钟可能有偏差。</span><br><span class="line">网络延迟不稳定。</span><br><span class="line">GC 或卡顿可能导致节点误以为 lease 仍然有效。</span><br></pre></td></tr></table></figure>
+<p>所以关键系统里通常还会配合 epoch 或 fencing token。</p>
+<h2 id="fencing-token">Fencing Token</h2>
+<p><code>fencing token</code> 用来防止旧 owner 继续写。</p>
+<p>它通常是一个单调递增的数字。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">worker_a 获得 bg_1 owner，token=10。</span><br><span class="line">worker_a 失联。</span><br><span class="line">worker_b 获得 bg_1 owner，token=11。</span><br><span class="line">worker_a 恢复后继续写，携带 token=10。</span><br><span class="line">服务端发现 token=10 &lt; current_token=11，拒绝写入。</span><br></pre></td></tr></table></figure>
+<p>这和前面学习的 epoch 是同一个思想。</p>
+<p>在 KV Cache 系统里，下面操作都应该带 epoch 或 fencing token：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">迁移 BlockGroup。</span><br><span class="line">淘汰 BlockGroup。</span><br><span class="line">切换 primary。</span><br><span class="line">更新 location。</span><br><span class="line">更新 owner。</span><br><span class="line">释放旧副本。</span><br></pre></td></tr></table></figure>
+<h2 id="failover">Failover</h2>
+<p><code>failover</code> 是故障切换。</p>
+<p>当 primary 或 owner 不可用时，系统需要选出新的 primary 或 owner。</p>
+<p>一个简化流程：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">1. failure detector 发现 node_a 不可用。</span><br><span class="line">2. metadata server 标记 node_a 为 UNAVAILABLE。</span><br><span class="line">3. 查找 node_a 上负责的 BlockGroup。</span><br><span class="line">4. 对每个 BlockGroup 选择健康副本 node_b。</span><br><span class="line">5. 提升 node_b 为 primary/owner。</span><br><span class="line">6. epoch += 1。</span><br><span class="line">7. 更新路由和元数据。</span><br><span class="line">8. 拒绝旧 epoch 写入。</span><br><span class="line">9. 后台修复缺失副本。</span><br></pre></td></tr></table></figure>
+<p>Failover 的关键问题是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">新 primary 是否有最新数据？</span><br><span class="line">旧 primary 恢复后怎么办？</span><br><span class="line">客户端旧路由如何失效？</span><br><span class="line">正在执行的迁移任务如何处理？</span><br><span class="line">ref_count 和 pin_count 如何恢复？</span><br></pre></td></tr></table></figure>
+<p>这些都需要状态机和元数据配合。</p>
+<h2 id="repair-task">Repair Task</h2>
+<p><code>repair task</code> 是后台修复任务。</p>
+<p>它负责处理异常和不一致状态。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">MIGRATING_OUT 停留太久。</span><br><span class="line">MIGRATING_IN 没有完成。</span><br><span class="line">metadata 记录有副本，但节点本地找不到。</span><br><span class="line">节点恢复后本地存在旧 epoch 数据。</span><br><span class="line">replica checksum 不一致。</span><br><span class="line">ref_count 长时间不归零。</span><br></pre></td></tr></table></figure>
+<p>Repair task 的处理方式可能是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">回滚状态。</span><br><span class="line">继续完成迁移。</span><br><span class="line">删除旧副本。</span><br><span class="line">重建副本。</span><br><span class="line">刷新元数据。</span><br><span class="line">重新计算 KV Cache。</span><br><span class="line">标记 FAILED 并等待人工排查。</span><br></pre></td></tr></table></figure>
+<p>Repair task
+是分布式系统很重要的一层，因为不是所有失败都能在请求路径上同步处理完。</p>
+<h2 id="补偿机制">补偿机制</h2>
+<p>补偿机制用于处理“部分成功”的操作。</p>
+<p>例如迁移：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 元数据改成 MIGRATING_OUT。</span><br><span class="line">2. 数据复制到目标节点。</span><br><span class="line">3. 更新 location 失败。</span><br></pre></td></tr></table></figure>
+<p>这时系统不能假装没发生，也不能简单重试所有步骤。</p>
+<p>可以补偿：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">删除目标临时数据。</span><br><span class="line">把状态回滚到 LOCAL。</span><br><span class="line">或者继续完成 location 更新。</span><br></pre></td></tr></table></figure>
+<p>选择哪种补偿方式，取决于当前状态和系统策略。</p>
+<p>设计补偿机制时要注意：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">补偿操作也要幂等。</span><br><span class="line">补偿操作也要带 epoch。</span><br><span class="line">补偿失败后要能再次补偿。</span><br><span class="line">补偿过程要记录 operation_id。</span><br></pre></td></tr></table></figure>
+<h2 id="降级">降级</h2>
+<p>降级是指系统无法按理想路径服务时，使用较低质量但更可控的方式继续运行。</p>
+<p>KV Cache 场景中的降级方式包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">远端 cache 读不到时重新计算。</span><br><span class="line">长上下文请求被拒绝或缩短。</span><br><span class="line">暂停后台迁移。</span><br><span class="line">暂停预热副本。</span><br><span class="line">降低 batch size。</span><br><span class="line">只使用本地 cache。</span><br><span class="line">跳过非关键 cache 复用。</span><br><span class="line">把请求转移到健康节点。</span><br></pre></td></tr></table></figure>
+<p>降级要明确优先级：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">正确性优先。</span><br><span class="line">在线请求优先于后台任务。</span><br><span class="line">低延迟请求优先于可延迟任务。</span><br><span class="line">关键元数据优先于统计指标。</span><br></pre></td></tr></table></figure>
+<p>不能为了可用性破坏正确性。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">读不到正确 epoch 的 BlockGroup，不能随便读旧副本。</span><br></pre></td></tr></table></figure>
+<p>更好的选择可能是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">刷新元数据。</span><br><span class="line">读健康副本。</span><br><span class="line">重新计算。</span><br><span class="line">返回可重试错误。</span><br></pre></td></tr></table></figure>
+<h2 id="worker-挂了怎么办">Worker 挂了怎么办？</h2>
+<p>假设 worker_a 挂了，它上面有一些 BlockGroup。</p>
+<p>需要区分几种情况：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">BlockGroup 只有一份，在 worker_a。</span><br><span class="line">BlockGroup 有健康副本。</span><br><span class="line">BlockGroup 正在迁移。</span><br><span class="line">BlockGroup 被某个请求 pin 住。</span><br><span class="line">BlockGroup 只是本地缓存，可以重算。</span><br></pre></td></tr></table></figure>
+<p>处理方式不同：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">有健康副本：切换 primary/owner。</span><br><span class="line">没有副本但可重算：标记 miss，后续重新计算。</span><br><span class="line">正在迁移：repair task 检查源和目标状态。</span><br><span class="line">被 pin 住：请求可能已经失败，需要释放或超时清理 pin。</span><br><span class="line">只是本地缓存：删除元数据或标记 EVICTED。</span><br></pre></td></tr></table></figure>
+<p>不能简单地把 worker_a
+上所有数据都认为丢失，也不能简单认为恢复后都可用。</p>
+<p>恢复后要检查：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">epoch 是否过期。</span><br><span class="line">数据 checksum 是否正确。</span><br><span class="line">本地状态是否和 metadata server 一致。</span><br><span class="line">是否有旧 operation 未完成。</span><br></pre></td></tr></table></figure>
+<h2 id="迁移到一半失败怎么办">迁移到一半失败怎么办？</h2>
+<p>迁移失败是 KV Cache 系统中最典型的故障场景。</p>
+<p>简化迁移流程：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">LOCAL</span><br><span class="line">-&gt; MIGRATING_OUT</span><br><span class="line">-&gt; copy data</span><br><span class="line">-&gt; MIGRATING_IN</span><br><span class="line">-&gt; update location</span><br><span class="line">-&gt; LOCAL on target</span><br><span class="line">-&gt; release old replica</span><br></pre></td></tr></table></figure>
+<p>失败点包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">源节点设置 MIGRATING_OUT 后崩溃。</span><br><span class="line">目标节点设置 MIGRATING_IN 后空间不足。</span><br><span class="line">数据复制到一半网络中断。</span><br><span class="line">目标校验失败。</span><br><span class="line">location 更新成功，但源副本释放失败。</span><br><span class="line">客户端仍然访问旧位置。</span><br></pre></td></tr></table></figure>
+<p>处理原则：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">源副本不要过早删除。</span><br><span class="line">迁移任务必须有 operation_id。</span><br><span class="line">每一步状态变更都带 epoch。</span><br><span class="line">目标数据校验成功后才能切换 location。</span><br><span class="line">中间态超时后由 repair task 修复。</span><br><span class="line">客户端收到 STALE_METADATA 后刷新路由。</span><br></pre></td></tr></table></figure>
+<p>一种保守策略：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">如果目标未完成校验：回滚到源位置。</span><br><span class="line">如果目标已完成校验但 location 未更新：继续完成切换。</span><br><span class="line">如果 location 已切换但源未释放：延迟释放源副本。</span><br><span class="line">如果源和目标都不可信：标记 FAILED，尝试从副本恢复或重算。</span><br></pre></td></tr></table></figure>
+<h2 id="请求取消后资源怎么释放">请求取消后资源怎么释放？</h2>
+<p>在线推理中，请求可能被取消：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">用户断开连接。</span><br><span class="line">上游超时。</span><br><span class="line">调度器取消任务。</span><br><span class="line">worker 执行失败。</span><br></pre></td></tr></table></figure>
+<p>如果请求取消后没有释放资源，会出现：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">ref_count 不归零。</span><br><span class="line">pin_count 不归零。</span><br><span class="line">BlockGroup 长期不能淘汰。</span><br><span class="line">GPU HBM 泄漏。</span><br><span class="line">调度器认为资源还被占用。</span><br></pre></td></tr></table></figure>
+<p>处理方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">请求上下文记录所有 pin/ref。</span><br><span class="line">请求结束时统一 unpin/unref。</span><br><span class="line">unpin/unref 接口幂等。</span><br><span class="line">后台扫描超时 request_id。</span><br><span class="line">对长时间 pin 的对象告警。</span><br></pre></td></tr></table></figure>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">pin(bg_1, request_id=req_1, epoch=10)</span><br><span class="line">unpin(bg_1, request_id=req_1, epoch=10)</span><br></pre></td></tr></table></figure>
+<p>重复 unpin 不应该导致计数变成负数。</p>
+<h2 id="节点恢复后怎么办">节点恢复后怎么办？</h2>
+<p>节点恢复后不能立刻承接流量。</p>
+<p>它本地可能保存着旧状态：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">旧 epoch 的 BlockGroup。</span><br><span class="line">未完成的迁移任务。</span><br><span class="line">已经被 metadata server 移除的副本。</span><br><span class="line">旧 primary 身份。</span><br><span class="line">过期路由缓存。</span><br></pre></td></tr></table></figure>
+<p>恢复流程可以是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. 节点进入 RECOVERING。</span><br><span class="line">2. 清空或冻结本地旧路由缓存。</span><br><span class="line">3. 向 metadata server 拉取当前节点应持有的数据列表。</span><br><span class="line">4. 对本地数据做 epoch/version/checksum 校验。</span><br><span class="line">5. 删除过期副本。</span><br><span class="line">6. 恢复缺失副本。</span><br><span class="line">7. 确认健康后进入 HEALTHY。</span><br></pre></td></tr></table></figure>
+<p>恢复期间，旧 epoch 写入必须被拒绝。</p>
+<h2 id="常见错误设计">常见错误设计</h2>
+<h3 id="一次超时就判定节点死亡">一次超时就判定节点死亡</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">一次 heartbeat 超时 -&gt; node dead</span><br></pre></td></tr></table></figure>
+<p>问题是网络抖动会造成误判。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">多次失败后进入 SUSPECTED。</span><br><span class="line">结合 RPC 错误率、延迟、心跳综合判断。</span><br><span class="line">确认后再进入 UNAVAILABLE。</span><br></pre></td></tr></table></figure>
+<h3 id="旧-owner-恢复后继续写">旧 owner 恢复后继续写</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">worker 恢复后直接继续执行旧任务。</span><br></pre></td></tr></table></figure>
+<p>问题是 owner 可能已经转移。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">写操作必须带 epoch/fencing token。</span><br><span class="line">恢复后先重新同步元数据。</span><br><span class="line">旧 epoch 写入全部拒绝。</span><br></pre></td></tr></table></figure>
+<h3 id="中间态没有修复任务">中间态没有修复任务</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">MIGRATING_OUT 失败后一直停在那里。</span><br></pre></td></tr></table></figure>
+<p>问题是 BlockGroup 长期不可用。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">repair task 定期扫描中间态。</span><br><span class="line">根据 operation_id、epoch 和实际数据状态决定回滚或继续。</span><br></pre></td></tr></table></figure>
+<h3 id="请求取消不释放-pin">请求取消不释放 pin</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">请求失败后直接返回，不执行 unpin。</span><br></pre></td></tr></table></figure>
+<p>问题是资源泄漏。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">请求上下文统一清理。</span><br><span class="line">unpin 幂等。</span><br><span class="line">后台扫描超时 request_id。</span><br></pre></td></tr></table></figure>
+<h3 id="降级读旧副本">降级读旧副本</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">最新副本读不到，就随便读一个旧副本。</span><br></pre></td></tr></table></figure>
+<p>问题是可能破坏正确性。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">先校验 epoch/version。</span><br><span class="line">旧副本只能在语义允许时使用。</span><br><span class="line">不允许时重算或返回错误。</span><br></pre></td></tr></table></figure>
+<h2 id="如何排查故障处理问题">如何排查故障处理问题？</h2>
+<h3 id="日志字段">日志字段</h3>
+<p>日志中最好带上：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">request_id</span><br><span class="line">operation_id</span><br><span class="line">block_group_id</span><br><span class="line">node_id</span><br><span class="line">owner</span><br><span class="line">epoch</span><br><span class="line">state</span><br><span class="line">old_state</span><br><span class="line">new_state</span><br><span class="line">failure_reason</span><br><span class="line">retry_count</span><br><span class="line">timeout_ms</span><br><span class="line">lease_expire_time</span><br><span class="line">fencing_token</span><br></pre></td></tr></table></figure>
+<h3 id="指标">指标</h3>
+<p>可以关注：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">heartbeat_timeout_count</span><br><span class="line">node_suspected_count</span><br><span class="line">node_unavailable_count</span><br><span class="line">failover_count</span><br><span class="line">failover_latency</span><br><span class="line">repair_task_count</span><br><span class="line">repair_task_failure_count</span><br><span class="line">migration_timeout_count</span><br><span class="line">stale_epoch_reject_count</span><br><span class="line">lease_expired_count</span><br><span class="line">fencing_reject_count</span><br><span class="line">request_cancel_count</span><br><span class="line">pin_leak_count</span><br><span class="line">degraded_request_count</span><br></pre></td></tr></table></figure>
+<h3 id="排查问题">排查问题</h3>
+<p>遇到故障时，可以问：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">故障是节点宕机、网络抖动，还是慢节点？</span><br><span class="line">failure detector 是什么时候标记异常的？</span><br><span class="line">是否发生 failover？</span><br><span class="line">epoch 是否递增？</span><br><span class="line">旧 owner 是否还有写入？</span><br><span class="line">中间态是否被 repair task 处理？</span><br><span class="line">客户端是否刷新过元数据？</span><br><span class="line">请求取消后 pin/ref 是否释放？</span><br><span class="line">是否触发降级？降级是否破坏正确性？</span><br></pre></td></tr></table></figure>
+<h2 id="面向-kv-cache-的检查清单">面向 KV Cache 的检查清单</h2>
+<p>看组内代码或设计文档时，可以检查：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">1. 系统定义了哪些故障模型？</span><br><span class="line">2. heartbeat 上报哪些字段？</span><br><span class="line">3. failure detector 是否区分 HEALTHY、SUSPECTED、UNAVAILABLE、RECOVERING？</span><br><span class="line">4. 远程调用是否有 timeout？</span><br><span class="line">5. retry 是否只用于幂等操作？</span><br><span class="line">6. 是否存在 retry storm 风险？</span><br><span class="line">7. owner/primary 切换时 epoch 是否递增？</span><br><span class="line">8. 旧 owner 写入是否会被 fencing 拒绝？</span><br><span class="line">9. 迁移中间态是否有超时修复？</span><br><span class="line">10. repair task 是否幂等？</span><br><span class="line">11. 请求取消后 pin/ref 是否释放？</span><br><span class="line">12. 节点恢复后是否先进入 RECOVERING？</span><br><span class="line">13. 本地旧副本是否做 epoch/version/checksum 校验？</span><br><span class="line">14. 降级策略是否优先保证正确性？</span><br><span class="line">15. 在线请求和后台任务是否有不同优先级？</span><br></pre></td></tr></table></figure>
+<h2 id="推荐学习顺序">推荐学习顺序</h2>
+<p>这一组可以按下面顺序学：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">1. 故障模型：先知道系统可能怎么失败。</span><br><span class="line">2. timeout 和 retry：理解请求失败的基本处理。</span><br><span class="line">3. heartbeat：理解节点健康信息如何上报。</span><br><span class="line">4. failure detector：理解如何从怀疑到摘除节点。</span><br><span class="line">5. 慢节点：理解为什么慢比挂更麻烦。</span><br><span class="line">6. 网络分区：理解脑裂风险。</span><br><span class="line">7. lease 和 fencing token：理解如何限制旧 owner。</span><br><span class="line">8. failover：理解 primary/owner 如何切换。</span><br><span class="line">9. repair task：理解中间态如何恢复。</span><br><span class="line">10. 补偿机制：理解部分成功后如何收尾。</span><br><span class="line">11. 降级：理解故障时如何保正确性和可用性。</span><br><span class="line">12. 结合 KV Cache 分析 worker 挂、迁移失败、请求取消、节点恢复。</span><br></pre></td></tr></table></figure>
+<p>最后要能把一次故障讲完整：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">故障发生在哪里？</span><br><span class="line">系统如何发现？</span><br><span class="line">如何避免误判？</span><br><span class="line">是否需要 failover？</span><br><span class="line">epoch 是否递增？</span><br><span class="line">旧 owner 如何被 fencing？</span><br><span class="line">中间态如何 repair？</span><br><span class="line">请求如何降级或失败？</span><br><span class="line">资源如何释放？</span><br><span class="line">指标和日志如何证明恢复成功？</span><br></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>故障处理是分布式系统从“能跑”走向“可靠”的关键。</p>
+<p>对 KV Cache 和 BlockGroup 系统来说，最重要的是建立几个意识：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. 超时不等于失败，没响应不等于死亡。</span><br><span class="line">2. 故障检测只能怀疑，不能证明。</span><br><span class="line">3. 旧 owner 恢复后不能继续写，必须用 epoch/fencing 限制。</span><br><span class="line">4. 迁移、淘汰、恢复都要有中间态和 repair task。</span><br><span class="line">5. 请求取消后必须释放 pin/ref，避免资源泄漏。</span><br><span class="line">6. 降级不能破坏正确性。</span><br><span class="line">7. 节点恢复后要重新同步元数据，不能直接接流量。</span><br></pre></td></tr></table></figure>
+<p>掌握故障处理之后，下一步可以继续学习缓存策略、迁移淘汰、调度和负载均衡。这些内容会更偏性能和资源效率，但它们都建立在状态正确和故障可恢复的基础上。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+              <a href="/tags/KV-Cache/" rel="tag"># KV Cache</a>
+              <a href="/tags/%E6%95%85%E9%9A%9C%E5%A4%84%E7%90%86/" rel="tag"># 故障处理</a>
+              <a href="/tags/%E5%AE%B9%E9%94%99/" rel="tag"># 容错</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/07/14/distributed-foundation-replication-consistency/" rel="prev" title="分布式基础：副本和一致性">
+                  <i class="fa fa-angle-left"></i> 分布式基础：副本和一致性
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/07/14/distributed-foundation-cache-migration-eviction/" rel="next" title="分布式基础：缓存策略、迁移与淘汰">
+                  分布式基础：缓存策略、迁移与淘汰 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.css" integrity="sha256-gkQVf8UKZgQ0HyuxL/VnacadJ+D2Kox2TCEBuNQg5+w=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"qizi706.github.io","root":"/","images":"/images","scheme":"Muse","darkmode":true,"version":"8.28.0","exturl":false,"sidebar":{"position":"right","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"atom-one-dark-reasonable","dark":"atom-one-dark-reasonable"},"prism":{"light":"prism-one-dark","dark":"prism-one-light"},"copy_button":{"enable":true,"style":"flat"},"fold":{"enable":false,"height":500},"language":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"lazyload":false,"pangu":true,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":true,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"Searching...","empty":"We didn't find any results for the search: ${query}","hits_time":"${hits} results found in ${time} ms","hits":"${hits} results found"}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="背景 前面已经学习了几组基础： 123第一组：操作系统、网络、并发与存储。第二组：RPC 和远程调用。第三组：状态机、分片、路由与元数据。 这些内容解决了几个问题： 12345系统为什么会慢？远程调用为什么会失败？BlockGroup 有哪些状态？数据如何分片？请求如何通过路由和元数据找到 KV Cache？ 接下来要学习的是副本和一致性。 在分布式系统里，数据通常不会只放一份。只放一份会有明显问">
+<meta property="og:type" content="article">
+<meta property="og:title" content="分布式基础：副本和一致性">
+<meta property="og:url" content="http://qizi706.github.io/2026/07/14/distributed-foundation-replication-consistency/index.html">
+<meta property="og:site_name" content="Quan Zhou 的 blog">
+<meta property="og:description" content="背景 前面已经学习了几组基础： 123第一组：操作系统、网络、并发与存储。第二组：RPC 和远程调用。第三组：状态机、分片、路由与元数据。 这些内容解决了几个问题： 12345系统为什么会慢？远程调用为什么会失败？BlockGroup 有哪些状态？数据如何分片？请求如何通过路由和元数据找到 KV Cache？ 接下来要学习的是副本和一致性。 在分布式系统里，数据通常不会只放一份。只放一份会有明显问">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2026-07-14T02:30:00.000Z">
+<meta property="article:modified_time" content="2026-07-14T06:23:50.260Z">
+<meta property="article:author" content="Quan Zhou">
+<meta property="article:tag" content="KV Cache">
+<meta property="article:tag" content="一致性">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="副本">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="http://qizi706.github.io/2026/07/14/distributed-foundation-replication-consistency/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"en","comments":true,"permalink":"http://qizi706.github.io/2026/07/14/distributed-foundation-replication-consistency/","path":"2026/07/14/distributed-foundation-replication-consistency/","title":"分布式基础：副本和一致性"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>分布式基础：副本和一致性 | Quan Zhou 的 blog</title>
+  
+
+
+
+
+
+
+
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js" integrity="sha256-XL2inqUJaslATFnHdJOi9GfQ60on8Wx1C2H8DYiN1xY=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/next-theme-pjax/0.6.0/pjax.min.js" integrity="sha256-vxLn1tSKWD4dqbMRyv940UYw4sXgMtYcK6reefzZrao=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fancyapps-ui/5.0.31/fancybox/fancybox.umd.js" integrity="sha256-a+H7FYzJv6oU2hfsfDGM2Ohw/cR9v+hPfxHCLdmCrE8=" crossorigin="anonymous" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pangu/7.2.0/pangu.umd.js" integrity="sha256-JnmRRnJK7DC6RQJbAJb6AXOM9OmWzS6z8eYultk/48Y=" crossorigin="anonymous" defer></script>
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script><script src="/js/pjax.js" defer></script>
+
+  
+
+  <script class="next-config" data-name="mermaid" type="application/json">{"enable":true,"theme":{"light":"default","dark":"dark"},"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.10.1/mermaid.min.js","integrity":"sha256-BmQmdWDS8X2OTbrwELWK366LV6escyWhHHe0XCTU/Hk="}}</script>
+  <script src="/js/third-party/tags/mermaid.js" defer></script>
+
+  <script class="next-config" data-name="wavedrom" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/wavedrom.min.js","integrity":"sha256-INLAoJc6quTNfiMWkGZniYO2cxE8mHpddnLow1m6RFs="}}</script>
+  <script class="next-config" data-name="wavedrom_skin" type="application/json">{"enable":true,"js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/skins/default.js","integrity":"sha256-fduc/Zszk5ezWws2uInY/ALWVmIrmV6VTgXbsYSReFI="}}</script>
+  <script src="/js/third-party/tags/wavedrom.js" defer></script>
+
+  <script src="/js/third-party/fancybox.js" defer></script>
+
+
+
+  
+
+
+
+
+  
+
+  <script class="next-config" data-name="enableMath" type="application/json">false</script><script class="next-config" data-name="mathjax" type="application/json">{"enable":true,"tags":"ams","js":{"url":"https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js","integrity":"sha256-MASABpB4tYktI2Oitl4t+78w/lyA+D7b/s9GEP0JOGI="}}</script>
+<script src="/js/third-party/math/mathjax.js" defer></script>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quicklink/3.0.1/quicklink.umd.js" integrity="sha256-44BednzIpUeQJcY8qtLyarFu0UCCTbgmWOvaoehiFQQ=" crossorigin="anonymous" defer></script>
+  <script class="next-config" data-name="quicklink" type="application/json">{"enable":true,"home":true,"archive":true,"delay":true,"timeout":3000,"priority":true,"url":"http://qizi706.github.io/2026/07/14/distributed-foundation-replication-consistency/"}</script>
+  <script src="/js/third-party/quicklink.js" defer></script>
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Quan Zhou 的 blog</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="Search" role="button">
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a></li><li class="menu-item menu-item-about"><a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>About</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a></li>
+  </ul>
+</nav>
+
+
+
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%83%8C%E6%99%AF"><span class="nav-text">背景</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%AD%A6%E4%B9%A0%E7%9B%AE%E6%A0%87"><span class="nav-text">学习目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E5%89%AF%E6%9C%AC"><span class="nav-text">为什么需要副本？</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E9%AB%98%E5%8F%AF%E7%94%A8"><span class="nav-text">高可用</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%AF%BB%E6%89%A9%E5%B1%95"><span class="nav-text">读扩展</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%95%85%E9%9A%9C%E6%81%A2%E5%A4%8D%E5%92%8C%E8%BF%81%E7%A7%BB%E7%BC%93%E5%86%B2"><span class="nav-text">故障恢复和迁移缓冲</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%AF%E6%9C%AC%E5%B8%A6%E6%9D%A5%E7%9A%84%E9%97%AE%E9%A2%98"><span class="nav-text">副本带来的问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#kv-%E6%95%B0%E6%8D%AE%E5%92%8C%E5%85%83%E6%95%B0%E6%8D%AE%E8%A6%81%E5%88%86%E5%BC%80%E7%9C%8B"><span class="nav-text">KV 数据和元数据要分开看</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%BB%E4%BB%8E%E5%89%AF%E6%9C%AC"><span class="nav-text">主从副本</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#kv-cache-%E4%B8%AD%E7%9A%84%E4%B8%BB%E4%BB%8E%E5%89%AF%E6%9C%AC"><span class="nav-text">KV Cache 中的主从副本</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%90%8C%E6%AD%A5%E5%A4%8D%E5%88%B6"><span class="nav-text">同步复制</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%BC%82%E6%AD%A5%E5%A4%8D%E5%88%B6"><span class="nav-text">异步复制</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%BC%BA%E4%B8%80%E8%87%B4%E6%80%A7"><span class="nav-text">强一致性</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%80%E7%BB%88%E4%B8%80%E8%87%B4%E6%80%A7"><span class="nav-text">最终一致性</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%AF%BB%E5%86%99%E4%B8%80%E8%87%B4%E6%80%A7"><span class="nav-text">读写一致性</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#read-your-writes"><span class="nav-text">Read Your Writes</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#monotonic-reads"><span class="nav-text">Monotonic Reads</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#causal-consistency"><span class="nav-text">Causal Consistency</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#quorum"><span class="nav-text">Quorum</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#quorum-%E7%9A%84%E4%BB%A3%E4%BB%B7"><span class="nav-text">Quorum 的代价</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%97%A7%E8%AF%BB%E8%84%8F%E8%AF%BB%E5%92%8C%E5%86%99%E5%86%B2%E7%AA%81"><span class="nav-text">旧读、脏读和写冲突</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%97%A7%E8%AF%BB"><span class="nav-text">旧读</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%84%8F%E8%AF%BB"><span class="nav-text">脏读</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%86%99%E5%86%B2%E7%AA%81"><span class="nav-text">写冲突</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#kv-cache-%E4%B8%AD%E5%93%AA%E4%BA%9B%E9%9C%80%E8%A6%81%E5%BC%BA%E4%B8%80%E8%87%B4"><span class="nav-text">KV Cache 中哪些需要强一致？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%93%AA%E4%BA%9B%E5%8F%AF%E4%BB%A5%E6%9C%80%E7%BB%88%E4%B8%80%E8%87%B4"><span class="nav-text">哪些可以最终一致？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#blockgroup-%E5%89%AF%E6%9C%AC%E8%AE%BE%E8%AE%A1%E7%A4%BA%E4%BE%8B"><span class="nav-text">BlockGroup 副本设计示例</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%AF%E6%9C%AC%E8%AF%BB%E5%86%99%E8%B7%AF%E5%BE%84"><span class="nav-text">副本读写路径</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%86%99%E8%B7%AF%E5%BE%84"><span class="nav-text">写路径</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E8%AF%BB%E8%B7%AF%E5%BE%84"><span class="nav-text">读路径</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%AF%E6%9C%AC%E8%90%BD%E5%90%8E%E6%80%8E%E4%B9%88%E5%8A%9E"><span class="nav-text">副本落后怎么办？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#primary-%E6%95%85%E9%9A%9C%E6%80%8E%E4%B9%88%E5%8A%9E"><span class="nav-text">Primary 故障怎么办？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%AF%E6%9C%AC%E5%92%8C%E8%BF%81%E7%A7%BB%E7%9A%84%E5%85%B3%E7%B3%BB"><span class="nav-text">副本和迁移的关系</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%89%AF%E6%9C%AC%E5%92%8C%E6%B7%98%E6%B1%B0%E7%9A%84%E5%85%B3%E7%B3%BB"><span class="nav-text">副本和淘汰的关系</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E9%94%99%E8%AF%AF%E8%AE%BE%E8%AE%A1"><span class="nav-text">常见错误设计</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%8A%8A%E6%89%80%E6%9C%89%E5%89%AF%E6%9C%AC%E9%83%BD%E5%BD%93%E6%88%90%E4%B8%80%E6%A0%B7"><span class="nav-text">把所有副本都当成一样</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BB%8E%E8%90%BD%E5%90%8E%E5%89%AF%E6%9C%AC%E8%AF%BB%E5%8F%96%E5%85%B3%E9%94%AE%E7%8A%B6%E6%80%81"><span class="nav-text">从落后副本读取关键状态</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%83%E6%95%B0%E6%8D%AE%E6%9C%80%E7%BB%88%E4%B8%80%E8%87%B4"><span class="nav-text">元数据最终一致</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%89%AF%E6%9C%AC%E4%BF%AE%E5%A4%8D%E4%B8%8D%E6%A0%A1%E9%AA%8C%E7%89%88%E6%9C%AC"><span class="nav-text">副本修复不校验版本</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#primary-%E5%88%87%E6%8D%A2%E4%B8%8D%E9%80%92%E5%A2%9E-epoch"><span class="nav-text">primary 切换不递增 epoch</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%A6%82%E4%BD%95%E6%8E%92%E6%9F%A5%E5%89%AF%E6%9C%AC%E5%92%8C%E4%B8%80%E8%87%B4%E6%80%A7%E9%97%AE%E9%A2%98"><span class="nav-text">如何排查副本和一致性问题？</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%97%A5%E5%BF%97%E5%AD%97%E6%AE%B5"><span class="nav-text">日志字段</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%8C%87%E6%A0%87"><span class="nav-text">指标</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%8E%92%E6%9F%A5%E9%97%AE%E9%A2%98"><span class="nav-text">排查问题</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%9D%A2%E5%90%91-kv-cache-%E7%9A%84%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95"><span class="nav-text">面向 KV Cache 的检查清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%8E%A8%E8%8D%90%E5%AD%A6%E4%B9%A0%E9%A1%BA%E5%BA%8F"><span class="nav-text">推荐学习顺序</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%80%BB%E7%BB%93"><span class="nav-text">总结</span></a></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <p class="site-author-name" itemprop="name">Quan Zhou</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">21</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">25</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+        </div>
+      </div>
+        <div class="back-to-top animated" role="button" aria-label="Back to top">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="en">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/14/distributed-foundation-replication-consistency/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="分布式基础：副本和一致性 | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          分布式基础：副本和一致性
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-07-14 10:30:00 / Modified: 14:23:50" itemprop="dateCreated datePublished" datetime="2026-07-14T10:30:00+08:00">2026-07-14</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/" itemprop="url" rel="index"><span itemprop="name">分布式</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h2 id="背景">背景</h2>
+<p>前面已经学习了几组基础：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">第一组：操作系统、网络、并发与存储。</span><br><span class="line">第二组：RPC 和远程调用。</span><br><span class="line">第三组：状态机、分片、路由与元数据。</span><br></pre></td></tr></table></figure>
+<p>这些内容解决了几个问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">系统为什么会慢？</span><br><span class="line">远程调用为什么会失败？</span><br><span class="line">BlockGroup 有哪些状态？</span><br><span class="line">数据如何分片？</span><br><span class="line">请求如何通过路由和元数据找到 KV Cache？</span><br></pre></td></tr></table></figure>
+<p>接下来要学习的是副本和一致性。</p>
+<p>在分布式系统里，数据通常不会只放一份。只放一份会有明显问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">节点挂了，数据就不可用了。</span><br><span class="line">单个节点读压力太大。</span><br><span class="line">迁移或维护时没有备用数据。</span><br><span class="line">网络抖动时请求容易失败。</span><br></pre></td></tr></table></figure>
+<p>所以系统会把数据复制到多个节点，这就是副本。</p>
+<p>但副本一旦出现，就会带来另一个问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">多个副本之间如何保持一致？</span><br></pre></td></tr></table></figure>
+<p>对 KV Cache 和 BlockGroup 来说，这个问题尤其重要。因为 KV
+数据本身、位置信息、状态信息、引用计数、pin
+状态，对一致性的要求并不一样。</p>
+<span id="more"></span>
+<h2 id="学习目标">学习目标</h2>
+<p>这一组需要掌握：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">副本是什么</span><br><span class="line">为什么需要副本</span><br><span class="line">主副本和从副本</span><br><span class="line">读副本和写副本</span><br><span class="line">同步复制</span><br><span class="line">异步复制</span><br><span class="line">强一致性</span><br><span class="line">最终一致性</span><br><span class="line">读写一致性</span><br><span class="line">Quorum</span><br><span class="line">脏读、旧读、写冲突</span><br><span class="line">KV Cache 中数据和元数据的一致性区别</span><br></pre></td></tr></table></figure>
+<p>这一组的目标是：能够判断哪些数据必须强一致，哪些数据可以最终一致，以及副本读写会带来什么风险。</p>
+<h2 id="为什么需要副本">为什么需要副本？</h2>
+<p>副本的目的主要有三个。</p>
+<h3 id="高可用">高可用</h3>
+<p>如果数据只有一份，节点挂了就无法访问。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">bg_1 只在 node_a。</span><br><span class="line">node_a 宕机。</span><br><span class="line">worker 无法读取 bg_1。</span><br><span class="line">请求失败或只能重新计算。</span><br></pre></td></tr></table></figure>
+<p>如果有副本：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">bg_1 primary 在 node_a。</span><br><span class="line">bg_1 replica 在 node_b。</span><br><span class="line">node_a 宕机后，可以从 node_b 读取或提升 node_b 为新的 primary。</span><br></pre></td></tr></table></figure>
+<p>这能提高系统可用性。</p>
+<h3 id="读扩展">读扩展</h3>
+<p>如果很多请求都读取同一份数据，单个节点可能成为热点。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">某个系统 prompt 的 KV Cache 被大量请求复用。</span><br><span class="line">所有请求都去 node_a 读取。</span><br><span class="line">node_a 网络和内存带宽被打满。</span><br></pre></td></tr></table></figure>
+<p>如果有多个只读副本，就可以分担读压力：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">node_a</span><br><span class="line">node_b</span><br><span class="line">node_c</span><br></pre></td></tr></table></figure>
+<p>不同请求可以读不同副本。</p>
+<h3 id="故障恢复和迁移缓冲">故障恢复和迁移缓冲</h3>
+<p>副本还可以用于节点维护、迁移和故障恢复。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">node_a 即将下线。</span><br><span class="line">先把重要 block group 复制到 node_b。</span><br><span class="line">确认副本完整后，再切换路由。</span><br><span class="line">最后释放 node_a 上的数据。</span><br></pre></td></tr></table></figure>
+<p>这样可以减少迁移期间的数据不可用时间。</p>
+<h2 id="副本带来的问题">副本带来的问题</h2>
+<p>副本不是免费午餐。</p>
+<p>它会带来几个问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">1. 写入要同步到哪些副本？</span><br><span class="line">2. 读请求可以读任意副本吗？</span><br><span class="line">3. 如果副本之间数据不一样，谁是对的？</span><br><span class="line">4. 主副本挂了，谁能接管？</span><br><span class="line">5. 旧主恢复后还能不能继续写？</span><br><span class="line">6. 副本落后时，能不能对外提供读取？</span><br><span class="line">7. 副本修复期间，路由和元数据如何更新？</span><br></pre></td></tr></table></figure>
+<p>这些问题合起来，就是一致性问题。</p>
+<h2 id="kv-数据和元数据要分开看">KV 数据和元数据要分开看</h2>
+<p>在 KV Cache 系统里，首先要区分两类数据：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">KV 数据本身</span><br><span class="line">BlockGroup 元数据</span><br></pre></td></tr></table></figure>
+<p>KV 数据本身通常是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">某个 layer、某段 token range 的 Key/Value tensor。</span><br><span class="line">生成后很少修改。</span><br><span class="line">可以近似看作 immutable block。</span><br></pre></td></tr></table></figure>
+<p>BlockGroup 元数据通常包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">location</span><br><span class="line">state</span><br><span class="line">epoch</span><br><span class="line">owner</span><br><span class="line">ref_count</span><br><span class="line">pin_count</span><br><span class="line">replica_list</span><br><span class="line">primary_replica</span><br></pre></td></tr></table></figure>
+<p>这些元数据会频繁变化。</p>
+<p>这个区别非常关键：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">KV 数据本身可以更偏缓存语义。</span><br><span class="line">元数据状态必须更严格。</span><br></pre></td></tr></table></figure>
+<p>例如，一个已经生成好的 KV
+block，如果多个副本内容完全一样，那么读哪个副本都可以。</p>
+<p>但
+<code>owner</code>、<code>epoch</code>、<code>state</code>、<code>ref_count</code>
+这类元数据如果不一致，就可能造成严重问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">旧 owner 继续写。</span><br><span class="line">正在使用的 cache 被淘汰。</span><br><span class="line">迁移过程被重复执行。</span><br><span class="line">客户端读到旧位置。</span><br><span class="line">两个节点都认为自己是 primary。</span><br></pre></td></tr></table></figure>
+<p>所以学习一致性时，要先问：这份数据是内容数据，还是控制状态？</p>
+<h2 id="主从副本">主从副本</h2>
+<p>最常见的副本模型是主从副本。</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Primary：主副本，负责处理写入。</span><br><span class="line">Replica：从副本，复制 primary 的数据。</span><br></pre></td></tr></table></figure>
+<p>写入路径：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">client -&gt; primary -&gt; replicas</span><br></pre></td></tr></table></figure>
+<p>读取路径可以有两种：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">client -&gt; primary</span><br><span class="line">client -&gt; replica</span><br></pre></td></tr></table></figure>
+<p>如果所有读都走 primary，一致性更容易保证，但 primary 压力更大。</p>
+<p>如果读可以走 replica，读扩展能力更好，但可能读到旧数据。</p>
+<h3 id="kv-cache-中的主从副本">KV Cache 中的主从副本</h3>
+<p>对于 BlockGroup，可以这样建模：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">block_group_id = bg_1</span><br><span class="line">primary = node_a</span><br><span class="line">replicas = [node_b, node_c]</span><br><span class="line">epoch = 10</span><br><span class="line">state = LOCAL</span><br></pre></td></tr></table></figure>
+<p>如果要修改状态，例如迁移或淘汰，应该由 primary 或元数据服务协调。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">evict(bg_1, epoch=10)</span><br></pre></td></tr></table></figure>
+<p>这个请求不能随便发给任意 replica 执行，否则可能出现：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">node_b 删除了副本。</span><br><span class="line">node_a 还认为副本存在。</span><br><span class="line">metadata server 还把 node_b 写在 replica_list 里。</span><br></pre></td></tr></table></figure>
+<p>所以对元数据更新，要有明确的写入 owner。</p>
+<h2 id="同步复制">同步复制</h2>
+<p>同步复制是指写入必须等待副本确认，才算成功。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">client -&gt; primary</span><br><span class="line">primary -&gt; replica_1</span><br><span class="line">primary -&gt; replica_2</span><br><span class="line">replica_1 ack</span><br><span class="line">replica_2 ack</span><br><span class="line">primary -&gt; client success</span><br></pre></td></tr></table></figure>
+<p>优点：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">副本更一致。</span><br><span class="line">primary 故障后，副本更可能拥有最新数据。</span><br><span class="line">读副本更安全。</span><br></pre></td></tr></table></figure>
+<p>缺点：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">写延迟更高。</span><br><span class="line">可用性更差，只要副本慢就会拖慢写入。</span><br><span class="line">吞吐更低。</span><br></pre></td></tr></table></figure>
+<p>在 KV Cache 场景里，同步复制适合关键元数据，比如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">owner</span><br><span class="line">epoch</span><br><span class="line">state</span><br><span class="line">primary_replica</span><br></pre></td></tr></table></figure>
+<p>这些状态一旦错了，可能影响正确性。</p>
+<h2 id="异步复制">异步复制</h2>
+<p>异步复制是指 primary 写入成功后先返回，再后台复制到其他副本。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">client -&gt; primary</span><br><span class="line">primary local write success</span><br><span class="line">primary -&gt; client success</span><br><span class="line">primary later -&gt; replica_1</span><br><span class="line">primary later -&gt; replica_2</span><br></pre></td></tr></table></figure>
+<p>优点：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">写延迟低。</span><br><span class="line">吞吐更高。</span><br><span class="line">对慢副本不敏感。</span><br></pre></td></tr></table></figure>
+<p>缺点：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">副本可能落后。</span><br><span class="line">primary 故障时可能丢失最新写入。</span><br><span class="line">读 replica 可能读到旧数据。</span><br></pre></td></tr></table></figure>
+<p>在 KV Cache 场景里，异步复制适合：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">非关键 cache 副本。</span><br><span class="line">预热数据。</span><br><span class="line">可重算数据。</span><br><span class="line">统计指标。</span><br><span class="line">访问热度。</span><br></pre></td></tr></table></figure>
+<p>如果某个 KV block 可以重新计算，那么它对一致性的要求可以低一些。</p>
+<h2 id="强一致性">强一致性</h2>
+<p>强一致性要求系统表现得像只有一份数据。</p>
+<p>更直观地说：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">一次写入成功后，后续读一定能读到这次写入。</span><br></pre></td></tr></table></figure>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">metadata server 更新 bg_1 location = node_b，epoch=11。</span><br><span class="line">之后任何客户端查询 bg_1，都应该看到 node_b 和 epoch=11。</span><br></pre></td></tr></table></figure>
+<p>强一致性的优点是语义简单，系统更容易推理。</p>
+<p>缺点是性能和可用性成本更高。</p>
+<p>强一致性适合：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">owner</span><br><span class="line">epoch</span><br><span class="line">state</span><br><span class="line">primary_replica</span><br><span class="line">ref_count</span><br><span class="line">pin_count</span><br><span class="line">资源配额</span><br><span class="line">任务归属</span><br></pre></td></tr></table></figure>
+<p>这些状态如果读到旧值，可能导致错误行为。</p>
+<h2 id="最终一致性">最终一致性</h2>
+<p>最终一致性允许短时间内不同副本不一致，但如果没有新的写入，最终会收敛到相同状态。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">node_a 记录 bg_1 access_count = 100。</span><br><span class="line">node_b 暂时记录 access_count = 90。</span><br><span class="line">后台同步后，两个节点最终合并成一致结果。</span><br></pre></td></tr></table></figure>
+<p>最终一致性适合：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">访问统计。</span><br><span class="line">热度估计。</span><br><span class="line">监控指标。</span><br><span class="line">非关键副本。</span><br><span class="line">可以重算的 cache。</span><br><span class="line">异步预热数据。</span><br></pre></td></tr></table></figure>
+<p>最终一致性的问题是：应用层必须能接受短时间不一致。</p>
+<p>例如访问热度晚一点同步，通常没问题；但 <code>epoch</code>
+晚一点同步，就可能出大问题。</p>
+<h2 id="读写一致性">读写一致性</h2>
+<p>除了强一致和最终一致，还有一些更细的读写语义。</p>
+<h3 id="read-your-writes">Read Your Writes</h3>
+<p>自己写入后，自己后续一定能读到。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">worker pin(bg_1, request_id=req_1) 成功。</span><br><span class="line">worker 后续查询 bg_1，必须看到 req_1 已经 pin 住。</span><br></pre></td></tr></table></figure>
+<p>如果做不到，worker 可能刚 pin 完，下一步又看到
+<code>pin_count=0</code>，导致错误淘汰。</p>
+<h3 id="monotonic-reads">Monotonic Reads</h3>
+<p>同一个客户端不会先读到新值，再读到旧值。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">第一次读到 bg_1 epoch=11。</span><br><span class="line">第二次不应该又读到 epoch=10。</span><br></pre></td></tr></table></figure>
+<p>否则客户端状态会倒退。</p>
+<h3 id="causal-consistency">Causal Consistency</h3>
+<p>有因果关系的操作，要按因果顺序可见。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">先完成迁移 bg_1: node_a -&gt; node_b。</span><br><span class="line">再释放 node_a 旧副本。</span><br></pre></td></tr></table></figure>
+<p>客户端不能先看到旧副本释放，再看到迁移完成，否则会出现短时间不可读。</p>
+<h2 id="quorum">Quorum</h2>
+<p><code>Quorum</code> 是一种常见的多副本读写方式。</p>
+<p>假设有 <code>N</code> 个副本：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">W：写入需要成功的副本数。</span><br><span class="line">R：读取需要读取的副本数。</span><br></pre></td></tr></table></figure>
+<p>如果满足：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">R + W &gt; N</span><br></pre></td></tr></table></figure>
+<p>那么读集合和写集合一定有交集，理论上可以读到最新写入。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">N = 3</span><br><span class="line">W = 2</span><br><span class="line">R = 2</span><br><span class="line">R + W = 4 &gt; 3</span><br></pre></td></tr></table></figure>
+<p>写入至少写 2 个副本，读取至少读 2 个副本，这两个集合一定重叠。</p>
+<h3 id="quorum-的代价">Quorum 的代价</h3>
+<p>Quorum 能提高一致性，但也有代价：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">读写延迟更高。</span><br><span class="line">需要处理多个副本返回不同版本。</span><br><span class="line">慢副本会影响尾延迟。</span><br><span class="line">实现复杂度更高。</span><br></pre></td></tr></table></figure>
+<p>在 KV Cache 场景中，Quorum 更适合元数据或关键状态，不一定适合大块 KV
+数据。</p>
+<p>因为 KV 数据很大，如果每次读取都从多个副本读并比较，成本太高。</p>
+<h2 id="旧读脏读和写冲突">旧读、脏读和写冲突</h2>
+<p>副本系统常见问题包括旧读、脏读和写冲突。</p>
+<h3 id="旧读">旧读</h3>
+<p>旧读是指读到了过期数据。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">bg_1 已经迁移到 node_b，epoch=11。</span><br><span class="line">客户端从 replica 读到旧 location=node_a，epoch=10。</span><br></pre></td></tr></table></figure>
+<p>解决方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">读请求携带 epoch。</span><br><span class="line">服务端拒绝旧 epoch。</span><br><span class="line">客户端收到 STALE_METADATA 后刷新。</span><br></pre></td></tr></table></figure>
+<h3 id="脏读">脏读</h3>
+<p>脏读是指读到了未提交或未完成的数据。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">bg_1 正在 MIGRATING_IN。</span><br><span class="line">目标节点数据只复制了一半。</span><br><span class="line">客户端直接从目标节点读取。</span><br></pre></td></tr></table></figure>
+<p>这会读到不完整数据。</p>
+<p>解决方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">中间态不可读。</span><br><span class="line">目标节点校验完成后再切换状态。</span><br><span class="line">读取前检查 state。</span><br></pre></td></tr></table></figure>
+<h3 id="写冲突">写冲突</h3>
+<p>写冲突是指多个节点同时修改同一份状态。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">scheduler A 发起迁移 bg_1。</span><br><span class="line">scheduler B 同时发起淘汰 bg_1。</span><br></pre></td></tr></table></figure>
+<p>解决方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">状态机限制合法转移。</span><br><span class="line">CAS 检查 state 和 epoch。</span><br><span class="line">只有 owner 可以写。</span><br><span class="line">元数据服务集中处理关键状态更新。</span><br></pre></td></tr></table></figure>
+<h2 id="kv-cache-中哪些需要强一致">KV Cache 中哪些需要强一致？</h2>
+<p>在 KV Cache 系统里，下面这些状态通常需要强一致或接近强一致：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">block_group_id -&gt; owner</span><br><span class="line">block_group_id -&gt; epoch</span><br><span class="line">block_group_id -&gt; state</span><br><span class="line">block_group_id -&gt; primary_replica</span><br><span class="line">block_group_id -&gt; location</span><br><span class="line">block_group_id -&gt; ref_count</span><br><span class="line">block_group_id -&gt; pin_count</span><br><span class="line">request_id -&gt; active_block_group_list</span><br></pre></td></tr></table></figure>
+<p>原因是这些状态会影响正确性。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">owner 错了：旧 owner 可能继续写。</span><br><span class="line">epoch 错了：旧请求可能覆盖新状态。</span><br><span class="line">state 错了：正在迁移的数据可能被读或被删。</span><br><span class="line">location 错了：客户端访问旧位置。</span><br><span class="line">ref_count 错了：正在使用的数据可能被释放。</span><br><span class="line">pin_count 错了：正在使用的数据可能被淘汰。</span><br></pre></td></tr></table></figure>
+<p>这些状态不适合随便最终一致。</p>
+<h2 id="哪些可以最终一致">哪些可以最终一致？</h2>
+<p>下面这些数据可以更偏最终一致：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">access_count</span><br><span class="line">last_access_time</span><br><span class="line">cache_hit_count</span><br><span class="line">cache_miss_count</span><br><span class="line">eviction_count</span><br><span class="line">migration_bytes</span><br><span class="line">replica_health_score</span><br><span class="line">预热副本进度</span><br><span class="line">非关键只读副本列表</span><br></pre></td></tr></table></figure>
+<p>这些数据即使短时间不准确，通常也不会破坏请求正确性。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">access_count 晚一点同步，最多影响淘汰策略。</span><br><span class="line">cache_hit_count 晚一点同步，最多影响监控展示。</span><br><span class="line">预热副本进度短暂不一致，最多影响是否提前使用副本。</span><br></pre></td></tr></table></figure>
+<p>但要注意：最终一致的数据也可能影响策略。如果策略过度依赖不准确数据，也会导致性能问题。</p>
+<h2 id="blockgroup-副本设计示例">BlockGroup 副本设计示例</h2>
+<p>一个 BlockGroup 的副本元数据可以设计成：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">BlockGroupReplicaMetadata &#123;</span><br><span class="line">    block_group_id</span><br><span class="line">    epoch</span><br><span class="line">    state</span><br><span class="line">    primary_replica</span><br><span class="line">    replica_list</span><br><span class="line">    committed_version</span><br><span class="line">    replica_versions</span><br><span class="line">    checksum</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">block_group_id = bg_1</span><br><span class="line">epoch = 12</span><br><span class="line">state = LOCAL</span><br><span class="line">primary_replica = node_b</span><br><span class="line">replica_list = [node_b, node_c, node_d]</span><br><span class="line">committed_version = 8</span><br><span class="line">replica_versions = &#123;</span><br><span class="line">    node_b: 8,</span><br><span class="line">    node_c: 8,</span><br><span class="line">    node_d: 7</span><br><span class="line">&#125;</span><br><span class="line">checksum = xxx</span><br></pre></td></tr></table></figure>
+<p>这里可以看到：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">node_b 和 node_c 已经是最新版本。</span><br><span class="line">node_d 落后一版。</span><br></pre></td></tr></table></figure>
+<p>如果读请求要求强一致，就不能直接读 <code>node_d</code>。</p>
+<p>如果读请求只是访问可重算的非关键 cache，可能允许读
+node_d，但要做好版本校验。</p>
+<h2 id="副本读写路径">副本读写路径</h2>
+<h3 id="写路径">写路径</h3>
+<p>以更新 BlockGroup location 为例：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">1. client 发起 update_location(bg_1, node_b, epoch=12)。</span><br><span class="line">2. metadata primary 检查 epoch 和 owner。</span><br><span class="line">3. metadata primary 写本地日志。</span><br><span class="line">4. metadata primary 同步到多数派副本。</span><br><span class="line">5. 多数派确认后提交。</span><br><span class="line">6. 返回 client success。</span><br></pre></td></tr></table></figure>
+<p>这条路径更偏强一致。</p>
+<h3 id="读路径">读路径</h3>
+<p>读元数据可以有不同策略：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">强一致读：读 primary 或读 quorum。</span><br><span class="line">快速读：读本地缓存或 follower。</span><br><span class="line">带校验读：读缓存，但请求实际数据时带 epoch。</span><br></pre></td></tr></table></figure>
+<p>在性能敏感系统里，常见做法是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">读路径尽量快。</span><br><span class="line">写路径保证关键状态正确。</span><br><span class="line">读请求携带 epoch 做兜底校验。</span><br></pre></td></tr></table></figure>
+<p>这样可以在性能和正确性之间取得平衡。</p>
+<h2 id="副本落后怎么办">副本落后怎么办？</h2>
+<p>副本落后是常态。</p>
+<p>原因可能包括：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">网络抖动。</span><br><span class="line">副本节点负载高。</span><br><span class="line">复制队列堆积。</span><br><span class="line">节点短暂不可用。</span><br><span class="line">磁盘或远端存储变慢。</span><br></pre></td></tr></table></figure>
+<p>系统需要维护副本状态：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">HEALTHY</span><br><span class="line">LAGGING</span><br><span class="line">REBUILDING</span><br><span class="line">UNAVAILABLE</span><br></pre></td></tr></table></figure>
+<p>如果副本落后：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">不把它作为强一致读对象。</span><br><span class="line">不把它提升为 primary。</span><br><span class="line">后台补齐缺失数据。</span><br><span class="line">必要时从 replica_list 中移除。</span><br></pre></td></tr></table></figure>
+<p>对于 KV Cache 数据副本，还要校验：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">version</span><br><span class="line">size_bytes</span><br><span class="line">checksum</span><br><span class="line">token_range</span><br><span class="line">layer_id</span><br></pre></td></tr></table></figure>
+<p>否则可能读到错的数据。</p>
+<h2 id="primary-故障怎么办">Primary 故障怎么办？</h2>
+<p>如果 primary 挂了，系统需要选出新的 primary。</p>
+<p>关键问题是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">谁有资格成为新的 primary？</span><br><span class="line">新的 primary 是否拥有最新数据？</span><br><span class="line">旧 primary 恢复后如何处理？</span><br></pre></td></tr></table></figure>
+<p>一个保守规则是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">只有拥有最新 committed_version 的副本才能成为 primary。</span><br><span class="line">primary 切换时 epoch 必须递增。</span><br><span class="line">旧 primary 恢复后，必须先向 metadata server 确认当前 epoch。</span><br><span class="line">旧 epoch 的写入必须被拒绝。</span><br></pre></td></tr></table></figure>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">node_a 是 primary，epoch=10。</span><br><span class="line">node_a 故障。</span><br><span class="line">node_b 被提升为 primary，epoch=11。</span><br><span class="line">node_a 恢复。</span><br><span class="line">node_a 携带 epoch=10 写入，被拒绝。</span><br></pre></td></tr></table></figure>
+<p>这和前面学习的 fencing 是同一个思想。</p>
+<h2 id="副本和迁移的关系">副本和迁移的关系</h2>
+<p>迁移和副本很像，但目标不同。</p>
+<p>副本：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">为了高可用、读扩展和容错，保留多份数据。</span><br></pre></td></tr></table></figure>
+<p>迁移：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">为了改变数据位置，通常最终只保留目标位置或新的副本集合。</span><br></pre></td></tr></table></figure>
+<p>但迁移过程中经常会临时产生副本。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">bg_1 从 node_a 迁移到 node_b。</span><br><span class="line">复制完成但路由未切换前，node_a 和 node_b 都有数据。</span><br><span class="line">路由切换后，node_b 成为 primary。</span><br><span class="line">node_a 延迟释放旧副本。</span><br></pre></td></tr></table></figure>
+<p>这段时间内，系统必须明确：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">谁是 primary？</span><br><span class="line">哪个 epoch 最新？</span><br><span class="line">读请求应该读哪里？</span><br><span class="line">旧副本什么时候能删？</span><br></pre></td></tr></table></figure>
+<p>否则迁移很容易变成副本一致性问题。</p>
+<h2 id="副本和淘汰的关系">副本和淘汰的关系</h2>
+<p>如果有副本，淘汰也不能只看本地。</p>
+<p>例如：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">node_a 想淘汰 bg_1。</span><br><span class="line">metadata 里记录 bg_1 有 3 个副本。</span><br><span class="line">node_a 是 primary。</span><br></pre></td></tr></table></figure>
+<p>如果 node_a 直接删除，可能导致 primary 消失。</p>
+<p>淘汰前应该检查：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">这个副本是不是 primary？</span><br><span class="line">删除后副本数是否仍满足要求？</span><br><span class="line">是否还有健康副本？</span><br><span class="line">metadata 是否先更新？</span><br><span class="line">是否有请求正在读取？</span><br></pre></td></tr></table></figure>
+<p>如果要删除 primary，通常需要先切主：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">node_a primary -&gt; node_b primary</span><br><span class="line">epoch += 1</span><br><span class="line">确认 node_b 可用</span><br><span class="line">再删除 node_a 副本</span><br></pre></td></tr></table></figure>
+<h2 id="常见错误设计">常见错误设计</h2>
+<h3 id="把所有副本都当成一样">把所有副本都当成一样</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">replica_list = [node_a, node_b, node_c]</span><br><span class="line">任意节点都可以读写。</span><br></pre></td></tr></table></figure>
+<p>问题是写冲突很难处理。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">明确 primary。</span><br><span class="line">只有 primary 或元数据服务能处理关键写入。</span><br><span class="line">replica 只负责读或复制。</span><br></pre></td></tr></table></figure>
+<h3 id="从落后副本读取关键状态">从落后副本读取关键状态</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">从任意 replica 读取 bg_1 epoch。</span><br></pre></td></tr></table></figure>
+<p>问题是可能读到旧 epoch。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">关键状态读 primary、quorum，或者读后做 epoch 校验。</span><br></pre></td></tr></table></figure>
+<h3 id="元数据最终一致">元数据最终一致</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">owner、epoch、state 通过异步同步，短时间不一致也接受。</span><br></pre></td></tr></table></figure>
+<p>问题是这些状态影响正确性。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">关键元数据强一致。</span><br><span class="line">非关键统计指标最终一致。</span><br></pre></td></tr></table></figure>
+<h3 id="副本修复不校验版本">副本修复不校验版本</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">发现副本缺失，直接从任意节点拷贝一份。</span><br></pre></td></tr></table></figure>
+<p>问题是可能拷贝旧版本。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">修复时校验 epoch、version、checksum 和 committed_version。</span><br></pre></td></tr></table></figure>
+<h3 id="primary-切换不递增-epoch">primary 切换不递增 epoch</h3>
+<p>错误做法：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">node_a primary -&gt; node_b primary，但 epoch 不变。</span><br></pre></td></tr></table></figure>
+<p>问题是旧 primary 恢复后无法识别自己已经过期。</p>
+<p>更好的方式：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">每次 primary/owner 变化，epoch 必须递增。</span><br></pre></td></tr></table></figure>
+<h2 id="如何排查副本和一致性问题">如何排查副本和一致性问题？</h2>
+<h3 id="日志字段">日志字段</h3>
+<p>日志中最好带上：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">request_id</span><br><span class="line">operation_id</span><br><span class="line">block_group_id</span><br><span class="line">epoch</span><br><span class="line">version</span><br><span class="line">primary_replica</span><br><span class="line">replica_id</span><br><span class="line">replica_state</span><br><span class="line">committed_version</span><br><span class="line">read_version</span><br><span class="line">write_version</span><br><span class="line">checksum</span><br><span class="line">error_code</span><br></pre></td></tr></table></figure>
+<h3 id="指标">指标</h3>
+<p>可以关注：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">replica_lag</span><br><span class="line">replica_lag_bytes</span><br><span class="line">replica_lag_seconds</span><br><span class="line">replica_rebuild_count</span><br><span class="line">replica_rebuild_latency</span><br><span class="line">primary_failover_count</span><br><span class="line">stale_read_count</span><br><span class="line">stale_epoch_reject_count</span><br><span class="line">quorum_read_latency</span><br><span class="line">quorum_write_latency</span><br><span class="line">replication_queue_length</span><br><span class="line">replication_error_count</span><br></pre></td></tr></table></figure>
+<h3 id="排查问题">排查问题</h3>
+<p>遇到读错、读不到、迁移异常时，可以问：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">客户端读的是 primary 还是 replica？</span><br><span class="line">这个 replica 的 version 是多少？</span><br><span class="line">metadata 的 committed_version 是多少？</span><br><span class="line">客户端携带的 epoch 是多少？</span><br><span class="line">服务端当前 epoch 是多少？</span><br><span class="line">副本是否处于 LAGGING 或 REBUILDING？</span><br><span class="line">primary 是否发生过切换？</span><br><span class="line">旧 primary 是否有写入被拒绝？</span><br><span class="line">读取的数据 checksum 是否匹配？</span><br></pre></td></tr></table></figure>
+<h2 id="面向-kv-cache-的检查清单">面向 KV Cache 的检查清单</h2>
+<p>看组内代码或设计文档时，可以检查：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">1. 哪些数据有副本？</span><br><span class="line">2. 副本是为了高可用、读扩展，还是迁移缓冲？</span><br><span class="line">3. 是否区分 KV 数据和元数据？</span><br><span class="line">4. 哪些元数据必须强一致？</span><br><span class="line">5. 哪些指标或统计可以最终一致？</span><br><span class="line">6. 是否有 primary_replica？</span><br><span class="line">7. 只有谁能写关键状态？</span><br><span class="line">8. replica 落后时是否还能对外读？</span><br><span class="line">9. 读 replica 时是否校验 epoch/version？</span><br><span class="line">10. primary 故障后如何选新 primary？</span><br><span class="line">11. primary 切换是否递增 epoch？</span><br><span class="line">12. 旧 primary 恢复后写入是否会被拒绝？</span><br><span class="line">13. 迁移过程中的临时副本什么时候释放？</span><br><span class="line">14. 淘汰副本前是否检查副本数和 primary 身份？</span><br><span class="line">15. 副本修复是否校验 checksum？</span><br></pre></td></tr></table></figure>
+<h2 id="推荐学习顺序">推荐学习顺序</h2>
+<p>这一组可以按下面顺序学：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">1. 副本的目的：高可用、读扩展、故障恢复。</span><br><span class="line">2. 主从副本：理解 primary 和 replica。</span><br><span class="line">3. 同步复制：理解一致性和写延迟。</span><br><span class="line">4. 异步复制：理解性能和落后副本。</span><br><span class="line">5. 强一致性：理解关键状态为什么不能错。</span><br><span class="line">6. 最终一致性：理解统计和非关键副本为什么可以放松。</span><br><span class="line">7. 读写一致性：理解 Read Your Writes、Monotonic Reads。</span><br><span class="line">8. Quorum：理解 R/W/N 的基本关系。</span><br><span class="line">9. 旧读、脏读、写冲突：理解副本系统常见错误。</span><br><span class="line">10. KV Cache 中区分数据和元数据。</span><br><span class="line">11. BlockGroup 副本元数据设计。</span><br><span class="line">12. primary 故障和 epoch/fencing。</span><br><span class="line">13. 副本、迁移和淘汰之间的关系。</span><br></pre></td></tr></table></figure>
+<p>最后要能回答下面的问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">这个字段如果读到旧值，会不会影响正确性？</span><br><span class="line">这个副本落后时，还能不能提供读取？</span><br><span class="line">这个写操作应该写几个副本才算成功？</span><br><span class="line">primary 挂了，哪个副本可以接管？</span><br><span class="line">旧 primary 恢复后，如何防止它继续写？</span><br></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2>
+<p>副本解决的是可用性、读扩展和故障恢复问题；一致性解决的是多个副本之间如何保持正确语义的问题。</p>
+<p>对 KV Cache 和 BlockGroup 来说，最重要的是区分：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">KV 数据本身：很多时候是不可变、可重算、可异步复制的。</span><br><span class="line">元数据状态：owner、epoch、state、location、ref_count、pin_count 通常必须更严格。</span><br></pre></td></tr></table></figure>
+<p>核心判断标准是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">如果这个字段短时间不一致，会不会导致读错、写错、误删或旧 owner 写入？</span><br></pre></td></tr></table></figure>
+<p>如果会，就应该偏强一致；如果只是影响统计、热度或策略精度，可以考虑最终一致。</p>
+<p>掌握副本和一致性之后，再继续学习故障处理、调度和负载均衡，会更容易理解系统为什么要设计
+heartbeat、failure detector、failover、repair task 和降级策略。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+              <a href="/tags/KV-Cache/" rel="tag"># KV Cache</a>
+              <a href="/tags/%E5%89%AF%E6%9C%AC/" rel="tag"># 副本</a>
+              <a href="/tags/%E4%B8%80%E8%87%B4%E6%80%A7/" rel="tag"># 一致性</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/07/07/distributed-foundation-state-machine-sharding-metadata/" rel="prev" title="分布式基础：状态机、分片、路由与元数据">
+                  <i class="fa fa-angle-left"></i> 分布式基础：状态机、分片、路由与元数据
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/07/14/distributed-foundation-failure-handling/" rel="next" title="分布式基础：故障处理">
+                  分布式基础：故障处理 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Quan Zhou</span>
+  </div>
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>
