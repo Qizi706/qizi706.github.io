@@ -155,7 +155,7 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
         <a href="/archives/">
-          <span class="site-state-item-count">21</span>
+          <span class="site-state-item-count">22</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
@@ -166,7 +166,7 @@
       </div>
       <div class="site-state-item site-state-tags">
           <a href="/tags/">
-        <span class="site-state-item-count">25</span>
+        <span class="site-state-item-count">27</span>
         <span class="site-state-item-name">tags</span></a>
       </div>
   </nav>
@@ -263,6 +263,106 @@
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2026/07/23/cpp-build-tools/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+        <div class="post-eof"></div>
+      
+    </footer>
+  </article>
+</div>
+
+
+
+
+    
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
+    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/07/23/distributed-foundation-scheduling-load-balancing/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Quan Zhou">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content=" | Quan Zhou 的 blog">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          <a href="/2026/07/23/distributed-foundation-scheduling-load-balancing/" class="post-title-link" itemprop="url">分布式基础：调度和负载均衡</a>
+        </h2>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">Posted on</span>
+      
+
+      <time title="Created: 2026-07-23 10:30:00 / Modified: 21:50:18" itemprop="dateCreated datePublished" datetime="2026-07-23T10:30:00+08:00">2026-07-23</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">In</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F/" itemprop="url" rel="index"><span itemprop="name">分布式</span></a>
+        </span>
+    </span>
+
+  
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+          <h2 id="背景">背景</h2>
+<p>前面已经学习了几组基础：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">操作系统、网络、并发与存储。</span><br><span class="line">RPC 和远程调用。</span><br><span class="line">状态机、分片、路由与元数据。</span><br><span class="line">副本和一致性。</span><br><span class="line">故障处理。</span><br><span class="line">缓存策略、迁移与淘汰。</span><br></pre></td></tr></table></figure>
+<p>这些内容已经覆盖了一个 KV Cache 系统的很多核心问题：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">数据在哪里？</span><br><span class="line">状态是否正确？</span><br><span class="line">远程调用是否可靠？</span><br><span class="line">故障后如何恢复？</span><br><span class="line">缓存应该留在 HBM、CPU Memory、SSD，还是远端？</span><br><span class="line">显存满了应该淘汰谁？</span><br></pre></td></tr></table></figure>
+<p>接下来要学习的是调度和负载均衡。</p>
+<p>调度解决的问题是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">一个请求应该交给哪个节点、哪个 worker、哪张 GPU 来处理？</span><br></pre></td></tr></table></figure>
+<p>负载均衡解决的问题是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">如何避免某些节点过载，而另一些节点空闲？</span><br></pre></td></tr></table></figure>
+<p>在普通 Web
+服务里，负载均衡可能只是把请求均匀打到多台机器。但在训练-推理一体存储和
+KV Cache 场景里，调度要复杂得多。</p>
+<p>因为请求不是无状态的。它会和模型副本、GPU HBM、KV Cache
+位置、上下文长度、batch、网络拓扑绑定在一起。</p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2026/07/23/distributed-foundation-scheduling-load-balancing/#more" rel="contents">
                 Read more &raquo;
               </a>
             </div>
@@ -1049,104 +1149,6 @@ C 风格强转：</p>
           <!--noindex-->
             <div class="post-button">
               <a class="btn" href="/2026/05/22/cast/#more" rel="contents">
-                Read more &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-
-    <footer class="post-footer">
-        <div class="post-eof"></div>
-      
-    </footer>
-  </article>
-</div>
-
-
-
-
-    
-
-
-<div class="post-block">
-  
-  
-
-  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="">
-    <link itemprop="mainEntityOfPage" href="http://qizi706.github.io/2026/05/20/thread/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="Quan Zhou">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Quan Zhou 的 blog">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
-      <meta itemprop="name" content=" | Quan Zhou 的 blog">
-      <meta itemprop="description" content="">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          <a href="/2026/05/20/thread/" class="post-title-link" itemprop="url">C++ 线程库</a>
-        </h2>
-
-        <div class="post-meta-container">
-          <div class="post-meta">
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar"></i>
-      </span>
-      <span class="post-meta-item-text">Posted on</span>
-
-      <time title="Created: 2026-05-20 15:54:46" itemprop="dateCreated datePublished" datetime="2026-05-20T15:54:46+08:00">2026-05-20</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-calendar-check"></i>
-      </span>
-      <span class="post-meta-item-text">Edited on</span>
-      <time title="Modified: 2026-07-06 11:54:30" itemprop="dateModified" datetime="2026-07-06T11:54:30+08:00">2026-07-06</time>
-    </span>
-    <span class="post-meta-item">
-      <span class="post-meta-item-icon">
-        <i class="far fa-folder"></i>
-      </span>
-      <span class="post-meta-item-text">In</span>
-        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-          <a href="/categories/C-C/" itemprop="url" rel="index"><span itemprop="name">C/C++</span></a>
-        </span>
-    </span>
-
-  
-</div>
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-          <h2 id="c-线程库解决什么问题">C++ 线程库解决什么问题？</h2>
-<p>C++11 开始，标准库正式引入多线程支持，主要提供：</p>
-<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;thread&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;mutex&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;shared_mutex&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;condition_variable&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;future&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;atomic&gt;</span></span></span><br></pre></td></tr></table></figure>
-<p>它解决的问题包括：</p>
-<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">1. 创建和管理线程</span><br><span class="line">2. 保护共享数据</span><br><span class="line">3. 线程之间通信</span><br><span class="line">4. 等待异步任务结果</span><br><span class="line">5. 无锁原子操作</span><br></pre></td></tr></table></figure>
-<p>C++ 线程库不是直接操作 Linux
-pthread，而是在标准层面提供了一套跨平台接口。</p>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2026/05/20/thread/#more" rel="contents">
                 Read more &raquo;
               </a>
             </div>
