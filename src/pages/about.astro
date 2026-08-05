@@ -1,63 +1,502 @@
 ---
-import AboutHeroImage from '../assets/blog-placeholder-about.jpg';
 import Layout from '../layouts/BlogPost.astro';
+import '../styles/global.css';
 ---
 
-<Layout
-	title="About Me"
-	description="Lorem ipsum dolor sit amet"
-	pubDate={new Date('August 08 2021')}
-	heroImage={AboutHeroImage}
->
-	<p>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
-		labore et dolore magna aliqua. Vitae ultricies leo integer malesuada nunc vel risus commodo
-		viverra. Adipiscing enim eu turpis egestas pretium. Euismod elementum nisi quis eleifend quam
-		adipiscing. In hac habitasse platea dictumst vestibulum. Sagittis purus sit amet volutpat. Netus
-		et malesuada fames ac turpis egestas. Eget magna fermentum iaculis eu non diam phasellus
-		vestibulum lorem. Varius sit amet mattis vulputate enim. Habitasse platea dictumst quisque
-		sagittis. Integer quis auctor elit sed vulputate mi. Dictumst quisque sagittis purus sit amet.
-	</p>
+<Layout title="(Who am I) 我是谁" description="" pubDate={new Date('2026-08-06')} hideTitleDivider>
+	<header class="about-intro">
+		<!-- <p class="prompt"><span>~/qizi706</span> $ whoami</p> -->
+		<p>
+			我是周权，就读于中国科学技术大学软件学院，研究生二年级。对底层技术痴迷，喜爱研究
+			<b>Linux（Arch 用户）</b>，熟悉 <b>C/C++ 语言</b
+			>，目前在国内某大厂实习，工作内容是分布式存储。
+		</p>
+		<div class="status-line">
+			<span class="status-dot" aria-hidden="true"></span>
+			<span>currently exploring: kernels · storage · AI infra</span>
+		</div>
+		<a class="github-link" href="https://github.com/Qizi706" target="_blank" rel="noreferrer">
+			↗ github.com/Qizi706
+		</a>
+	</header>
 
-	<p>
-		Morbi tristique senectus et netus. Id semper risus in hendrerit gravida rutrum quisque non
-		tellus. Habitasse platea dictumst quisque sagittis purus sit amet. Tellus molestie nunc non
-		blandit massa. Cursus vitae congue mauris rhoncus. Accumsan tortor posuere ac ut. Fringilla urna
-		porttitor rhoncus dolor. Elit ullamcorper dignissim cras tincidunt lobortis. In cursus turpis
-		massa tincidunt dui ut ornare lectus. Integer feugiat scelerisque varius morbi enim nunc.
-		Bibendum neque egestas congue quisque egestas diam. Cras ornare arcu dui vivamus arcu felis
-		bibendum. Dignissim suspendisse in est ante in nibh mauris. Sed tempus urna et pharetra pharetra
-		massa massa ultricies mi.
-	</p>
+	<section class="about-section" aria-labelledby="projects-title">
+		<div class="section-label">01 / projects</div>
+		<h2 id="projects-title">个人项目</h2>
 
-	<p>
-		Mollis nunc sed id semper risus in. Convallis a cras semper auctor neque. Diam sit amet nisl
-		suscipit. Lacus viverra vitae congue eu consequat ac felis donec. Egestas integer eget aliquet
-		nibh praesent tristique magna sit amet. Eget magna fermentum iaculis eu non diam. In vitae
-		turpis massa sed elementum. Tristique et egestas quis ipsum suspendisse ultrices. Eget lorem
-		dolor sed viverra ipsum. Vel turpis nunc eget lorem dolor sed viverra. Posuere ac ut consequat
-		semper viverra nam. Laoreet suspendisse interdum consectetur libero id faucibus. Diam phasellus
-		vestibulum lorem sed risus ultricies tristique. Rhoncus dolor purus non enim praesent elementum
-		facilisis. Ultrices tincidunt arcu non sodales neque. Tempus egestas sed sed risus pretium quam
-		vulputate. Viverra suspendisse potenti nullam ac tortor vitae purus faucibus ornare. Fringilla
-		urna porttitor rhoncus dolor purus non. Amet dictum sit amet justo donec enim.
-	</p>
+		<details class="project" open>
+			<summary>
+				<span>MIT 6.s081</span>
+				<small>RISC-V · xv6 · C · Linux</small>
+			</summary>
+			<div class="project-body">
+				<p class="project-meta">2026.02 — 2026.04 · personal project</p>
+				<p>
+					以基于 RISC-V 指令集架构的微型操作系统 xv6
+					为基础，对内存管理、进程管理、文件系统和中断处理等模块进行扩展与优化。
+				</p>
+				<ul>
+					<li>实现独立内核页表与用户页表映射机制，掌握 trampoline、trapframe 与页表切换流程。</li>
+					<li>基于 page fault 实现 lazy allocation 与 copy-on-write fork，维护物理页引用计数。</li>
+					<li>扩展 trap 与 syscall 机制，实现 alarm 系统调用和用户态定时回调。</li>
+					<li>实现非抢占式用户级线程库，支持线程创建、上下文保存/恢复与协作式调度。</li>
+					<li>扩展 xv6 文件系统，支持三级间接索引、软链接、mmap/munmap 与按需映射回写。</li>
+				</ul>
+			</div>
+		</details>
 
-	<p>
-		Mattis ullamcorper velit sed ullamcorper morbi tincidunt. Tortor posuere ac ut consequat semper
-		viverra. Tellus mauris a diam maecenas sed enim ut sem viverra. Venenatis urna cursus eget nunc
-		scelerisque viverra mauris in. Arcu ac tortor dignissim convallis aenean et tortor at. Curabitur
-		gravida arcu ac tortor dignissim convallis aenean et tortor. Egestas tellus rutrum tellus
-		pellentesque eu. Fusce ut placerat orci nulla pellentesque dignissim enim sit amet. Ut enim
-		blandit volutpat maecenas volutpat blandit aliquam etiam. Id donec ultrices tincidunt arcu. Id
-		cursus metus aliquam eleifend mi.
-	</p>
+		<details class="project" open>
+			<summary>
+				<span>CMU 15-445</span>
+				<small>BusTub · C++ · Linux</small>
+			</summary>
+			<div class="project-body">
+				<p class="project-meta">2025.11 — 2025.12 · personal project</p>
+				<p>
+					开发支持简单 SQL 操作的单机数据库 BusTub，覆盖缓冲池管理、B+
+					树索引、查询执行器与多版本并发控制。
+				</p>
+				<ul>
+					<li>
+						实现线程安全的 BufferPoolManager，维护 page/frame 映射、pin count、dirty flag
+						与换入换出。
+					</li>
+					<li>实现 LRU-K 页面替换器，并与 Buffer Pool 的 evictable 状态协同工作。</li>
+					<li>实现支持并发访问的 B+Tree 索引、节点 split/merge/redistribution 与有序迭代器。</li>
+					<li>
+						基于 Volcano Iterator 模型实现 Scan、Join、Aggregation、Sort、Limit、Distinct 等算子。
+					</li>
+					<li>实现规则优化器，将 SeqScan 改写为 IndexScan，将 NestedLoopJoin 改写为 HashJoin。</li>
+					<li>基于版本链和 undo log 实现 MVCC，支持快照隔离下的并发读写。</li>
+				</ul>
+			</div>
+		</details>
+	</section>
 
-	<p>
-		Tempus quam pellentesque nec nam aliquam sem. Risus at ultrices mi tempus imperdiet. Id porta
-		nibh venenatis cras sed felis eget velit. Ipsum a arcu cursus vitae. Facilisis magna etiam
-		tempor orci eu lobortis elementum. Tincidunt dui ut ornare lectus sit. Quisque non tellus orci
-		ac. Blandit libero volutpat sed cras. Nec tincidunt praesent semper feugiat nibh sed pulvinar
-		proin gravida. Egestas integer eget aliquet nibh praesent tristique magna.
-	</p>
+	<section class="about-section" aria-labelledby="learning-title">
+		<div class="section-label">02 / current quest</div>
+		<h2 id="learning-title">2026.07 — 2026.08 学习路线</h2>
+		<div class="quest-line">
+			<input
+				class="quest-checkbox"
+				type="checkbox"
+				disabled
+				aria-label="AI Infra 全局认知尚未完成"
+			/>
+			<span>AI Infra 全局认知 <span class="muted">/ 2 weeks</span></span>
+			<span class="quest-state" aria-hidden="true"></span>
+		</div>
+
+		<div class="learning-grid">
+			<div>
+				<h3>需要回答的问题</h3>
+				<ol>
+					<li>LLM 训练和推理有什么区别？</li>
+					<li>一次请求如何经过 LLM Serving 链路？</li>
+					<li>prefill、decode 和 KV Cache 分别解决什么问题？</li>
+					<li>吞吐、延迟、TTFT、TPOT、显存利用率如何衡量？</li>
+					<li>模型、推理引擎、调度器、GPU、网络、存储和监控如何协作？</li>
+				</ol>
+			</div>
+			<div>
+				<h3>阶段产出</h3>
+				<ul>
+					<li>跑通一个本地小模型推理。</li>
+					<li>跑通一次 vLLM 服务。</li>
+					<li>测试输入/输出长度对响应时间的影响。</li>
+					<li>完成《LLM 推理系统从请求到返回的完整链路》笔记。</li>
+				</ul>
+			</div>
+		</div>
+
+		<details class="reading-list">
+			<summary>reading queue <span>展开阅读清单</span></summary>
+			<div class="reading-columns">
+				<div>
+					<h3>理解 LLM 和 Transformer</h3>
+					<ul>
+						<li>
+							<a
+								href="https://jalammar.github.io/illustrated-transformer/"
+								target="_blank"
+								rel="noreferrer">The Illustrated Transformer</a
+							>
+						</li>
+						<li>
+							<a
+								href="https://jalammar.github.io/illustrated-gpt-2/"
+								target="_blank"
+								rel="noreferrer">The Illustrated GPT-2</a
+							>
+						</li>
+					</ul>
+					<h3>理解推理和生成</h3>
+					<ul>
+						<li>
+							<a href="https://huggingface.co/blog/how-to-generate" target="_blank" rel="noreferrer"
+								>How to generate text</a
+							>
+						</li>
+						<li>
+							<a
+								href="https://huggingface.co/docs/transformers/main/en/llm_tutorial"
+								target="_blank"
+								rel="noreferrer">Transformers: Text generation</a
+							>
+						</li>
+					</ul>
+				</div>
+				<div>
+					<h3>理解 KV Cache</h3>
+					<ul>
+						<li>
+							<a
+								href="https://huggingface.co/docs/transformers/main/en/cache_explanation"
+								target="_blank"
+								rel="noreferrer">KV Cache explained</a
+							>
+						</li>
+						<li>
+							<a
+								href="https://huggingface.co/docs/transformers/main/en/llm_optims"
+								target="_blank"
+								rel="noreferrer">Optimizing inference</a
+							>
+						</li>
+					</ul>
+					<h3>性能与系统</h3>
+					<ul>
+						<li>
+							<a href="https://blog.vllm.ai/2023/06/20/vllm.html" target="_blank" rel="noreferrer"
+								>vLLM + PagedAttention</a
+							>
+						</li>
+						<li>
+							<a
+								href="https://docs.vllm.ai/en/latest/design/kernel/paged_attention.html"
+								target="_blank"
+								rel="noreferrer">Paged Attention</a
+							>
+						</li>
+						<li>
+							<a
+								href="https://docs.nvidia.com/nim/benchmarking/llm/latest/metrics.html"
+								target="_blank"
+								rel="noreferrer">LLM Benchmarking Metrics</a
+							>
+						</li>
+					</ul>
+				</div>
+			</div>
+		</details>
+
+		<pre
+			class="pipeline"
+			aria-label="LLM inference pipeline"><code>prompt
+  -&gt; tokenizer
+  -&gt; prefill  -&gt;  KV Cache
+  -&gt; decode   -&gt;  scheduler / batching
+  -&gt; response
+
+constraint: KV Cache consumes GPU memory</code></pre>
+	</section>
+
+	<footer class="about-footer">
+		<span>EOF</span>
+		<span>keep building from the bottom</span>
+	</footer>
 </Layout>
+
+<style>
+	.about-intro {
+		padding: 0.25rem 0 1.75rem;
+	}
+
+	.prompt,
+	.section-label,
+	.project-meta,
+	.status-line,
+	.github-link,
+	.quest-line,
+	.pipeline,
+	.about-footer {
+		font-family: var(--font-mono);
+	}
+
+	.prompt {
+		margin: 0 0 1.25rem;
+		color: rgb(var(--gray));
+		font-size: 0.78rem;
+	}
+
+	.prompt span,
+	.github-link {
+		color: var(--accent);
+	}
+
+	.about-intro h2,
+	.about-section > h2 {
+		margin-top: 0;
+	}
+
+	.about-intro h2 small {
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.7em;
+		font-weight: 400;
+	}
+
+	.about-intro p:not(.prompt) {
+		max-width: 62ch;
+	}
+
+	.status-line {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		margin: 1.1rem 0 0.8rem;
+		color: rgb(var(--gray));
+		font-size: 0.72rem;
+	}
+
+	.status-dot {
+		width: 0.45rem;
+		height: 0.45rem;
+		border-radius: 50%;
+		background: #16a34a;
+		box-shadow: 0 0 0 3px rgb(22 163 74 / 12%);
+	}
+
+	.github-link {
+		display: inline-block;
+		font-size: 0.78rem;
+	}
+
+	.about-section {
+		margin: 2.25rem 0;
+	}
+
+	.section-label {
+		margin-bottom: 0.25rem;
+		color: var(--accent);
+		font-size: 0.7rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.about-section > h2 {
+		margin-bottom: 1rem;
+	}
+
+	.project,
+	.reading-list {
+		margin: 0.8rem 0;
+		border: 1px solid rgb(var(--gray-light));
+		background: rgb(255 255 255 / 28%);
+	}
+
+	.project summary,
+	.reading-list summary {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.8rem 0.95rem;
+		cursor: pointer;
+		list-style: none;
+		font-family: var(--font-heading);
+		font-weight: 700;
+	}
+
+	.project summary::-webkit-details-marker,
+	.reading-list summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.project summary::before,
+	.reading-list summary::before {
+		content: '>';
+		margin-right: 0.2rem;
+		color: var(--accent);
+		font-family: var(--font-mono);
+	}
+
+	.project[open] summary::before,
+	.reading-list[open] summary::before {
+		content: 'v';
+	}
+
+	.project summary span,
+	.reading-list summary {
+		flex: 1;
+	}
+
+	.project summary small,
+	.reading-list summary span {
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		font-weight: 400;
+	}
+
+	.project-body {
+		padding: 0 1rem 1rem;
+		border-top: 1px dashed rgb(var(--gray-light));
+	}
+
+	.project-meta {
+		margin: 0.75rem 0;
+		color: rgb(var(--gray));
+		font-size: 0.72rem;
+	}
+
+	.project-body ul,
+	.learning-grid ul,
+	.learning-grid ol,
+	.reading-columns ul {
+		padding-left: 1.35rem;
+	}
+
+	.project-body li,
+	.learning-grid li,
+	.reading-columns li {
+		margin: 0.35rem 0;
+	}
+
+	.project-body li::marker,
+	.learning-grid li::marker,
+	.reading-columns li::marker {
+		color: var(--accent);
+		font-family: var(--font-mono);
+	}
+
+	.quest-line {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		margin: 0.75rem 0 1.25rem;
+		padding: 0.55rem 0.7rem;
+		border: 1px dashed rgb(var(--gray-light));
+		background: rgb(226 232 240 / 24%);
+		font-size: 0.9rem;
+	}
+
+	.quest-checkbox {
+		display: inline-grid;
+		flex: 0 0 auto;
+		place-content: center;
+		width: 0.95rem;
+		height: 0.95rem;
+		margin: 0;
+		border: 1px solid var(--accent);
+		border-radius: 2px;
+		appearance: none;
+		background: transparent;
+		opacity: 1;
+		pointer-events: none;
+	}
+
+	.quest-checkbox::before {
+		content: '';
+		width: 0.5rem;
+		height: 0.5rem;
+		transform: scale(0);
+		background: var(--accent);
+		clip-path: polygon(14% 44%, 0 65%, 38% 100%, 100% 18%, 80% 0, 36% 68%);
+	}
+
+	.quest-checkbox:checked::before {
+		transform: scale(1);
+	}
+
+	.quest-state {
+		margin-left: auto;
+		color: rgb(var(--gray));
+		font-size: 0.7rem;
+	}
+
+	.quest-state::before {
+		content: '[pending]';
+	}
+
+	.quest-checkbox:checked ~ .quest-state::before {
+		content: '[done]';
+		color: #15803d;
+	}
+
+	.muted {
+		color: rgb(var(--gray));
+	}
+
+	.learning-grid,
+	.reading-columns {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1.5rem;
+	}
+
+	.learning-grid h3,
+	.reading-columns h3 {
+		margin-top: 0.5rem;
+		font-size: 0.95rem;
+	}
+
+	.reading-list {
+		margin-top: 1.25rem;
+	}
+
+	.reading-columns {
+		padding: 0 1rem 1rem;
+		border-top: 1px dashed rgb(var(--gray-light));
+	}
+
+	.reading-columns h3 {
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+	}
+
+	.reading-columns a {
+		text-decoration: underline;
+		text-decoration-color: rgb(var(--accent) / 35%);
+	}
+
+	.pipeline {
+		margin: 1.25rem 0 0;
+		border: 1px solid rgb(var(--gray-light));
+		background: rgb(226 232 240 / 45%);
+		color: rgb(var(--black));
+		font-size: 0.78rem;
+		line-height: 1.7;
+	}
+
+	.about-footer {
+		display: flex;
+		justify-content: space-between;
+		margin-top: 3rem;
+		padding-top: 0.75rem;
+		border-top: 1px dashed rgb(var(--gray-light));
+		color: rgb(var(--gray));
+		font-size: 0.7rem;
+	}
+
+	@media (max-width: 620px) {
+		.project summary,
+		.reading-list summary {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 0.25rem;
+		}
+
+		.learning-grid,
+		.reading-columns {
+			grid-template-columns: 1fr;
+			gap: 0.75rem;
+		}
+
+		.about-footer {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 0.3rem;
+		}
+	}
+</style>

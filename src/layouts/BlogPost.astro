@@ -13,6 +13,7 @@ type Props = Pick<BlogData, 'title' | 'description' | 'pubDate' | 'updatedDate' 
 	categories?: BlogData['categories'];
 	tags?: BlogData['tags'];
 	mermaid?: BlogData['mermaid'];
+	hideTitleDivider?: boolean;
 };
 
 const {
@@ -24,6 +25,7 @@ const {
 	categories = [],
 	tags = [],
 	mermaid = false,
+	hideTitleDivider = false,
 } = Astro.props;
 ---
 
@@ -104,6 +106,10 @@ const {
 			.title hr {
 				display: none;
 			}
+			.title--no-divider {
+				padding-bottom: 0;
+				border-bottom: 0;
+			}
 			@media (min-width: 768px) {
 				article {
 					border-width: 1px;
@@ -141,7 +147,7 @@ const {
 					{heroImage && <Image width={1020} height={510} src={heroImage} alt="" />}
 				</div>
 				<div class="prose">
-					<div class="title">
+					<div class:list={['title', { 'title--no-divider': hideTitleDivider }]}>
 						<div class="date">
 							<FormattedDate date={pubDate} />
 							{
