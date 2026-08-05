@@ -1,0 +1,175 @@
+---
+import { getCollection } from 'astro:content';
+import FormattedDate from '../components/FormattedDate.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
+import PageLayout from '../layouts/PageLayout.astro';
+import { getCategoryUrl, getPostUrl } from '../utils/posts';
+
+const posts = (await getCollection('blog'))
+	.filter((post) => !post.data.draft)
+	.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+const recentPosts = posts.slice(0, 8);
+const categoryCounts = posts.reduce((counts, post) => {
+	for (const category of post.data.categories) {
+		counts.set(category, (counts.get(category) ?? 0) + 1);
+	}
+	return counts;
+}, new Map<string, number>());
+
+const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
+---
+
+<PageLayout title={SITE_TITLE} description={SITE_DESCRIPTION} mainClass="home-page">
+	<header class="intro">
+		<h1>{SITE_TITLE}</h1>
+		<!-- <p class="lead">{SITE_DESCRIPTION}</p> -->
+	</header>
+
+	<section aria-labelledby="recent-heading">
+		<div class="section-heading">
+			<h2 id="recent-heading">最近发布</h2>
+			<a href="/blog">全部文章 →</a>
+		</div>
+		<ul class="recent-posts">
+			{
+				recentPosts.map((post) => (
+					<li>
+						<a href={getPostUrl(post)}>{post.data.title}</a>
+						<FormattedDate date={post.data.pubDate} />
+					</li>
+				))
+			}
+		</ul>
+	</section>
+
+	{
+		categories.length > 0 && (
+			<section aria-labelledby="topics-heading">
+				<h2 id="topics-heading">文章存档</h2>
+				<ul class="topics">
+					{categories.map(([category, count]) => (
+						<li>
+							<a href={getCategoryUrl(category)}>
+								<span>{category}</span>
+								<small> {count}篇</small>
+							</a>
+						</li>
+					))}
+				</ul>
+			</section>
+		)
+	}
+</PageLayout>
+
+<style>
+	.intro {
+		padding-bottom: 1.75rem;
+		/* border-bottom: 1px solid rgb(var(--gray-light)); */
+	}
+
+	.intro h1 {
+		padding: 1.5rem 0 0;
+		margin: 0 0 1rem;
+		font-family: var(--font-merienda), cursive;
+		font-size: 1.5rem;
+		font-weight: 700;
+		letter-spacing: -0.01em;
+		line-height: 2rem;
+	}
+
+	.lead {
+		max-width: 38rem;
+		margin: 0;
+		color: rgb(var(--gray));
+	}
+
+	section {
+		margin-top: 2rem;
+	}
+
+	.section-heading {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	section h2 {
+		margin: 0 0 0.75rem;
+		font-size: 1.2rem;
+	}
+
+	.section-heading > a {
+		font-size: 0.8rem;
+	}
+
+	.recent-posts,
+	.topics {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.recent-posts li {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 1rem;
+		padding: 0.55rem 0;
+		border-bottom: 1px dashed rgb(var(--gray-light));
+	}
+
+	.recent-posts li:first-child {
+		border-top: 1px dashed rgb(var(--gray-light));
+	}
+
+	.recent-posts :global(time) {
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		white-space: nowrap;
+	}
+
+	.topics {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.5rem 1.5rem;
+	}
+
+	.topics li {
+		border-bottom: 1px solid rgb(var(--gray-light));
+	}
+
+	.topics a {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.35rem 0;
+		color: rgb(var(--black));
+	}
+
+	.topics a:hover,
+	.topics a:hover small {
+		color: var(--accent);
+	}
+
+	.topics small {
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+	}
+
+	@media (max-width: 560px) {
+		.recent-posts li {
+			display: block;
+		}
+
+		.recent-posts :global(time) {
+			display: block;
+			margin-top: 0.15rem;
+		}
+
+		.topics {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

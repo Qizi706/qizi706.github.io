@@ -1,0 +1,29 @@
+---
+import BaseHead from '../components/BaseHead.astro';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+
+interface Props {
+	title: string;
+	description: string;
+	mainClass?: string;
+}
+
+const { title, description, mainClass } = Astro.props;
+---
+
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<BaseHead title={title} description={description} />
+	</head>
+	<body>
+		<Header />
+		<div class="page-shell">
+			<main class:list={['page-frame', mainClass]}>
+				<slot />
+			</main>
+		</div>
+		<Footer />
+	</body>
+</html>

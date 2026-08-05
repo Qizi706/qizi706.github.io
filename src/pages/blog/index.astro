@@ -1,0 +1,111 @@
+---
+import { getCollection } from 'astro:content';
+import FormattedDate from '../../components/FormattedDate.astro';
+import { SITE_DESCRIPTION, SITE_TITLE } from '../../consts';
+import PageLayout from '../../layouts/PageLayout.astro';
+import { getPostUrl } from '../../utils/posts';
+
+const posts = (await getCollection('blog'))
+	.filter((post) => !post.data.draft)
+	.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+---
+
+<PageLayout title={`文章 | ${SITE_TITLE}`} description={SITE_DESCRIPTION} mainClass="blog-index">
+	<header class="page-heading">
+		<p class="path">~/blog</p>
+		<h1>文章</h1>
+		<p>{SITE_DESCRIPTION}</p>
+	</header>
+	<section>
+		<ul class="post-list">
+			{
+				posts.map((post) => (
+					<li>
+						<article>
+							<div class="post-heading">
+								<a class="post-title" href={getPostUrl(post)}>
+									<h2>{post.data.title}</h2>
+								</a>
+								<p class="date">
+									<FormattedDate date={post.data.pubDate} />
+								</p>
+							</div>
+							<p class="description">{post.data.description}</p>
+						</article>
+					</li>
+				))
+			}
+		</ul>
+	</section>
+</PageLayout>
+
+<style>
+	.page-heading {
+		margin-bottom: 2rem;
+		padding-bottom: 1.25rem;
+		border-bottom: 1px solid rgb(var(--gray-light));
+	}
+	.path {
+		margin: 0 0 0.35rem;
+		color: var(--accent);
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+	}
+	.page-heading h1 {
+		margin-bottom: 0.25rem;
+	}
+	.page-heading p {
+		margin: 0;
+		color: rgb(var(--gray));
+		font-size: 0.9rem;
+	}
+	.post-list {
+		list-style-type: none;
+		margin: 0;
+		padding: 0;
+	}
+	.post-list li {
+		padding: 1rem 0;
+		border-top: 1px dashed rgb(var(--gray-light));
+	}
+	.post-list li:last-child {
+		border-bottom: 1px dashed rgb(var(--gray-light));
+	}
+	.post-heading {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.post-title {
+		color: rgb(var(--black));
+	}
+	.post-title:hover {
+		color: var(--accent);
+	}
+	.post-title h2 {
+		margin: 0;
+		font-size: 1.05rem;
+		line-height: 1.45;
+	}
+	.date {
+		flex: none;
+		margin: 0;
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+	}
+	.description {
+		margin: 0.3rem 0 0;
+		color: rgb(var(--gray));
+		font-size: 0.875rem;
+		line-height: 1.55;
+	}
+	@media (max-width: 720px) {
+		.post-heading {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 0.2rem;
+		}
+	}
+</style>
