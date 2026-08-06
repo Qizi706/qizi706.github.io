@@ -1,8 +1,9 @@
 ---
 import { getCollection } from 'astro:content';
+import FormattedDate from '../components/FormattedDate.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 import PageLayout from '../layouts/PageLayout.astro';
-import { getCategoryUrl } from '../utils/posts';
+import { getCategoryUrl, getPostUrl } from '../utils/posts';
 
 const posts = (await getCollection('blog'))
 	.filter((post) => !post.data.draft)
@@ -16,6 +17,7 @@ const categoryCounts = posts.reduce((counts, post) => {
 }, new Map<string, number>());
 
 const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
+const featuredPost = posts.find((post) => post.id === 'conjecture-verification-practice');
 ---
 
 <PageLayout title={SITE_TITLE} description={SITE_DESCRIPTION} mainClass="home-page">
@@ -25,7 +27,7 @@ const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
 
 	<section class="personal-section" aria-labelledby="personal-heading">
 		<div class="personal-intro">
-			<p>
+			<p class="description-text">
 				我是周权，就读于中国科学技术大学软件学院，研究生二年级。对底层技术痴迷，喜爱研究
 				<b> Linux (Arch 用户)</b>，熟悉 <b>C/C++ 语言</b
 				>，目前在国内某大厂实习，工作内容是分布式存储。
@@ -38,16 +40,44 @@ const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
 				↗ github.com/Qizi706
 			</a>
 		</div>
-		<h2 id="personal-heading">个人发布</h2>
+		<h2 id="personal-heading">个人状态</h2>
 		<ul class="personal-links">
 			<li><a href="/about">(Pending) 近期进展</a></li>
 		</ul>
 	</section>
 
 	{
+		featuredPost && (
+			<section class="featured-section" aria-labelledby="featured-heading">
+				<h2 id="featured-heading">最近写作</h2>
+				<p class="description-text">{featuredPost.data.description}</p>
+				<ul class="featured-links">
+					<li>
+						<a href={getPostUrl(featuredPost)}>{featuredPost.data.title}</a>
+						<small>
+							（{featuredPost.data.categories.join(' / ')} ·{' '}
+							<FormattedDate date={featuredPost.data.pubDate} /> 有感而写）
+						</small>
+					</li>
+				</ul>
+				<div class="featured-image">
+					<img
+						src="/assets/home/roll-safe.png"
+						alt="Roll Safe"
+						width="400"
+						height="353"
+						loading="lazy"
+						decoding="async"
+					/>
+				</div>
+			</section>
+		)
+	}
+
+	{
 		categories.length > 0 && (
 			<section aria-labelledby="topics-heading">
-				<h2 id="topics-heading">文章分类</h2>
+				<h2 id="topics-heading">文章存档</h2>
 				<ul class="category-links">
 					{categories.map(([category, count]) => (
 						<li>
@@ -62,6 +92,23 @@ const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
 </PageLayout>
 
 <style>
+	:global(.page-frame.home-page) {
+		color: #0f172a;
+	}
+
+	:global(.page-frame.home-page) a,
+	:global(.page-frame.home-page) a:hover {
+		color: #3730a3;
+		font-family: 'Kalam', 'Sans Serif', sans-serif;
+		font-size: inherit;
+		font-style: normal;
+		font-weight: 500;
+		line-height: inherit;
+		letter-spacing: normal;
+		text-transform: none;
+		text-decoration: none;
+	}
+
 	.intro {
 		padding-bottom: 0;
 	}
@@ -69,6 +116,7 @@ const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
 	.intro h1 {
 		padding: 1.5rem 0 0;
 		margin: 0;
+		color: #111827;
 		font-family: var(--font-heading);
 		font-size: 1.5rem;
 		font-weight: 700;
@@ -90,21 +138,47 @@ const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
 		margin-top: 2rem;
 	}
 
-	.personal-links {
-		margin: 0.75rem 0 0;
-		padding-left: 1.5rem;
+	.personal-links,
+	.featured-links,
+	.category-links {
+		margin: 0.25rem 0;
+		padding: 0 0 0 0.5rem;
+		list-style-position: inside;
+		list-style-type: disc;
 	}
 
-	.personal-links li {
-		margin: 0.2rem 0;
+	.personal-links li,
+	.featured-links li,
+	.category-links li {
+		margin: 0 1rem;
+		padding: 0;
+		text-align: justify;
+		overflow-wrap: normal;
+		word-break: normal;
+	}
+
+	.personal-links li::marker,
+	.featured-links li::marker,
+	.category-links li::marker {
+		color: #d1d5db;
 	}
 
 	.personal-intro {
 		margin-bottom: 2rem;
 	}
 
-	.personal-intro p {
-		max-width: 62ch;
+	.description-text {
+		margin: 0;
+		padding: 0;
+		color: rgb(15 23 42);
+		font-family: 'Kalam', 'Sans Serif', sans-serif;
+		font-size: 1rem;
+		font-weight: 400;
+		line-height: 1.625;
+		text-align: justify;
+		text-indent: 2em;
+		overflow-wrap: normal;
+		word-break: normal;
 	}
 
 	.status-line,
@@ -117,7 +191,7 @@ const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
 		align-items: center;
 		gap: 0.45rem;
 		margin: 1.1rem 0 0.8rem;
-		color: rgb(var(--gray));
+		color: #0f172a;
 		font-size: 0.72rem;
 	}
 
@@ -139,18 +213,35 @@ const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
 		font-size: 1.2rem;
 	}
 
-	.category-links {
-		margin: 0.25rem 0 0;
-		padding-left: 1.5rem;
+	.featured-links small {
+		margin-left: 0.2rem;
+		color: #0f172a;
+		font-size: 0.8rem;
 	}
 
-	.category-links li {
-		margin: 0.3rem 0;
+	.featured-image {
+		display: flex;
+		justify-content: center;
+		margin: 0;
+	}
+
+	.featured-image img {
+		display: block;
+		width: 300px;
+		max-width: 100%;
+		height: auto;
+		margin: 0.5rem 0;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
+		object-fit: contain;
 	}
 
 	.category-links small {
 		margin-left: 0.25rem;
-		color: rgb(var(--gray));
+		color: #0f172a;
 		font-size: 0.8rem;
 	}
 </style>

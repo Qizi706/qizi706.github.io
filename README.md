@@ -6,13 +6,17 @@
 src/content/blog/
 ```
 
-文件名会成为文章地址。例如：
+文件名会成为文章 slug，Frontmatter 中的第一个分类会成为 URL 的第一段。例如：
 
 ```text
 src/content/blog/linux-process.md
+categories: ['OS']
                     ↓
-/blog/linux-process/
+/os/linux-process/
 ```
+
+分类会自动转换为小写、适合 URL 的形式；没有分类的文章会放在
+`/uncategorized/<slug>/` 下。调整第一个分类会同时改变文章地址，发布后应避免随意修改。
 
 ## 快速开始
 
@@ -129,6 +133,26 @@ public/assets/linux-process/process-tree.png
 ```
 
 图片会保持原始比例显示，不带黑框、圆角或阴影。请填写有意义的替代文本，方便无障碍阅读，也便于图片加载失败时辨认内容。
+
+如果需要控制图片尺寸、对齐方式或裁切模式，请使用 `.mdx` 和 `ArticleImage`：
+
+```mdx
+import ArticleImage from '../../components/ArticleImage.astro';
+
+<ArticleImage
+	src="/assets/linux-process/process-tree.png"
+	alt="Linux 进程树"
+	width={560}
+	maxWidth="100%"
+	align="center"
+	fit="contain"
+	caption="进程之间的父子关系"
+/>
+```
+
+`width`、`height` 和 `maxWidth` 可以使用数字（按像素处理）或 CSS
+尺寸字符串。`align` 支持 `left`、`center`、`right`，`fit` 支持
+`contain`、`cover`、`fill`、`none` 和 `scale-down`。
 
 ### 提示块
 
@@ -248,6 +272,26 @@ worker.join();
 - `Note`：`title`、`name`、`class`。
 - `title` 可以省略，此时可以在组件内部自行编写标题和内容。
 
+## 使用 ReasoningLoop
+
+`ReasoningLoop` 用来表现“提出候选 → 验证 → 反馈 → 更正”的循环。它不是全局
+MDX 组件，需要在文章中手动导入：
+
+```mdx
+import ReasoningLoop from '../../components/ReasoningLoop.astro';
+
+export const reasoningStages = [
+	{ label: '猜想', description: '根据约束与经验提出候选解。' },
+	{ label: '验证', description: '使用证明、反例或实验检查候选解。' },
+	{ label: '反馈', description: '定位候选解与事实之间的偏差。' },
+	{ label: '更正', description: '保留有效部分并进入下一轮。' },
+];
+
+<ReasoningLoop steps={reasoningStages} />
+```
+
+每个步骤必须包含 `label` 和 `description`。组件会在窄屏中提供横向滚动，避免节点内容挤压或溢出。
+
 ## 本地预览
 
 首次拉取项目后安装依赖：
@@ -300,6 +344,38 @@ npm run astro -- dev stop
 
 构建后的静态网站位于 `dist/`。
 
+## 发布到 GitHub Pages
+
+网站通过仓库根目录的 `.github/workflows/deploy.yml` 发布。工作流监听
+`astro` 分支，因此完成检查后提交并推送即可触发部署：
+
+```sh
+git switch astro
+git add .
+git commit -m "[ASTRO]add: article title"
+git push origin astro
+```
+
+随后在仓库的
+[Deploy to GitHub Pages](https://github.com/Qizi706/qizi706.github.io/actions/workflows/deploy.yml)
+页面查看构建与部署状态。仓库 `Settings → Pages → Build and deployment → Source`
+应设置为 `GitHub Actions`。
+
+如果 push 后没有产生新的 workflow run：
+
+1. 使用 `git status --short --branch` 确认当前是 `astro`，并且已经同步到 `origin/astro`。
+2. 查看 [GitHub Status](https://www.githubstatus.com/)，确认 Actions 和 Pages 均为 `Operational`。
+3. 服务正常时，可以创建一个不修改文件的提交重新触发：
+
+   ```sh
+   git commit --allow-empty -m "chore: retrigger deploy"
+   git push origin astro
+   ```
+
+工作流包含 `workflow_dispatch`，但 GitHub 只有在 workflow 文件存在于仓库默认分支时才显示
+`Run workflow`。若按钮不可见，可以继续使用 `astro` 分支的 push 自动触发，或将该
+workflow 同步到默认分支。
+
 ## 常见问题
 
 ### 为什么文章没有出现在列表里？
@@ -313,12 +389,14 @@ npm run astro -- dev stop
 ### Markdown 和 MDX 应该选哪个？
 
 - 只写文字、图片、代码、公式或 Mermaid：使用 `.md`。
-- 需要在正文中使用 `SlideCard` 等 Astro 组件：使用 `.mdx`。
+- 需要在正文中使用 `SlideCard`、`ArticleImage`、`ReasoningLoop` 等 Astro 组件：使用 `.mdx`。
 
 MDX 包含 Markdown 的主要写法，但同时会解析 JSX/组件语法，因此正文中的 `<`、`>` 和 `{}` 需要更加谨慎。
 
 ## 相关文档
 
 - [Astro Content Collections](https://docs.astro.build/en/guides/content-collections/)
+- [Astro Components](https://docs.astro.build/en/basics/astro-components/)
 - [Astro Markdown](https://docs.astro.build/en/guides/markdown-content/)
 - [Astro MDX](https://docs.astro.build/en/guides/integrations-guide/mdx/)
+- [Deploy Astro to GitHub Pages](https://docs.astro.build/en/guides/deploy/github/)
