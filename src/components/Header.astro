@@ -1,16 +1,10 @@
 ---
 import { SITE_TITLE } from '../consts';
-import HeaderLink from './HeaderLink.astro';
 ---
 
 <header>
 	<div class="header-inner">
 		<a class="site-title" href="/">{SITE_TITLE}</a>
-		<nav aria-label="主导航">
-			<HeaderLink href="/">Home</HeaderLink>
-			<HeaderLink href="/blog">Blog</HeaderLink>
-			<HeaderLink href="/about">About</HeaderLink>
-		</nav>
 	</div>
 </header>
 
@@ -47,56 +41,9 @@ import HeaderLink from './HeaderLink.astro';
 		white-space: nowrap;
 	}
 
-	nav {
-		display: flex;
-		margin-left: 1rem;
-		padding-left: 1rem;
-		align-items: center;
-		gap: 1rem;
-		border-left: 1px solid rgb(15 23 42 / 10%);
-	}
-
-	nav :global(a) {
-		display: inline-flex;
-		align-items: center;
-		padding: 0;
-		border: 0;
-		color: #334155;
-		font-family: var(--font-heading);
-		font-size: 0.875rem;
-		font-weight: 600;
-		letter-spacing: normal;
-		line-height: 1.25rem;
-		text-decoration: none;
-	}
-
-	nav :global(a:hover) {
-		color: #0ea5e9;
-		text-decoration: none;
-	}
-
-	nav :global(a.active) {
-		color: #0ea5e9;
-		text-decoration: none;
-	}
-
 	@media (max-width: 640px) {
 		.header-inner {
 			padding: 0.75rem 1rem;
-			justify-content: space-between;
-			gap: 0.5rem;
-		}
-
-		nav {
-			/* margin-left: auto; */
-			padding-left: 0;
-			gap: 0.1rem;
-			border-left: 0;
-		}
-
-		nav :global(a) {
-			padding: 0 0.35rem;
-			font-size: 0.875rem;
 		}
 	}
 </style>

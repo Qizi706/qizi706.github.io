@@ -37,127 +37,81 @@ const description = `共 ${posts.length} 篇归档于 ${category} 分类的文�
 
 <PageLayout title={`${category} | ${SITE_TITLE}`} {description} mainClass="category-page">
 	<header class="page-heading">
-		<p class="path"><a href="/blog">~/blog</a>/category</p>
 		<h1>{category}</h1>
-		<p>{description}</p>
+		<ul class="category-summary">
+			<li>{description}，按发布时间由新到旧排列</li>
+			<li><a href="/">主页</a>；<a href="/blog">全部文章</a></li>
+		</ul>
 	</header>
 
 	<section aria-label={`${category} 分类下的文章`}>
-		<ul class="post-list">
+		<h2>文章目录</h2>
+		<ol class="post-list">
 			{
 				posts.map((post) => (
 					<li>
-						<article>
-							<div class="post-heading">
-								<a class="post-title" href={getPostUrl(post)}>
-									<h2>{post.data.title}</h2>
-								</a>
-								<p class="date">
-									<FormattedDate date={post.data.pubDate} />
-								</p>
-							</div>
-							<p class="post-description">{post.data.description}</p>
-						</article>
+						<a class="post-title" href={getPostUrl(post)}>
+							{post.data.title}
+						</a>
+						<small class="post-meta">
+							（<FormattedDate date={post.data.pubDate} />
+							{post.data.tags.slice(0, 3).map((tag) => (
+								<span> · #{tag}</span>
+							))}
+							）
+						</small>
 					</li>
 				))
 			}
-		</ul>
+		</ol>
 	</section>
-
-	<a class="back-link" href="/">← 返回文章存档</a>
 </PageLayout>
 
 <style>
 	.page-heading {
 		margin-bottom: 2rem;
-		padding-bottom: 1.25rem;
-		border-bottom: 1px solid rgb(var(--gray-light));
-	}
-
-	.path {
-		margin: 0 0 0.35rem;
-		color: rgb(var(--gray));
-		font-family: var(--font-mono);
-		font-size: 0.75rem;
-	}
-
-	.path a {
-		color: var(--accent);
 	}
 
 	.page-heading h1 {
-		margin-bottom: 0.25rem;
+		padding: 1.5rem 0 0;
+		margin: 0 0 1rem;
+		font-size: 1.5rem;
+		line-height: 2rem;
 	}
 
-	.page-heading > p:last-child {
+	.category-summary {
 		margin: 0;
-		color: rgb(var(--gray));
-		font-size: 0.9rem;
+		padding-left: 1.5rem;
+	}
+
+	.category-summary li {
+		margin: 0.25rem 0;
+	}
+
+	section {
+		margin-top: 2rem;
+	}
+
+	section h2 {
+		margin: 0 0 0.75rem;
+		font-size: 1.2rem;
 	}
 
 	.post-list {
-		margin: 0;
-		padding: 0;
-		list-style: none;
+		margin: 0.25rem 0 0;
+		padding-left: 1.75rem;
 	}
 
 	.post-list li {
-		padding: 1rem 0;
-		border-top: 1px dashed rgb(var(--gray-light));
+		margin: 0.45rem 0;
+		padding-left: 0.1rem;
 	}
 
-	.post-list li:last-child {
-		border-bottom: 1px dashed rgb(var(--gray-light));
-	}
-
-	.post-heading {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 1rem;
-	}
-
-	.post-title {
-		color: rgb(var(--black));
-	}
-
-	.post-title:hover {
-		color: var(--accent);
-	}
-
-	.post-title h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		line-height: 1.45;
-	}
-
-	.date {
-		flex: none;
-		margin: 0;
+	.post-meta {
+		margin-left: 0.25rem;
 		color: rgb(var(--gray));
-		font-family: var(--font-mono);
 		font-size: 0.75rem;
-	}
-
-	.post-description {
-		margin: 0.3rem 0 0;
-		color: rgb(var(--gray));
-		font-size: 0.875rem;
-		line-height: 1.55;
-	}
-
-	.back-link {
-		display: inline-block;
-		margin-top: 2rem;
-		font-family: var(--font-mono);
-		font-size: 0.8rem;
-	}
-
-	@media (max-width: 720px) {
-		.post-heading {
-			align-items: flex-start;
-			flex-direction: column;
-			gap: 0.2rem;
-		}
+		font-weight: 400;
+		line-height: 1.5;
 	}
 </style>

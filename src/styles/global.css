@@ -17,6 +17,7 @@
 	--font-mono: 'Fira Mono', monospace;
 	--font-code: var(--font-mono);
 	--box-shadow: 0 1px 3px rgb(15 23 42 / 8%), 0 10px 28px rgb(15 23 42 / 7%);
+	--wiki-frame-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
 }
 
 *,
@@ -75,6 +76,13 @@ main {
 	background: var(--content-background);
 	box-shadow: var(--box-shadow);
 	font-family: var(--font-body);
+}
+
+.page-frame.home-page {
+	flex: none;
+	width: min(100%, var(--content-width));
+	border-radius: 0;
+	box-shadow: var(--wiki-frame-shadow);
 }
 
 h1,
@@ -405,6 +413,10 @@ hr {
 		padding: 1.5rem 0 2rem;
 		border-radius: 0;
 		box-shadow: none;
+	}
+
+	.page-frame.home-page {
+		padding: 0;
 	}
 }
 

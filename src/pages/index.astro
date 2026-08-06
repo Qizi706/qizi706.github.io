@@ -1,15 +1,13 @@
 ---
 import { getCollection } from 'astro:content';
-import FormattedDate from '../components/FormattedDate.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 import PageLayout from '../layouts/PageLayout.astro';
-import { getCategoryUrl, getPostUrl } from '../utils/posts';
+import { getCategoryUrl } from '../utils/posts';
 
 const posts = (await getCollection('blog'))
 	.filter((post) => !post.data.draft)
 	.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 
-const recentPosts = posts.slice(0, 8);
 const categoryCounts = posts.reduce((counts, post) => {
 	for (const category of post.data.categories) {
 		counts.set(category, (counts.get(category) ?? 0) + 1);
@@ -25,34 +23,36 @@ const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
 		<h1>{SITE_TITLE}</h1>
 	</header>
 
-	<section aria-labelledby="recent-heading">
-		<div class="section-heading">
-			<h2 id="recent-heading">最近发布</h2>
-			<a href="/blog">全部文章 →</a>
+	<section class="personal-section" aria-labelledby="personal-heading">
+		<div class="personal-intro">
+			<p>
+				我是周权，就读于中国科学技术大学软件学院，研究生二年级。对底层技术痴迷，喜爱研究
+				<b>Linux（Arch 用户）</b>，熟悉 <b>C/C++ 语言</b
+				>，目前在国内某大厂实习，工作内容是分布式存储。
+			</p>
+			<div class="status-line">
+				<span class="status-dot" aria-hidden="true"></span>
+				<span>currently exploring: kernels · storage · AI infra</span>
+			</div>
+			<a class="github-link" href="https://github.com/Qizi706" target="_blank" rel="noreferrer">
+				↗ github.com/Qizi706
+			</a>
 		</div>
-		<ul class="recent-posts">
-			{
-				recentPosts.map((post) => (
-					<li>
-						<a href={getPostUrl(post)}>{post.data.title}</a>
-						<FormattedDate date={post.data.pubDate} />
-					</li>
-				))
-			}
+		<h2 id="personal-heading">个人发布</h2>
+		<ul class="personal-links">
+			<li><a href="/about">(Pending) 近期进展</a></li>
 		</ul>
 	</section>
 
 	{
 		categories.length > 0 && (
 			<section aria-labelledby="topics-heading">
-				<h2 id="topics-heading">文章存档</h2>
-				<ul class="topics">
+				<h2 id="topics-heading">文章分类</h2>
+				<ul class="category-links">
 					{categories.map(([category, count]) => (
 						<li>
-							<a href={getCategoryUrl(category)}>
-								<span>{category}</span>
-								<small> {count}篇</small>
-							</a>
+							<a href={getCategoryUrl(category)}>{category}</a>
+							<small>（{count} 篇文章）</small>
 						</li>
 					))}
 				</ul>
@@ -63,13 +63,12 @@ const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
 
 <style>
 	.intro {
-		padding-bottom: 1.75rem;
-		/* border-bottom: 1px solid rgb(var(--gray-light)); */
+		padding-bottom: 0;
 	}
 
 	.intro h1 {
 		padding: 1.5rem 0 0;
-		margin: 0 0 1rem;
+		margin: 0;
 		font-family: var(--font-heading);
 		font-size: 1.5rem;
 		font-weight: 700;
@@ -87,11 +86,52 @@ const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
 		margin-top: 2rem;
 	}
 
-	.section-heading {
+	.personal-section {
+		margin-top: 2rem;
+	}
+
+	.personal-links {
+		margin: 0.75rem 0 0;
+		padding-left: 1.5rem;
+	}
+
+	.personal-links li {
+		margin: 0.2rem 0;
+	}
+
+	.personal-intro {
+		margin-bottom: 2rem;
+	}
+
+	.personal-intro p {
+		max-width: 62ch;
+	}
+
+	.status-line,
+	.github-link {
+		font-family: var(--font-mono);
+	}
+
+	.status-line {
 		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 1rem;
+		align-items: center;
+		gap: 0.45rem;
+		margin: 1.1rem 0 0.8rem;
+		color: rgb(var(--gray));
+		font-size: 0.72rem;
+	}
+
+	.status-dot {
+		width: 0.45rem;
+		height: 0.45rem;
+		border-radius: 50%;
+		background: #16a34a;
+		box-shadow: 0 0 0 3px rgb(22 163 74 / 12%);
+	}
+
+	.github-link {
+		display: inline-block;
+		font-size: 0.78rem;
 	}
 
 	section h2 {
@@ -99,76 +139,18 @@ const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
 		font-size: 1.2rem;
 	}
 
-	.section-heading > a {
+	.category-links {
+		margin: 0.25rem 0 0;
+		padding-left: 1.5rem;
+	}
+
+	.category-links li {
+		margin: 0.3rem 0;
+	}
+
+	.category-links small {
+		margin-left: 0.25rem;
+		color: rgb(var(--gray));
 		font-size: 0.8rem;
-	}
-
-	.recent-posts,
-	.topics {
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	.recent-posts li {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
-		gap: 1rem;
-		padding: 0.55rem 0;
-		border-bottom: 1px dashed rgb(var(--gray-light));
-	}
-
-	.recent-posts li:first-child {
-		border-top: 1px dashed rgb(var(--gray-light));
-	}
-
-	.recent-posts :global(time) {
-		color: rgb(var(--gray));
-		font-family: var(--font-mono);
-		font-size: 0.72rem;
-		white-space: nowrap;
-	}
-
-	.topics {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.5rem 1.5rem;
-	}
-
-	.topics li {
-		border-bottom: 1px solid rgb(var(--gray-light));
-	}
-
-	.topics a {
-		display: flex;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.35rem 0;
-		color: rgb(var(--black));
-	}
-
-	.topics a:hover,
-	.topics a:hover small {
-		color: var(--accent);
-	}
-
-	.topics small {
-		color: rgb(var(--gray));
-		font-family: var(--font-mono);
-	}
-
-	@media (max-width: 560px) {
-		.recent-posts li {
-			display: block;
-		}
-
-		.recent-posts :global(time) {
-			display: block;
-			margin-top: 0.15rem;
-		}
-
-		.topics {
-			grid-template-columns: 1fr;
-		}
 	}
 </style>

@@ -3,23 +3,12 @@ import Layout from '../layouts/BlogPost.astro';
 import '../styles/global.css';
 ---
 
-<Layout title="(Who am I) 我是谁" description="" pubDate={new Date('2026-08-06')} hideTitleDivider>
-	<header class="about-intro">
-		<!-- <p class="prompt"><span>~/qizi706</span> $ whoami</p> -->
-		<p>
-			我是周权，就读于中国科学技术大学软件学院，研究生二年级。对底层技术痴迷，喜爱研究
-			<b>Linux（Arch 用户）</b>，熟悉 <b>C/C++ 语言</b
-			>，目前在国内某大厂实习，工作内容是分布式存储。
-		</p>
-		<div class="status-line">
-			<span class="status-dot" aria-hidden="true"></span>
-			<span>currently exploring: kernels · storage · AI infra</span>
-		</div>
-		<a class="github-link" href="https://github.com/Qizi706" target="_blank" rel="noreferrer">
-			↗ github.com/Qizi706
-		</a>
-	</header>
-
+<Layout
+	title="(Pending) 近期进展"
+	description="个人项目与近期学习路线"
+	pubDate={new Date('2026-08-06')}
+	hideTitleDivider
+>
 	<section class="about-section" aria-labelledby="projects-title">
 		<div class="section-label">01 / projects</div>
 		<h2 id="projects-title">个人项目</h2>
@@ -208,68 +197,16 @@ constraint: KV Cache consumes GPU memory</code></pre>
 </Layout>
 
 <style>
-	.about-intro {
-		padding: 0.25rem 0 1.75rem;
-	}
-
-	.prompt,
 	.section-label,
 	.project-meta,
-	.status-line,
-	.github-link,
 	.quest-line,
 	.pipeline,
 	.about-footer {
 		font-family: var(--font-mono);
 	}
 
-	.prompt {
-		margin: 0 0 1.25rem;
-		color: rgb(var(--gray));
-		font-size: 0.78rem;
-	}
-
-	.prompt span,
-	.github-link {
-		color: var(--accent);
-	}
-
-	.about-intro h2,
 	.about-section > h2 {
 		margin-top: 0;
-	}
-
-	.about-intro h2 small {
-		color: rgb(var(--gray));
-		font-family: var(--font-mono);
-		font-size: 0.7em;
-		font-weight: 400;
-	}
-
-	.about-intro p:not(.prompt) {
-		max-width: 62ch;
-	}
-
-	.status-line {
-		display: flex;
-		align-items: center;
-		gap: 0.45rem;
-		margin: 1.1rem 0 0.8rem;
-		color: rgb(var(--gray));
-		font-size: 0.72rem;
-	}
-
-	.status-dot {
-		width: 0.45rem;
-		height: 0.45rem;
-		border-radius: 50%;
-		background: #16a34a;
-		box-shadow: 0 0 0 3px rgb(22 163 74 / 12%);
-	}
-
-	.github-link {
-		display: inline-block;
-		font-size: 0.78rem;
 	}
 
 	.about-section {
