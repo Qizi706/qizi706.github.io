@@ -17,7 +17,7 @@
 	--font-mono: 'Fira Mono', monospace;
 	--font-code: var(--font-mono);
 	--box-shadow: 0 1px 3px rgb(15 23 42 / 8%), 0 10px 28px rgb(15 23 42 / 7%);
-	--wiki-frame-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
+	--wiki-frame-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
 }
 
 *,
@@ -617,119 +617,578 @@ pre.mermaid svg {
 	height: auto;
 }
 
-.prose .slide-card {
+.prose :is(.code-card, .note) {
+	margin: 0.5rem 1rem 0.25rem;
+	padding: 0.5rem 1rem;
+	border: 1px solid rgb(148 163 184);
+	border-radius: 0.375rem;
+	box-shadow:
+		0 4px 6px -1px rgba(0, 0, 0, 0.1),
+		0 2px 4px -2px rgba(0, 0, 0, 0.1);
+	color: rgb(15 23 42);
+	line-height: 1.25rem;
+}
+
+.prose :is(.code-card, .note).title-underline h1 {
+	text-decoration-line: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.28em;
+	text-decoration-skip-ink: auto;
+}
+
+.prose .code-card {
+	background: rgba(219, 234, 254, 0.6);
+}
+
+.prose .code-card a,
+.prose .code-card a:hover {
+	color: rgb(55 48 163);
+	text-decoration: none;
+}
+
+.prose .note {
+	background: rgba(243, 232, 255, 0.6);
+}
+
+.prose :is(.code-card, .note) > div {
+	padding: 0;
+}
+
+.prose .code-card > div > div::after,
+.prose .note > div::after {
+	display: block;
+	clear: both;
+	content: '';
+}
+
+.prose :is(.code-card, .note)::before {
+	display: none;
+	content: none;
+}
+
+.prose :is(.code-card, .note) h1 {
+	display: inline;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-family: var(--font-heading);
+	font-size: 1rem;
+	font-weight: 700;
+	line-height: 1.5rem;
+	text-decoration: none;
+}
+
+.prose :is(.code-card, .note) h1::before {
+	float: left;
+	margin-right: 0.75rem;
+	font-family: sans-serif;
+	font-size: 2.25rem;
+	font-weight: 400;
+	line-height: 2.5rem;
+}
+
+.prose .code-card h1::before {
+	content: '💻';
+}
+
+.prose .note h1::before {
+	content: '📝';
+}
+
+.prose :is(.code-card, .note) h1::after {
+	content: ': ';
+}
+
+.prose :is(.code-card, .note) h1 + p {
+	display: inline;
+	margin: 0;
+	padding: 0;
+	text-indent: 0;
+}
+
+.prose :is(.code-card, .note) h1 + p::first-letter {
+	float: none;
+	margin: 0;
+	color: inherit;
+	font-size: inherit;
+	font-weight: inherit;
+}
+
+.prose :is(.code-card, .note) :is(h2, h3) {
+	margin: 0;
+	font-family: var(--font-heading);
+	font-size: 1.125rem;
+	line-height: 1.75rem;
+}
+
+.prose :is(.code-card, .note) h2 {
+	padding: 0.25rem 0;
+	font-weight: 600;
+}
+
+.prose :is(.code-card, .note) h3 {
+	padding: 0.5rem 0;
+	font-weight: 700;
+}
+
+.prose :is(.code-card, .note) p {
+	margin: 0;
+	padding: 0;
+	overflow-wrap: normal;
+	line-height: 1.625;
+	text-align: justify;
+	text-indent: 2em;
+	word-break: normal;
+}
+
+.prose :is(.code-card, .note) :is(ul, ol) {
+	list-style-position: inside;
+	padding: 0 0 0 0.5rem;
+}
+
+.prose :is(.code-card, .note) ul {
+	margin: 0.25rem 1rem;
+	list-style-type: disc;
+	text-align: left;
+}
+
+.prose :is(.code-card, .note) ol {
+	margin: 0.75rem 1rem;
+	list-style-type: decimal;
+	text-align: justify;
+}
+
+.prose :is(.code-card, .note) li {
+	margin: 0.25rem 0;
+	padding: 0;
+	overflow-wrap: normal;
+	word-break: normal;
+}
+
+.prose :is(.code-card, .note) blockquote {
+	margin: 0.5rem 0;
+	padding-top: 0;
+	padding-bottom: 0;
+	color: inherit;
+	font-size: inherit;
+	font-style: normal;
+}
+
+.prose .slideshow {
 	display: flex;
 	width: 600px;
-	max-width: 100%;
+	max-width: 600px;
 	height: 450px;
 	margin: 0.75rem auto;
 	overflow: hidden;
 	flex-direction: column;
 	padding: 0.5rem 1rem;
-	border: 1px solid #94a3b8;
+	border: 1px solid rgb(148 163 184);
 	border-radius: 0.375rem;
-	background: transparent;
 	box-shadow:
-		0 4px 6px -1px rgb(0 0 0 / 10%),
-		0 2px 4px -2px rgb(0 0 0 / 10%);
-	font-family: sans-serif;
+		0 4px 6px -1px rgba(0, 0, 0, 0.1),
+		0 2px 4px -2px rgba(0, 0, 0, 0.1);
+	color: rgb(15 23 42);
 	font-size: 1rem;
 	line-height: 1.25rem;
-	text-align: left;
+	text-align: justify;
+	zoom: 0.85;
 }
 
-.prose .slide-card * {
-	font-family: sans-serif !important;
-}
-
-.prose .slide-card:not(:has(img)) {
-	height: auto;
-}
-
-.prose .slide-card__content {
+.prose .slideshow > div {
 	display: flex;
 	min-height: 0;
-	flex: 1 1 auto;
+	flex: 1 1 0%;
 	flex-direction: column;
-	overflow: visible;
-}
-
-.prose .slide-card:has(img) .slide-card__content {
-	flex-basis: 0;
+	padding: 0;
 	overflow: hidden;
 }
 
-.prose .slide-card h1 {
+.prose .slideshow:not(:has(img)) {
+	height: auto;
+}
+
+.prose .slideshow:has(.article-image) {
+	height: auto;
+}
+
+.prose .slideshow:has(.article-image) > div {
+	flex: 0 1 auto;
+	overflow: visible;
+}
+
+.prose .slideshow :not(.katex):not(.katex *):not(pre):not(pre *) {
+	font-family: sans-serif !important;
+}
+
+.prose .slideshow h1 {
 	margin: 0;
 	padding: 0.5rem 0;
-	border-bottom: 1px solid #475569;
+	border-bottom: 1px solid rgb(203 213 225);
+	font-family: var(--font-heading);
 	font-size: 1.4rem;
 	font-weight: 700;
 	line-height: 2rem;
 }
 
-.prose .slide-card h2,
-.prose .slide-card h3 {
+.prose .slideshow h2,
+.prose .slideshow h3 {
 	margin: 0;
-	padding: 0.25rem 0;
-	font-size: 1.125rem;
+	font-family: var(--font-heading);
+	font-weight: 700;
 	line-height: 1.75rem;
 }
 
-.prose .slide-card h2 {
+.prose .slideshow h2 {
+	padding: 0.25rem 0;
+	font-size: 1.125rem;
 	font-weight: 600;
 }
 
-.prose .slide-card h3 {
+.prose .slideshow h3 {
+	padding: 0.5rem 0;
+	font-size: 1.125rem;
+}
+
+.prose .slideshow h4 {
+	margin: 1.5rem 0 0.5rem;
+	font-family: var(--font-heading);
+	font-size: 1rem;
+	font-weight: 600;
+	line-height: 1.5rem;
+}
+
+.prose .slideshow h5 {
+	margin: 1.25rem 0 0.5rem;
+	font-family: var(--font-heading);
+	font-weight: 600;
+}
+
+.prose .slideshow h6 {
+	margin: 1rem 0 0.5rem;
+	color: rgb(71 85 105);
+	font-family: var(--font-heading);
+	font-size: 0.875rem;
+	font-weight: 600;
+	line-height: 1.25rem;
+	letter-spacing: 0.025em;
+	text-transform: uppercase;
+}
+
+.prose .slideshow h1 + h2 {
+	padding-top: 0.5rem;
+}
+
+.prose .slideshow h2 + h3 {
+	padding-top: 0;
+}
+
+.prose .slideshow h1 + p {
+	margin-top: 0.5rem;
+	text-indent: 0;
+}
+
+.prose .slideshow h1 + p::first-letter {
+	float: left;
+	margin-right: 0.5rem;
+	color: rgb(15 23 42);
+	font-size: 3rem;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.prose .slideshow h1 + p::first-line {
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.prose .slideshow p {
+	margin: 0;
+	padding: 0;
+	overflow-wrap: normal;
+	line-height: 1.625;
+	text-align: justify;
+	text-indent: 2em;
+	word-break: normal;
+}
+
+.prose .slideshow a {
+	color: rgb(55 48 163);
+	font-family: sans-serif !important;
+	font-size: 1rem;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 1.25rem;
+	text-decoration-line: none;
+}
+
+.prose .slideshow hr {
+	margin-top: 0.5rem;
+	margin-bottom: 0.5rem;
+}
+
+.prose .slideshow ul,
+.prose .slideshow ol {
+	list-style-position: inside;
+	padding: 0 0 0 0.5rem;
+}
+
+.prose .slideshow ul {
+	margin: 0.25rem 1rem;
+	list-style-type: disc;
+	text-align: left;
+}
+
+.prose .slideshow ol {
+	margin: 0.75rem 1rem;
+	list-style-type: decimal;
+	text-align: justify;
+}
+
+.prose .slideshow li {
+	margin: 0.25rem 0;
+	padding: 0;
+	overflow-wrap: normal;
+	word-break: normal;
+}
+
+.prose .slideshow li > ol,
+.prose .slideshow li > ul {
+	margin-top: 0.5rem;
+	margin-bottom: 0.5rem;
+}
+
+.prose .slideshow blockquote {
+	margin: 0.4rem 0;
+	padding: 0 0 0 0.75rem;
+	border-left: 4px solid #e5e7eb;
+	color: inherit;
+	font-size: inherit;
+	font-style: normal;
+	font-weight: 400;
+}
+
+.prose .slideshow blockquote p {
+	margin: 0;
+	text-indent: 0;
+}
+
+.prose :is(.slideshow, .code-card, .note) :not(pre) > code {
+	padding: 0 0.125rem;
+	background: transparent;
+	color: rgb(15 23 42);
+	font-size: 0.85em;
+	font-weight: 200;
+}
+
+.prose :is(.slideshow, .code-card, .note) :not(pre) > code::before,
+.prose :is(.slideshow, .code-card, .note) :not(pre) > code::after {
+	content: none;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre {
+	margin: 0.5rem 0;
+	padding: 0;
+	overflow-x: auto;
+	border: 0;
+	border-radius: 0.75rem;
+	background: rgba(226, 232, 240, 0.7);
+	box-shadow:
+		0 1px 3px 0 rgba(0, 0, 0, 0.1),
+		0 1px 2px -1px rgba(0, 0, 0, 0.1);
+	font-family: var(--font-mono);
+	line-height: 1.5;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre,
+.prose :is(.slideshow, .code-card, .note) pre * {
+	font-family: 'Fira Mono', monospace !important;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre code {
+	display: block;
+	padding: 0.5rem;
+	background: transparent;
+	color: rgb(17 24 39);
+	font-size: 0.9rem;
+	line-height: 1.2;
+	text-shadow: none;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre code * {
+	color: inherit;
+	font-style: normal;
+	font-weight: 400;
+	text-decoration: none;
+}
+
+/* lect6 uses Pygments' default palette; map Prism's token names to the same colors. */
+.prose
+	:is(.slideshow, .code-card, .note)
+	pre
+	:is(.token.comment, .token.prolog, .token.doctype, .token.cdata) {
+	color: #408080;
+	font-style: italic;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre .token.keyword {
+	color: green;
 	font-weight: 700;
 }
 
-.prose .slide-card p,
-.prose .slide-card li,
-.prose .slide-card ul,
-.prose .slide-card ol,
-.prose .slide-card pre,
-.prose .slide-card blockquote {
-	margin-top: 0.25rem;
-	margin-bottom: 0.25rem;
+.prose :is(.slideshow, .code-card, .note) pre .token.operator {
+	color: #666;
 }
 
-.prose .slide-card ul,
-.prose .slide-card ol {
-	padding-left: 1.5rem;
+.prose :is(.slideshow, .code-card, .note) pre :is(.token.number, .token.unit) {
+	color: #666;
 }
 
-.prose .slide-card blockquote {
-	padding-left: 0.75rem;
-	border-left: 4px solid #e5e7eb;
+.prose :is(.slideshow, .code-card, .note) pre :is(.token.string, .token.char, .token.attr-value) {
+	color: #ba2121;
 }
 
-.prose .slide-card blockquote p {
-	margin: 0;
+.prose :is(.slideshow, .code-card, .note) pre :is(.token.boolean, .token.builtin) {
+	color: green;
 }
 
-.prose .slide-card p:has(> img) {
+.prose :is(.slideshow, .code-card, .note) pre .token.class-name {
+	color: #00f;
+	font-weight: 700;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre .token.function {
+	color: #00f;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre .token.constant {
+	color: #800;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre :is(.token.atrule, .token.macro) {
+	color: #bc7a00;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre :is(.token.attr-name, .token.property) {
+	color: #7d9029;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre :is(.token.tag, .token.selector) {
+	color: green;
+	font-weight: 700;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre :is(.token.variable, .token.symbol) {
+	color: #19177c;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre :is(.token.regex, .token.url) {
+	color: #b68;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre .token.entity {
+	color: #999;
+	font-weight: 700;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre .token.deleted {
+	color: #a00000;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre .token.inserted {
+	color: #00a000;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre :is(.token.bold, .token.important) {
+	font-weight: 700;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre .token.italic {
+	font-style: italic;
+}
+
+.prose :is(.slideshow, .code-card, .note) pre .token.namespace {
+	opacity: 1;
+}
+
+.prose :is(.slideshow, .code-card, .note) .katex-html {
+	font-size: 90%;
+}
+
+.prose :is(.slideshow, .code-card, .note) .katex-display {
+	max-width: 100%;
+	margin: 1em 0;
+	padding: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	text-align: center;
+	text-indent: 0;
+}
+
+.prose :is(.slideshow, .code-card, .note) .katex-display > .katex {
+	max-width: 100%;
+	text-align: center;
+}
+
+.prose .slideshow p:has(> img) {
 	display: flex;
 	min-height: 0;
 	flex: 1 1 0;
 	text-indent: 0;
 }
 
-.prose .slide-card img {
+.prose .slideshow img {
 	width: 100%;
 	max-width: 100%;
 	max-height: 100%;
 	margin: 0.5rem 0;
+	padding: 0;
 	border: 0;
 	border-radius: 0;
-	background: transparent;
 	box-shadow: none;
 	object-fit: contain;
 }
 
-.prose .slide-card pre {
-	margin-right: 0;
-	margin-left: 0;
+.prose .slideshow table {
+	width: 100%;
+	margin-top: 1.5rem;
+	margin-bottom: 1.5rem;
+	border: 1px solid rgba(226, 232, 240, 0.7);
+	border-collapse: collapse;
+	text-align: left;
+}
+
+.prose .slideshow th,
+.prose .slideshow td {
+	padding: 0.5rem 1rem;
+	border: 1px solid rgba(226, 232, 240, 0.7);
+	vertical-align: top;
+}
+
+@media (min-width: 768px) {
+	.prose .slideshow {
+		width: 600px;
+	}
+}
+
+@media (prefers-color-scheme: dark) {
+	.prose .slideshow h1 {
+		border-color: rgb(71 85 105);
+	}
+
+	.prose .slideshow h6 {
+		color: rgb(203 213 225);
+	}
+
+	.prose :is(.slideshow, .code-card, .note) :not(pre) > code {
+		color: rgb(241 245 249);
+	}
+
+	.prose .slideshow table,
+	.prose .slideshow th,
+	.prose .slideshow td {
+		border-color: rgba(51, 65, 85, 0.7);
+	}
 }
 
 @media (max-width: 720px) {

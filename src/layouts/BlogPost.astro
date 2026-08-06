@@ -45,9 +45,9 @@ const {
 			article {
 				padding: 2.5rem;
 				border: 0 solid var(--frame-border);
-				border-radius: 3px;
+				border-radius: 0;
 				background: var(--content-background);
-				box-shadow: var(--box-shadow);
+				box-shadow: none;
 			}
 			.hero-image {
 				margin: 0 auto 1.5rem;
@@ -114,6 +114,7 @@ const {
 			@media (min-width: 768px) {
 				article {
 					border-width: 1px;
+					box-shadow: var(--wiki-frame-shadow);
 				}
 			}
 			@media (max-width: 720px) {

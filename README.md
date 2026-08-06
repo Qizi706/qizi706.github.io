@@ -207,6 +207,47 @@ worker.join();
 - 普通 `#` 标题不会自动生成卡片。
 - `.md` 适合普通文章；需要 `SlideCard` 等组件时才使用 `.mdx`。
 
+## 使用 CoreCard 和 Note
+
+只能在 `.mdx` 文章中使用，并且不需要手动导入。
+
+`CoreCard` 会显示 💻 图标；`CodeCard` 是完全相同的别名：
+
+```mdx
+<CoreCard
+  title="Crazy OS"
+  href="https://example.com/crazy-os"
+  path="virtualization/crazy-os"
+>
+
+这是项目或代码示例的简介。标题和第一段会保持在同一行。
+
+</CoreCard>
+```
+
+`Note` 会显示 📝 图标，适合总结和阅读材料：
+
+```mdx
+<Note title="Takeaways" name="takeaways">
+
+操作系统通过虚拟内存为每个进程提供独立的地址空间。
+
+</Note>
+
+<Note title="阅读材料" name="readings">
+
+- 第 12 章 - Dialogue
+- 第 13 章 - Address Spaces
+
+</Note>
+```
+
+可用属性：
+
+- `CoreCard` / `CodeCard`：`title`、`href`、`path`、`class`。
+- `Note`：`title`、`name`、`class`。
+- `title` 可以省略，此时可以在组件内部自行编写标题和内容。
+
 ## 本地预览
 
 首次拉取项目后安装依赖：

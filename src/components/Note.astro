@@ -1,13 +1,14 @@
 ---
 interface Props {
 	title?: string;
+	name?: string;
 	class?: string;
 }
 
-const { title, class: className } = Astro.props;
+const { title, name, class: className } = Astro.props;
 ---
 
-<div class:list={['slideshow', className]}>
+<div class:list={['note', className]} data-name={name}>
 	<div>
 		{title && <h1>{title}</h1>}
 		<slot />

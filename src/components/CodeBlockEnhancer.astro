@@ -26,6 +26,7 @@
 		document
 			.querySelectorAll<HTMLPreElement>('.prose pre[class*="language-"]:not(.mermaid)')
 			.forEach((pre) => {
+				if (pre.closest('.slideshow, .code-card, .note')) return;
 				if (pre.dataset.codeBlockEnhanced === 'true') return;
 
 				const code = pre.querySelector<HTMLElement>(':scope > code');

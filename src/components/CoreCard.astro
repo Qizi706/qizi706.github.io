@@ -1,0 +1,19 @@
+---
+interface Props {
+	title?: string;
+	href?: string;
+	path?: string;
+	class?: string;
+}
+
+const { title, href, path, class: className } = Astro.props;
+---
+
+<div class:list={['code-card', className]} data-path={path}>
+	<div>
+		<div>
+			{title && <h1>{href ? <a href={href}>{title}</a> : title}</h1>}
+			<slot />
+		</div>
+	</div>
+</div>

@@ -1,0 +1,229 @@
+---
+interface Step {
+	label: string;
+	description: string;
+}
+
+interface Props {
+	steps: Step[];
+}
+
+const { steps } = Astro.props;
+---
+
+<section class="reasoning-loop" aria-label="从猜想到修正的思考循环">
+	<header class="reasoning-loop__header">
+		<span class="reasoning-loop__prompt" aria-hidden="true">$</span>
+		<span>proposal --verify --iterate</span>
+		<span class="reasoning-loop__status">loop</span>
+	</header>
+
+	<div class="reasoning-loop__viewport">
+		<div class="reasoning-loop__pipeline">
+			<ol>
+				{
+					steps.map((step, index) => (
+						<li>
+							<span class="reasoning-loop__index">node_{String(index + 1).padStart(2, '0')}</span>
+							<strong>{step.label}</strong>
+							<p>{step.description}</p>
+						</li>
+					))
+				}
+			</ol>
+
+			<div class="reasoning-loop__return" aria-hidden="true">
+				<span>feedback / retry</span>
+			</div>
+		</div>
+	</div>
+</section>
+
+<style>
+	.reasoning-loop {
+		margin: 1.5rem 0;
+		padding: 0.75rem 1rem 0.9rem;
+		overflow: hidden;
+		border: 1px solid rgb(148 163 184);
+		border-radius: 0.375rem;
+		background: rgb(248 250 252 / 42%);
+		box-shadow:
+			0 1px 3px 0 rgb(15 23 42 / 8%),
+			0 1px 2px -1px rgb(15 23 42 / 8%);
+	}
+
+	.reasoning-loop__header {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		margin: 0;
+		padding: 0 0 0.55rem;
+		border-bottom: 1px solid rgb(203 213 225);
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		line-height: 1.2;
+		letter-spacing: 0.035em;
+		text-align: left;
+	}
+
+	.reasoning-loop__prompt {
+		color: var(--accent);
+		font-weight: 700;
+	}
+
+	.reasoning-loop__status {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin-left: auto;
+		color: #15803d;
+		text-transform: uppercase;
+	}
+
+	.reasoning-loop__status::before {
+		width: 0.38rem;
+		height: 0.38rem;
+		border-radius: 50%;
+		background: currentColor;
+		box-shadow: 0 0 0 2px rgb(21 128 61 / 12%);
+		content: '';
+	}
+
+	.reasoning-loop__viewport {
+		overflow-x: auto;
+		scrollbar-color: rgb(148 163 184) transparent;
+		scrollbar-width: thin;
+	}
+
+	.reasoning-loop__pipeline {
+		min-width: 600px;
+		padding-bottom: 0.35rem;
+	}
+
+	ol {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	li {
+		position: relative;
+		min-width: 0;
+		padding: 0.8rem 0.9rem 0.65rem;
+		background: transparent;
+		text-align: left;
+	}
+
+	li + li {
+		border-left: 1px dashed rgb(203 213 225);
+	}
+
+	li:not(:last-child)::after {
+		position: absolute;
+		top: 2.05rem;
+		right: -0.34rem;
+		z-index: 1;
+		padding: 0 0.12rem;
+		background: rgb(248 250 252);
+		color: var(--accent);
+		font-family: var(--font-mono);
+		font-size: 0.88rem;
+		line-height: 1;
+		content: '>';
+	}
+
+	.reasoning-loop__index {
+		display: block;
+		margin-bottom: 0.28rem;
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.62rem;
+		line-height: 1.2;
+		letter-spacing: 0.025em;
+	}
+
+	strong {
+		display: block;
+		color: rgb(var(--black));
+		font-family: var(--font-mono);
+		font-size: 0.88rem;
+		font-weight: 500;
+		line-height: 1.35;
+		letter-spacing: 0.03em;
+	}
+
+	strong::before {
+		color: var(--accent);
+		content: '[ ';
+	}
+
+	strong::after {
+		color: var(--accent);
+		content: ' ]';
+	}
+
+	li p {
+		margin: 0.38rem 0 0;
+		color: rgb(var(--gray-dark));
+		font-family: var(--font-sans);
+		font-size: 0.76rem;
+		line-height: 1.45;
+		text-align: left;
+	}
+
+	.reasoning-loop__return {
+		position: relative;
+		height: 1.9rem;
+		margin: 0 12.5%;
+		border-right: 1px solid rgb(100 116 139);
+		border-bottom: 1px solid rgb(100 116 139);
+		border-left: 1px solid rgb(100 116 139);
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.6rem;
+		letter-spacing: 0.035em;
+		text-align: center;
+	}
+
+	.reasoning-loop__return::before {
+		position: absolute;
+		top: -0.22rem;
+		left: -0.3rem;
+		width: 0;
+		height: 0;
+		border-right: 0.27rem solid transparent;
+		border-bottom: 0.42rem solid var(--accent);
+		border-left: 0.27rem solid transparent;
+		content: '';
+	}
+
+	.reasoning-loop__return span {
+		position: absolute;
+		bottom: -0.3rem;
+		left: 50%;
+		padding: 0 0.45rem;
+		background: rgb(248 250 252);
+		line-height: 1;
+		white-space: nowrap;
+		transform: translateX(-50%);
+	}
+
+	@media (max-width: 640px) {
+		.reasoning-loop {
+			padding-right: 0.75rem;
+			padding-left: 0.75rem;
+		}
+
+		.reasoning-loop__pipeline {
+			min-width: 560px;
+		}
+
+		li {
+			padding-right: 0.75rem;
+			padding-left: 0.75rem;
+		}
+	}
+</style>
