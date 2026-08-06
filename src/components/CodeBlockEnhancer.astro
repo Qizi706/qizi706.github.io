@@ -1,0 +1,78 @@
+<script>
+	const getLanguage = (pre: HTMLPreElement, code: HTMLElement) => {
+		const languageClass = [...code.classList, ...pre.classList].find((className) =>
+			className.startsWith('language-'),
+		);
+
+		return languageClass?.slice('language-'.length) || 'text';
+	};
+
+	const copyText = async (text: string) => {
+		if (!navigator.clipboard) throw new Error('Clipboard API is unavailable');
+		await navigator.clipboard.writeText(text);
+	};
+
+	const enhanceCodeBlocks = () => {
+		document
+			.querySelectorAll<HTMLPreElement>('.prose pre[class*="language-"]:not(.mermaid)')
+			.forEach((pre) => {
+				if (pre.dataset.codeBlockEnhanced === 'true') return;
+
+				const code = pre.querySelector<HTMLElement>(':scope > code');
+				if (!code) return;
+
+				pre.dataset.codeBlockEnhanced = 'true';
+
+				const source = code.textContent || '';
+				const lineCount = Math.max(1, source.replace(/\n$/, '').split('\n').length);
+				const shell = document.createElement('div');
+				const toolbar = document.createElement('div');
+				const language = document.createElement('span');
+				const copyButton = document.createElement('button');
+				const body = document.createElement('div');
+				const lineNumbers = document.createElement('span');
+
+				shell.className = 'code-block-shell';
+				toolbar.className = 'code-block-toolbar';
+				language.className = 'code-block-language';
+				language.textContent = getLanguage(pre, code);
+				copyButton.className = 'code-copy-button';
+				copyButton.type = 'button';
+				copyButton.textContent = 'Copy';
+				copyButton.setAttribute('aria-label', '复制代码');
+				body.className = 'code-block-body';
+				lineNumbers.className = 'code-line-numbers';
+				lineNumbers.setAttribute('aria-hidden', 'true');
+
+				for (let number = 1; number <= lineCount; number += 1) {
+					const line = document.createElement('span');
+					line.textContent = String(number);
+					lineNumbers.append(line);
+				}
+
+				copyButton.addEventListener('click', async () => {
+					try {
+						await copyText(source);
+						copyButton.textContent = 'Copied';
+						copyButton.dataset.state = 'success';
+					} catch {
+						copyButton.textContent = 'Failed';
+						copyButton.dataset.state = 'error';
+					}
+
+					window.setTimeout(() => {
+						copyButton.textContent = 'Copy';
+						delete copyButton.dataset.state;
+					}, 1600);
+				});
+
+				pre.before(shell);
+				toolbar.append(language, copyButton);
+				body.append(lineNumbers, pre);
+				shell.append(toolbar, body);
+			});
+	};
+
+	enhanceCodeBlocks();
+	document.addEventListener('astro:page-load', enhanceCodeBlocks);
+</script>

@@ -19,7 +19,7 @@ export default defineConfig({
 			rehypePlugins: [rehypeKatex, rehypeCallouts, rehypeMermaid],
 		}),
 		syntaxHighlight: {
-			type: 'shiki',
+			type: 'prism',
 			excludeLangs: ['math', 'mermaid'],
 		},
 	},
