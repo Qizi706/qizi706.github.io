@@ -11,7 +11,7 @@
 	--frame-border: #e5e7eb;
 	--content-width: 768px;
 	--shell-width: 1024px;
-	--font-heading: var(--font-merienda), Arial, Helvetica, sans-serif;
+	--font-heading: var(--font-merienda);
 	--font-body: 'Kalam', 'Sans Serif', sans-serif;
 	--font-sans: sans-serif;
 	--font-mono: 'Fira Mono', monospace;
