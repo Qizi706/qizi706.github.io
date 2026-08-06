@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+	<defs>
+		<clipPath id="logo-circle" clipPathUnits="userSpaceOnUse">
+			<circle cx="286" cy="315" r="166" />
+		</clipPath>
+	</defs>
+	<rect width="1200" height="630" fill="#e9edf3" />
+	<image
+		href="q-logo-master.png"
+		x="120"
+		y="149"
+		width="332"
+		height="332"
+		clip-path="url(#logo-circle)"
+	/>
+
+	<g font-family="Fira Mono, Menlo, Consolas, monospace">
+		<text x="520" y="238" fill="#475569" font-size="26">~/wiki $ whoami</text>
+		<text x="520" y="330" fill="#0f172a" font-size="62" font-weight="700">QuanZhou's Wiki</text>
+		<text x="524" y="393" fill="#475569" font-size="23" letter-spacing="1.5">SYSTEMS · C/C++ · STORAGE · AI INFRA</text>
+		<line x1="522" y1="438" x2="1080" y2="438" stroke="#94a3b8" stroke-width="2" />
+		<text x="524" y="490" fill="#334155" font-size="23">qizi706.github.io</text>
+	</g>
+</svg>
