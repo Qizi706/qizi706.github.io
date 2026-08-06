@@ -1,9 +1,9 @@
 import type { CollectionEntry } from 'astro:content';
 
-type BlogPost = Pick<CollectionEntry<'blog'>, 'id'>;
+type BlogPost = Pick<CollectionEntry<'blog'>, 'id' | 'data'>;
 
 export function getPostUrl(post: BlogPost): string {
-	return `/blog/${post.id}/`;
+	return `/${getPrimaryCategorySlug(post)}/${post.id}/`;
 }
 
 export function getCategorySlug(category: string): string {
@@ -21,5 +21,9 @@ export function getCategorySlug(category: string): string {
 }
 
 export function getCategoryUrl(category: string): string {
-	return `/blog/category/${getCategorySlug(category)}/`;
+	return `/category/${getCategorySlug(category)}/`;
+}
+
+export function getPrimaryCategorySlug(post: BlogPost): string {
+	return getCategorySlug(post.data.categories[0] ?? 'uncategorized');
 }
