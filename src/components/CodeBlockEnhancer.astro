@@ -1,15 +1,25 @@
 <script>
-	const getLanguage = (pre: HTMLPreElement, code: HTMLElement) => {
-		const languageClass = [...code.classList, ...pre.classList].find((className) =>
-			className.startsWith('language-'),
-		);
+	type CodeTheme = 'light' | 'dark';
 
-		return languageClass?.slice('language-'.length) || 'text';
+	const themeStorageKey = 'code-theme';
+
+	const getCodeTheme = (): CodeTheme => {
+		try {
+			return localStorage.getItem(themeStorageKey) === 'dark' ? 'dark' : 'light';
+		} catch {
+			return 'light';
+		}
 	};
 
-	const copyText = async (text: string) => {
-		if (!navigator.clipboard) throw new Error('Clipboard API is unavailable');
-		await navigator.clipboard.writeText(text);
+	const applyCodeTheme = (theme: CodeTheme) => {
+		document.documentElement.dataset.codeTheme = theme;
+
+		document.querySelectorAll<HTMLButtonElement>('.code-theme-toggle').forEach((toggle) => {
+			const isDark = theme === 'dark';
+			toggle.setAttribute('aria-checked', String(isDark));
+			toggle.setAttribute('aria-label', isDark ? '切换为亮色代码主题' : '切换为暗色代码主题');
+			toggle.title = isDark ? 'One Light' : 'One Dark';
+		});
 	};
 
 	const enhanceCodeBlocks = () => {
@@ -23,54 +33,52 @@
 
 				pre.dataset.codeBlockEnhanced = 'true';
 
-				const source = code.textContent || '';
-				const lineCount = Math.max(1, source.replace(/\n$/, '').split('\n').length);
 				const shell = document.createElement('div');
-				const toolbar = document.createElement('div');
-				const language = document.createElement('span');
-				const copyButton = document.createElement('button');
+				const actions = document.createElement('div');
+				const themeToggle = document.createElement('button');
 				const body = document.createElement('div');
-				const lineNumbers = document.createElement('span');
 
 				shell.className = 'code-block-shell';
-				toolbar.className = 'code-block-toolbar';
-				language.className = 'code-block-language';
-				language.textContent = getLanguage(pre, code);
-				copyButton.className = 'code-copy-button';
-				copyButton.type = 'button';
-				copyButton.textContent = 'Copy';
-				copyButton.setAttribute('aria-label', '复制代码');
+				actions.className = 'code-block-actions';
+				themeToggle.className = 'code-theme-toggle';
+				themeToggle.type = 'button';
+				themeToggle.setAttribute('role', 'switch');
+				themeToggle.innerHTML = `
+					<span class="code-theme-icon code-theme-icon--light" aria-hidden="true">
+						<svg viewBox="0 0 24 24" focusable="false">
+							<circle cx="12" cy="12" r="3.5"></circle>
+							<path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path>
+						</svg>
+					</span>
+					<span class="code-theme-icon code-theme-icon--dark" aria-hidden="true">
+						<svg viewBox="0 0 24 24" focusable="false">
+							<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+						</svg>
+					</span>
+					<span class="code-theme-thumb" aria-hidden="true"></span>
+				`;
 				body.className = 'code-block-body';
-				lineNumbers.className = 'code-line-numbers';
-				lineNumbers.setAttribute('aria-hidden', 'true');
 
-				for (let number = 1; number <= lineCount; number += 1) {
-					const line = document.createElement('span');
-					line.textContent = String(number);
-					lineNumbers.append(line);
-				}
+				themeToggle.addEventListener('click', () => {
+					const nextTheme: CodeTheme =
+						document.documentElement.dataset.codeTheme === 'dark' ? 'light' : 'dark';
 
-				copyButton.addEventListener('click', async () => {
 					try {
-						await copyText(source);
-						copyButton.textContent = 'Copied';
-						copyButton.dataset.state = 'success';
+						localStorage.setItem(themeStorageKey, nextTheme);
 					} catch {
-						copyButton.textContent = 'Failed';
-						copyButton.dataset.state = 'error';
+						// Theme switching still works when storage is unavailable.
 					}
 
-					window.setTimeout(() => {
-						copyButton.textContent = 'Copy';
-						delete copyButton.dataset.state;
-					}, 1600);
+					applyCodeTheme(nextTheme);
 				});
 
 				pre.before(shell);
-				toolbar.append(language, copyButton);
-				body.append(lineNumbers, pre);
-				shell.append(toolbar, body);
+				actions.append(themeToggle);
+				body.append(pre);
+				shell.append(actions, body);
 			});
+
+		applyCodeTheme(getCodeTheme());
 	};
 
 	enhanceCodeBlocks();

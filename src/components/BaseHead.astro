@@ -35,6 +35,15 @@ const { title, description, image = FallbackImage } = Astro.props;
 />
 <meta name="generator" content={Astro.generator} />
 
+<script is:inline>
+	try {
+		document.documentElement.dataset.codeTheme =
+			localStorage.getItem('code-theme') === 'dark' ? 'dark' : 'light';
+	} catch {
+		document.documentElement.dataset.codeTheme = 'light';
+	}
+</script>
+
 <Font cssVariable="--font-merienda" preload />
 
 <!-- Canonical URL -->
