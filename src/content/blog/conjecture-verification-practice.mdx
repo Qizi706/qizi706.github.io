@@ -138,10 +138,15 @@ ans: 1  3  1  7  1 3  1  15 1  3  1  7  1  3  1  31...
 
 <CoreCard
  title="Speculative Decoding "
- href="https://arxiv.org/abs/2302.01318"
+ href="<https://arxiv.org/abs/2302.01318>"
  class="title-underline"
 >
 这样做的关键在于，**提出候选和验证候选的成本并不相同**。小模型虽然没有大模型可靠，却可以便宜地探索几个可能的后续；大模型也不需要重新逐个提出这些 token，而可以一次检查多个位置。标准的投机采样通过更正的拒绝采样保持 target model 的输出分布，因此获得的不是“降低质量换速度”，而是在目标分布不变的前提下减少解码延迟。
+
+- 提出一个尝试 $\to$ 小模型（eazy）
+- 验证猜想得到答案或更正 $\to$ 大模型（hard）
+
+当直觉足够准，问题的解决就十分迅速。
 
 </CoreCard>
 
@@ -305,7 +310,7 @@ $$
 
 <CoreCard
  title="Freivalds' Algorithm"
- href="https://arxiv.org/abs/1705.10449"
+ href="<https://arxiv.org/abs/1705.10449>"
  class="title-underline"
 >
 
