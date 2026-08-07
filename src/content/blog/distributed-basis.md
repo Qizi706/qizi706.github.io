@@ -9,7 +9,6 @@ tags:
   - "算法"
 draft: false
 mathjax: false
-mermaid: false
 ---
 
 ## 背景

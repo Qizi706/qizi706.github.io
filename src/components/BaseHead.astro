@@ -4,7 +4,6 @@
 import '@fontsource/fira-mono/latin-400.css';
 import '@fontsource/kalam/latin-400.css';
 import '../styles/global.css';
-import 'prism-themes/themes/prism-one-light.css';
 import type { ImageMetadata } from 'astro';
 import FallbackImage from '../assets/q-social-card.png';
 import { SITE_TITLE } from '../consts';
@@ -36,15 +35,6 @@ const socialImageURL = new URL(image.src, Astro.url);
 	href={new URL('rss.xml', Astro.site)}
 />
 <meta name="generator" content={Astro.generator} />
-
-<script is:inline>
-	try {
-		document.documentElement.dataset.codeTheme =
-			localStorage.getItem('code-theme') === 'dark' ? 'dark' : 'light';
-	} catch {
-		document.documentElement.dataset.codeTheme = 'light';
-	}
-</script>
 
 <Font cssVariable="--font-merienda" preload />
 

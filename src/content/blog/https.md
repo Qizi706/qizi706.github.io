@@ -8,7 +8,6 @@ tags:
   - "Network"
 draft: false
 mathjax: true
-mermaid: true
 ---
 
 ## 1. HTTPS 加密过程解读
@@ -65,29 +64,7 @@ HTTPS HTTPS 的握手过程（以主流的 TLS 1.2 为例）分为三个主要�
 > 此前的数据传输都是非对称加密的，也就是服务端会给出公钥，客户端使用公钥传输给服务器的数据只有服务器使用对应的私钥才能解密，这个过程即使数据被劫持也不会被破解出原文。
 > 此时安全性生效，客户端和服务端使用最终的主密钥进行对称加密传输。
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as 客户端 (浏览器)
-    participant S as 服务端 (服务器)
-    Note over C, S: 第一阶段：参数协商 (Negotiation)
-    C->>S: 客户端问候 (Client Hello)<br/>包含：TLS版本、加密套件列表、客户端随机数 r1
-    S->>C: 服务端问候 (Server Hello)<br/>包含：选定的加密套件、服务端随机数 r2
-    Note over C, S: 第二阶段：身份认证与公钥分发 (Authentication)
-    S->>C: 数字证书 (Certificate)<br/>包含：服务端 RSA 公钥、CA 电子签名
-    Note right of C: 客户端执行证书校验：<br/>1. 验证 CA 信任链<br/>2. 确认域名与有效期
-    Note over C, S: 第三阶段：预主密钥交换 (Key Exchange)
-    Note left of C: 内部生成：预主密钥 r3<br/>(Pre-master Secret)
-    C->>S: 客户端密钥交换 (Client Key Exchange)<br/>内容：经服务端公钥加密后的 r3 密文
-    Note right of S: 服务端利用【RSA 私钥】进行解密<br/>提取原始随机数 r3
-    Note over C, S: 第四阶段：会话密钥派生 (Key Derivation)
-    Note left of C: 基于 r1, r2, r3<br/>派生主密钥 (Master Secret)<br/>及对称会话密钥
-    Note right of S: 基于 r1, r2, r3<br/>派生相同的主密钥<br/>及对称会话密钥
-    Note over C, S: 第五阶段：握手验证与切换 (Finalization)
-    C->>S: 切换加密规范 (Change Cipher Spec)<br/>发送握手结束消息 (Finished，含 MAC 校验)
-    S->>C: 切换加密规范 (Change Cipher Spec)<br/>发送握手结束消息 (Finished，含 MAC 校验)
-    Note over C, S: 握手建立成功：后续应用层数据 (HTTP) 使用对称密钥进行加密传输
-```
+![TLS 1.2 RSA 握手时序：客户端与服务端依次完成参数协商、证书验证、预主密钥交换、会话密钥派生和加密切换](/assets/https/tls12-rsa-handshake.svg)
 
 *TLS 1.2（RSA 模式） 握手过程*
 

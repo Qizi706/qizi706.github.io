@@ -206,22 +206,22 @@ function convertNotes(source) {
 	);
 }
 
-function convertMermaid(source) {
+function convertLegacyDiagrams(source) {
 	const figuresConverted = source.replace(
 		/<figure>\s*\{%\s*mermaid\s*%\}\s*([\s\S]*?)\s*\{%\s*endmermaid\s*%\}\s*(?:<figcaption[^>]*>([\s\S]*?)<\/figcaption>\s*)?<\/figure>/gi,
 		(_, diagram, rawCaption = '') => {
 			const caption = stripHtml(rawCaption).replace(/\s+/g, ' ').trim();
-			return `\`\`\`mermaid\n${dedent(diagram)}\n\`\`\`${caption ? `\n\n*${caption}*` : ''}`;
+			return `\`\`\`text\n${dedent(diagram)}\n\`\`\`${caption ? `\n\n*${caption}*` : ''}`;
 		},
 	);
 
 	return figuresConverted
-		.replace(/^[ \t]*\{%\s*mermaid\s*%\}\s*$/gim, '```mermaid')
+		.replace(/^[ \t]*\{%\s*mermaid\s*%\}\s*$/gim, '```text')
 		.replace(/^[ \t]*\{%\s*endmermaid\s*%\}\s*$/gim, '```');
 }
 
 function convertBody(source) {
-	return convertMermaid(convertNotes(source))
+	return convertLegacyDiagrams(convertNotes(source))
 		.replace(/^\s*<!--more-->\s*$/gim, '')
 		.replaceAll('/asserts/', '/assets/')
 		.replace(/\n{3,}/g, '\n\n')
@@ -251,7 +251,6 @@ function serializePost(frontmatter, body, filename) {
 		yamlList('tags', frontmatter.tags ?? []),
 		'draft: false',
 		`mathjax: ${frontmatter.mathjax === true}`,
-		`mermaid: ${frontmatter.mermaid === true}`,
 		'---',
 		'',
 		convertBody(body),

@@ -12,7 +12,6 @@ tags:
   - "存储"
 draft: false
 mathjax: false
-mermaid: false
 ---
 
 ## 背景

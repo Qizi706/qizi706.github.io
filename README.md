@@ -34,7 +34,6 @@ tags:
   - 'Kernel'
 draft: true
 mathjax: false
-mermaid: false
 ---
 
 这里写开场介绍。
@@ -64,7 +63,6 @@ mermaid: false
 | `tags`        |  否  | 标签数组                                  |
 | `draft`       |  否  | 默认 `false`；设为 `true` 时不发布        |
 | `mathjax`     |  否  | 文章使用数学公式时设为 `true`             |
-| `mermaid`     |  否  | 文章使用 Mermaid 图表时设为 `true`        |
 | `heroImage`   |  否  | 文章头图，必须引用 `src` 中的本地图片     |
 
 分类和标签必须写成 YAML 数组，即使只有一个值：
@@ -182,20 +180,15 @@ $$
 
 公式实际由 KaTeX 在构建时渲染；`mathjax` 字段用于标记这篇文章包含数学内容。
 
-### Mermaid 图表
+### 静态图表
 
-使用 Mermaid 时，将 `mermaid` 设为 `true`：
+图表使用 SVG 或普通图片实现，存放到 `public/assets/<文章名>/` 后按普通 Markdown 图片引用：
 
-````md
-```mermaid
-flowchart LR
-    Source --> Compile
-    Compile --> Link
-    Link --> Binary
+```md
+![从源码到可执行文件的构建流程](/assets/cpp-build-tools/build-flow.svg)
 ```
-````
 
-`mermaid: true` 很重要，它会让文章页面加载 Mermaid 渲染器。
+优先使用 SVG：文字和线条在高分屏上保持清晰，页面也不需要加载额外的客户端图表渲染器。
 
 ## 使用 SlideCard
 
@@ -329,7 +322,7 @@ npm run astro -- dev stop
 
 1. 将 `draft` 改为 `false`。
 2. 检查标题、摘要、分类、标签和图片替代文本。
-3. 如果用了公式或 Mermaid，确认对应开关为 `true`。
+3. 如果用了公式，确认 `mathjax` 开关为 `true`。
 4. 运行类型与内容检查：
 
    ```sh
@@ -388,7 +381,7 @@ workflow 同步到默认分支。
 
 ### Markdown 和 MDX 应该选哪个？
 
-- 只写文字、图片、代码、公式或 Mermaid：使用 `.md`。
+- 只写文字、图片、代码或公式：使用 `.md`。
 - 需要在正文中使用 `SlideCard`、`ArticleImage`、`ReasoningLoop` 等 Astro 组件：使用 `.mdx`。
 
 MDX 包含 Markdown 的主要写法，但同时会解析 JSX/组件语法，因此正文中的 `<`、`>` 和 `{}` 需要更加谨慎。

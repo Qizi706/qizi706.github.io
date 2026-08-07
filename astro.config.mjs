@@ -7,20 +7,33 @@ import { defineConfig, fontProviders } from 'astro/config';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
 import rehypeCallouts from './src/plugins/rehype-callouts.mjs';
-import rehypeMermaid from './src/plugins/rehype-mermaid.mjs';
+import { legacyPostRedirects } from './src/legacy-post-redirects.mjs';
+import { pygmentsDefaultTheme } from './src/themes/pygments-default.mjs';
 
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://qizi706.github.io',
-	integrations: [mdx(), sitemap()],
+	trailingSlash: 'always',
+	redirects: legacyPostRedirects,
+	integrations: [
+		mdx(),
+		sitemap({
+			filter: (page) => !Object.hasOwn(legacyPostRedirects, new URL(page).pathname),
+		}),
+	],
 	markdown: {
 		processor: unified({
 			remarkPlugins: [remarkMath],
-			rehypePlugins: [rehypeKatex, rehypeCallouts, rehypeMermaid],
+			rehypePlugins: [rehypeKatex, rehypeCallouts],
 		}),
 		syntaxHighlight: {
-			type: 'prism',
-			excludeLangs: ['math', 'mermaid'],
+			type: 'shiki',
+			excludeLangs: ['math'],
+		},
+		shikiConfig: {
+			theme: pygmentsDefaultTheme,
+			langAlias: { nasm: 'asm' },
+			wrap: false,
 		},
 	},
 	fonts: [

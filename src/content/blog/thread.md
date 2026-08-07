@@ -8,7 +8,6 @@ tags:
   - "C++特性"
 draft: false
 mathjax: false
-mermaid: false
 ---
 
 ## C++ 线程库解决什么问题？

@@ -8,7 +8,6 @@ tags:
   - "C++特性"
 draft: false
 mathjax: false
-mermaid: false
 ---
 
 在 C++ 中，类型转换是一个很常见但也很容易写出隐患的知识点。对于初学者来说，最熟悉的可能是 C 风格强转：

@@ -4,18 +4,15 @@ import CoreCard from '../../components/CoreCard.astro';
 import Note from '../../components/Note.astro';
 import SlideCard from '../../components/SlideCard.astro';
 import BlogPost from '../../layouts/BlogPost.astro';
-import { getPrimaryCategorySlug } from '../../utils/posts';
 
 export async function getStaticPaths() {
 	const posts = (await getCollection('blog')).filter((post) => !post.data.draft);
 	return posts.map((post) => ({
-		params: {
-			category: getPrimaryCategorySlug(post),
-			slug: post.id,
-		},
+		params: { slug: post.id },
 		props: post,
 	}));
 }
+
 type Props = CollectionEntry<'blog'>;
 
 const post = Astro.props;

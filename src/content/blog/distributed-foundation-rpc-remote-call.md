@@ -11,7 +11,6 @@ tags:
   - "系统设计"
 draft: false
 mathjax: false
-mermaid: false
 ---
 
 ## 背景

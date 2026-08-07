@@ -12,7 +12,6 @@ tags:
   - "KV Cache"
 draft: false
 mathjax: false
-mermaid: false
 ---
 
 ## 背景

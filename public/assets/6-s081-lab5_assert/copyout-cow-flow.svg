@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1640" role="img" aria-labelledby="title desc">
+  <title id="title">copyout 处理 COW 页的流程</title>
+  <desc id="desc">copyout 循环检查地址和页表，在遇到 COW 页时处理缺页，再验证写权限并复制数据。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#475569" />
+    </marker>
+    <style>
+      .title { font: 700 30px system-ui, sans-serif; fill: #0f172a; }
+      .text { font: 600 18px system-ui, sans-serif; fill: #0f172a; }
+      .small { font: 16px system-ui, sans-serif; fill: #475569; }
+      .edge { fill: none; stroke: #475569; stroke-width: 2.5; marker-end: url(#arrow); }
+      .node { fill: #ffffff; stroke: #64748b; stroke-width: 2.5; }
+      .decision { fill: #eff6ff; stroke: #3b82f6; stroke-width: 2.5; }
+      .success { fill: #dcfce7; stroke: #22c55e; stroke-width: 2.5; }
+      .error { fill: #fee2e2; stroke: #ef4444; stroke-width: 2.5; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="1640" rx="18" fill="#f8fafc" />
+  <rect x="1" y="1" width="1198" height="1638" rx="18" fill="none" stroke="#cbd5e1" stroke-width="2" />
+  <text x="600" y="48" text-anchor="middle" class="title">Copyout COW Flow</text>
+
+  <rect x="440" y="72" width="320" height="58" rx="29" class="node" />
+  <text x="600" y="108" text-anchor="middle" class="text">开始 copyout</text>
+  <path d="M600 130 V170" class="edge" />
+
+  <polygon points="600,170 770,225 600,280 430,225" class="decision" />
+  <text x="600" y="232" text-anchor="middle" class="text">len &gt; 0？</text>
+  <path d="M430 225 H250" class="edge" />
+  <text x="342" y="213" text-anchor="middle" class="small">否</text>
+  <rect x="50" y="196" width="200" height="58" rx="29" class="success" />
+  <text x="150" y="232" text-anchor="middle" class="text">返回 0</text>
+  <path d="M600 280 V320" class="edge" />
+  <text x="620" y="307" class="small">是</text>
+
+  <rect x="390" y="320" width="420" height="66" rx="10" class="node" />
+  <text x="600" y="348" text-anchor="middle" class="text">计算 va0</text>
+  <text x="600" y="373" text-anchor="middle" class="small">PGROUNDDOWN(dstva)</text>
+  <path d="M600 386 V426" class="edge" />
+
+  <polygon points="600,426 770,481 600,536 430,481" class="decision" />
+  <text x="600" y="488" text-anchor="middle" class="text">va0 ≥ MAXVA？</text>
+  <path d="M770 481 H1040" class="edge" />
+  <text x="852" y="469" text-anchor="middle" class="small">是</text>
+  <path d="M600 536 V576" class="edge" />
+  <text x="620" y="563" class="small">否</text>
+
+  <rect x="390" y="576" width="420" height="66" rx="10" class="node" />
+  <text x="600" y="604" text-anchor="middle" class="text">walk 查找 PTE</text>
+  <text x="600" y="629" text-anchor="middle" class="small">检查页表项是否存在且有效</text>
+  <path d="M600 642 V682" class="edge" />
+
+  <polygon points="600,682 770,737 600,792 430,737" class="decision" />
+  <text x="600" y="730" text-anchor="middle" class="text">PTE 存在</text>
+  <text x="600" y="754" text-anchor="middle" class="text">且 PTE_V 有效？</text>
+  <path d="M770 737 H1040" class="edge" />
+  <text x="852" y="725" text-anchor="middle" class="small">否</text>
+  <path d="M600 792 V832" class="edge" />
+  <text x="620" y="819" class="small">是</text>
+
+  <polygon points="600,832 770,887 600,942 430,887" class="decision" />
+  <text x="600" y="894" text-anchor="middle" class="text">PTE_COW = 1？</text>
+  <path d="M430 887 H350 V1218 H600 V1238" class="edge" />
+  <text x="388" y="875" text-anchor="middle" class="small">否</text>
+  <path d="M600 942 V982" class="edge" />
+  <text x="620" y="969" class="small">是</text>
+
+  <rect x="390" y="982" width="420" height="66" rx="10" class="node" />
+  <text x="600" y="1010" text-anchor="middle" class="text">调用 store_page_fault</text>
+  <text x="600" y="1035" text-anchor="middle" class="small">复制或解除 COW，并重新 walk</text>
+  <path d="M600 1048 V1088" class="edge" />
+
+  <polygon points="600,1088 770,1143 600,1198 430,1143" class="decision" />
+  <text x="600" y="1136" text-anchor="middle" class="text">COW 处理及</text>
+  <text x="600" y="1160" text-anchor="middle" class="text">重新取 PTE 成功？</text>
+  <path d="M770 1143 H1040" class="edge" />
+  <text x="852" y="1131" text-anchor="middle" class="small">否</text>
+  <path d="M600 1198 V1238" class="edge" />
+  <text x="620" y="1225" class="small">是</text>
+
+  <polygon points="600,1238 770,1293 600,1348 430,1293" class="decision" />
+  <text x="600" y="1300" text-anchor="middle" class="text">PTE_W 可写？</text>
+  <path d="M770 1293 H1040" class="edge" />
+  <text x="852" y="1281" text-anchor="middle" class="small">否</text>
+  <path d="M600 1348 V1388" class="edge" />
+  <text x="620" y="1375" class="small">是</text>
+
+  <rect x="390" y="1388" width="420" height="72" rx="10" class="node" />
+  <text x="600" y="1418" text-anchor="middle" class="text">计算物理地址与本次长度</text>
+  <text x="600" y="1444" text-anchor="middle" class="small">pa0 = PTE2PA · n = min(页内剩余, len)</text>
+  <path d="M600 1460 V1495" class="edge" />
+
+  <rect x="390" y="1495" width="420" height="68" rx="10" class="node" />
+  <text x="600" y="1524" text-anchor="middle" class="text">memmove 拷贝数据</text>
+  <text x="600" y="1549" text-anchor="middle" class="small">更新 len、src、dstva</text>
+  <path d="M390 1529 H315 V225 H430" class="edge" />
+  <text x="302" y="880" transform="rotate(-90 302 880)" text-anchor="middle" class="small">继续下一页</text>
+
+  <rect x="930" y="452" width="220" height="1010" rx="14" fill="#fff7f7" stroke="#fecaca" stroke-width="2" stroke-dasharray="7 7" />
+  <path d="M1040 481 V1350" fill="none" stroke="#fca5a5" stroke-width="2" marker-end="url(#arrow)" />
+  <rect x="960" y="1350" width="160" height="58" rx="29" class="error" />
+  <text x="1040" y="1386" text-anchor="middle" class="text">返回 -1</text>
+  <text x="1040" y="1435" text-anchor="middle" class="small">任一校验失败</text>
+</svg>

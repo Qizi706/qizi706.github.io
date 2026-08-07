@@ -10,7 +10,6 @@ tags:
   - "CMake"
 draft: false
 mathjax: false
-mermaid: false
 ---
 
 之前做过 `15445 Bustub`、`6.s081 xv6` 这类项目，其实已经接触过构建工具了。

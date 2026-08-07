@@ -3,7 +3,7 @@ import type { CollectionEntry } from 'astro:content';
 type BlogPost = Pick<CollectionEntry<'blog'>, 'id' | 'data'>;
 
 export function getPostUrl(post: BlogPost): string {
-	return `/${getPrimaryCategorySlug(post)}/${post.id}/`;
+	return `/blog/${post.id}/`;
 }
 
 export function getCategorySlug(category: string): string {
