@@ -14,7 +14,7 @@ interface Props {
 export async function getStaticPaths() {
 	const posts = (await getCollection('blog'))
 		.filter((post) => !post.data.draft)
-		.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+		.sort((a, b) => a.data.pubDate.valueOf() - b.data.pubDate.valueOf());
 	const categoryPosts = new Map<string, CollectionEntry<'blog'>[]>();
 
 	for (const post of posts) {
@@ -39,7 +39,7 @@ const description = `共 ${posts.length} 篇归档于 ${category} 分类的文�
 	<header class="page-heading">
 		<h1>{category}</h1>
 		<ul class="category-summary">
-			<li>{description}，按发布时间由新到旧排列</li>
+			<li>{description}，按发布时间由旧到新排列</li>
 		</ul>
 	</header>
 
