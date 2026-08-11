@@ -1,0 +1,785 @@
+---
+title: 'LLM 推理系统从请求到返回的完整链路'
+description: '阶段 1 的 AI Infra 学习产出：从一条看似简单的推理请求出发，理解 tokenizer、scheduler、prefill、KV Cache、decode、streaming 与 Serving 指标，并用本地实践验证这套心智模型。'
+pubDate: '2026-08-11T17:30:00+08:00'
+categories:
+  - 'AI Infra'
+tags:
+  - 'LLM'
+  - '推理系统'
+  - 'KV Cache'
+  - 'vLLM'
+draft: false
+mathjax: true
+---
+
+import ArticleImage from '../../components/ArticleImage.astro';
+
+## 1. Aside: 一条请求真的有那么简单吗？
+
+<SlideCard title="黑盒：用户视角下最朴素 LLM">
+
+## 输入一个问题
+
+```text
+Prompt: 请解释什么是 KV Cache。
+```
+
+## 等待几秒
+
+```text
+Response: KV Cache 是……
+```
+
+## 最初的理解
+
+- 文本被送进模型
+- 模型在 GPU 上计算
+- 最后返回一段文本
+
+> 这条路径看起来短到只剩下两个动作：**输入**和**输出**。
+
+<ArticleImage
+	src="/assets/llm-inference-request-lifecycle/llm-black-box-reaction-transparent.png"
+	alt="面对看似简单的 LLM 黑盒请求时略显紧张的卡通人物"
+	width={320}
+	maxWidth="100%"
+/>
+
+</SlideCard>
+
+<SlideCard title="但答案返回之前发生了什么？">
+
+## 文本怎样进入模型？
+
+- Chat 消息为什么要先套模板？
+- 字符、单词和 token 为什么不是同一种长度？
+
+## 模型怎样生成答案？
+
+- 为什么 Prompt 可以一次处理，输出却要逐 token 生成？
+- 为什么生成到后面不需要重算全部历史？
+
+## 多个请求怎样共享机器？
+
+- 谁决定请求何时运行、和谁组成 batch？
+- 显存不够时，KV Cache 怎么处理？
+- “快”究竟指首 token 快、后续 token 快，还是总体吞吐高？
+
+</SlideCard>
+
+<Note title="这让我开始换一个视角" class="title-underline">
+
+模型只是推理系统中的一个组件。一次响应背后还有请求接入、模板处理、Tokenization、排队、调度、模型执行、KV Cache、采样、流式传输和指标采集。
+
+这篇文章记录如何理解一个请求从进入 LLM Serving 系统到返回文本的完整过程。第 7 节保留验证摘要，实验环境、故障现场和复现步骤见独立报告[《在 Apple Silicon 上运行 Qwen3-4B：本地 LLM 推理服务实验》](/blog/llm-inference-request-lifecycle-practice/)。
+
+</Note>
+
+## 2. 从模型推理到 LLM Serving
+
+### 2.1 同一份模型，两种系统目标
+
+<SlideCard title="Training vs. Inference">
+
+## 训练在做什么？
+
+- 输入大量样本，执行 Forward、Backward 和 Optimizer Step
+- 保留反向传播所需的激活，并持续更新模型参数
+- 通常使用较大的 batch，提高设备利用率和训练吞吐
+- 关注训练时间、样本吞吐、扩展效率和收敛效果
+
+## 推理在做什么？
+
+- 模型权重通常保持不变，主要执行 Forward
+- 自回归模型按照依赖关系逐个生成 token
+- 在线服务面对不断到达、长度不同的请求
+- 关注 TTFT、TPOT、吞吐、尾延迟、KV Cache 容量和成本
+
+</SlideCard>
+
+<Note title="训练 & 推理" class="title-underline">
+
+训练是在固定数据上反复调整参数，推理是在固定参数上响应动态请求。到了 Serving 场景，问题不再只是“模型能否算出结果”，而是如何让许多到达时间、输入长度和输出长度都不确定的请求，共享有限的计算与内存资源。
+
+</Note>
+
+### 2.2 模型 ≠ 服务？
+
+<SlideCard title="A model is not a service">
+
+## 只有模型权重还缺什么？
+
+- 没有 API Server，请求无法接入
+- 没有 Tokenizer，文本无法变成模型输入
+- 没有 Scheduler，多请求无法有效共享设备
+- 没有 KV Cache 管理，Decode 会重复计算或耗尽内存
+- 没有 Streaming，用户只能等待完整输出
+- 没有 Metrics，系统变慢时无法定位原因
+
+## AI Infra 视角
+
+> 不只是一次 Forward，而是一个请求怎样在模型、计算、内存、调度和网络之间移动。
+
+</SlideCard>
+
+<SlideCard title="第一张 Serving 地图">
+
+## 接入与协议层
+
+- HTTP / RPC、鉴权、限流和请求校验<del>（这里是传统后端吗？）</del>
+- Chat Template、Tokenizer、Detokenizer
+- Streaming、超时、取消和错误返回
+
+## 推理引擎层
+
+- Scheduler、Batching 和 Sequence 状态
+- Prefill / Decode、Sampling 和模型执行
+- KV Cache 的分配、复用、释放与淘汰
+
+## 资源与基础设施层
+
+- GPU / NPU / Apple Silicon 等计算设备
+- HBM / 统一内存 / CPU DRAM / SSD 等存储层级
+- 网络、模型与 Cache 搬运、日志、Tracing 和 Metrics
+
+</SlideCard>
+
+<SlideCard title="这些层怎样连接？">
+
+```text
+client / gateway
+        |
+        v
+API server / tokenizer / streaming
+        |
+        v
+scheduler / batching / sequence state
+        |
+        v
+model executor <----> KV Cache manager
+        |                    |
+        v                    v
+compute device       HBM / DRAM / SSD
+        |
+        v
+metrics / tracing / logs / capacity
+```
+
+> 遇到问题时，可以先判断请求停在哪一层：仍在前端、正在等待调度、设备正在计算、KV Cache 不足，还是结果已经生成但卡在传输。
+
+</SlideCard>
+
+## 3. 一个请求走完整条链路
+
+### 3.1 文本还不是模型输入
+
+<SlideCard title="Text is not the model input">
+
+## API Server
+
+- 模型名称
+- `messages` 或 Prompt
+- `temperature`、`max_tokens` 等采样参数
+- 是否流式返回、是否需要 Logprobs 等服务参数
+
+## Chat Template
+
+- 把 System、User、Assistant 消息组织成模型训练时约定的格式
+- 插入角色标记、分隔符和生成提示
+
+## Tokenizer
+
+- 把模板处理后的字符串切分并映射成 token ID
+- 模型真正消费的是 token ID 序列，而不是字符或单词
+
+</SlideCard>
+
+<Note title="长度最终要回到 token" class="title-underline">
+
+同一段文本会因为语言、Tokenizer 和 Chat Template 不同而得到不同数量的 token。上下文上限、Prefill 工作量和 KV Cache 占用最终都按 token 计算，所以性能实验不能用字符数或单词数代替实际 token 数。
+
+</Note>
+
+Tokenization 通常发生在 CPU 侧，也属于 TTFT 的一部分。Prompt 很长、模板复杂或并发很高时，模型还没开始执行，前端处理就可能已经成为瓶颈。
+
+### 3.2 请求运行
+
+<SlideCard title="Scheduler decides what runs next">
+
+## 请求进入引擎之后
+
+- Tokenized 请求进入等待或运行状态
+- Scheduler 根据请求状态和资源情况组织下一轮工作
+
+## 每一轮都要重新决定
+
+- 哪些新请求执行 Prefill？
+- 哪些已有请求继续 Decode？
+- 哪些 Sequence 可以组成 Batch？
+- 本轮分配多少 Token Budget？
+- KV Cache 是否还有足够的 Block？
+
+> Scheduler 不是只在请求进入时出现一次，它会伴随请求的多个 Engine Step。
+> Scheduler 把请求队列、模型执行和 KV Cache 容量连接在一起。请求此时已经变成模型能理解的 token，但还要等系统为它分配计算机会和内存资源。
+
+</SlideCard>
+
+### 3.3 Prefill：一次读完 Prompt
+
+<SlideCard title="Prefill builds the initial state">
+
+## 输入
+
+- 完整 Prompt 的 token 序列
+
+## 发生的计算
+
+- 每一层对 Prompt token 执行 Transformer Forward
+- 为每层、每个 KV Head、每个 Prompt 位置计算 K/V
+- 将这些 K/V 写入 KV Cache
+
+## 输出
+
+- 根据最后一个 Prompt 位置的 Logits 采样第一个输出 token
+
+## 适合并行
+
+- Prompt 的所有位置已经已知
+- 可以批量执行大量矩阵运算
+
+> Prefill 把“用户输入的一段文本”转化为“模型可以继续生成的初始状态”。它通常构成第一个输出 token 到达前最主要的模型计算，因此 Prompt 变长时，TTFT 往往会明显上升。
+
+</SlideCard>
+
+### 3.4 KV Cache：缓存的不是文本
+
+<SlideCard title="What is cached?">
+
+## Attention 需要
+
+- 已处理 token 在每一层产生 Key 和 Value
+- 后续 token 的 Query 仍要与这些历史 K/V 做 Attention
+
+## KV Cache 保存
+
+- 每个 Transformer Layer 的 K/V Tensor
+- 与 Sequence、Layer、KV Head 和 token 位置对应的中间状态
+
+## 它不是什么？
+
+- 不是原始 Prompt 文本
+- 不是按关键词查找历史内容的数据库
+- 也不是模型权重的一部分
+
+</SlideCard>
+
+<SlideCard title="为什么 KV Cache 会成为瓶颈？">
+
+## 容量随工作负载增长
+
+- 上下文越长，单请求占用的 Cache 越多
+- 并发 Sequence 越多，需要同时保留的 Cache 越多
+
+## Decode 会反复读取
+
+- 每生成一个新 token，都要访问历史 K/V
+- 上下文增长后，单步读取的数据也随之增长
+
+## 管理行为会反过来影响调度
+
+- Block 分配、复用和碎片
+- Cache 淘汰、迁移和重新计算
+- 资源不足时的等待或抢占
+
+</SlideCard>
+
+<SlideCard title="KV Cache 占用">
+
+## 可以用一个粗略关系建立直觉
+
+$$
+S_{\mathrm{KV}} \approx 2 \times L \times H_{\mathrm{KV}} \times D_h \times T_{\mathrm{cached}} \times B
+$$
+
+- $S_{\mathrm{KV}}$ 表示 KV Cache 占用的字节数
+- $L$ 是模型层数
+- $H_{\mathrm{KV}}$ 是 KV Head 数
+- $D_h$ 是每个 Head 的维度
+- $T_{\mathrm{cached}}$ 是所有活跃 Sequence 当前缓存的 token 总数
+- $B$ 是每个元素占用的字节数
+
+> 系数 $2$ 代表 K 和 V。实际实现还要考虑 Block 大小、对齐和元数据，但这个关系已经说明：模型层数、上下文、并发和精度都会扩大 Cache 占用。
+
+</SlideCard>
+
+### 3.5 Decode：一次只向前走一个 token
+
+<SlideCard title="The autoregressive loop">
+
+## 一轮 Decode
+
+- 输入当前已经确定的最新 token。
+- 对这个 token 执行所有 Transformer Layer。
+- 计算它的 Q/K/V，并把新 K/V 追加到 Cache。
+- 使用新的 Q 与全部历史 K/V 计算 Attention。
+- 得到 Logits，按照采样策略选择下一个 token。
+- 没有结束时，再次等待 Scheduler 安排下一轮。
+
+## 什么时候结束？
+
+- 生成 EOS
+- 达到长度上限
+- 客户端取消或超时
+- 服务内部发生错误
+
+</SlideCard>
+
+<Note title="一个容易写反的时序" class="title-underline">
+
+预测第 100 个生成 token 时，第 100 个 token 还未知。系统处理的是第 99 个已经确定的 token，并由这一步产生预测第 100 个 token 的 Logits；不能先计算“第 100 个 token 的 KV”再预测它自己。
+
+</Note>
+
+Decode 每轮只有一个新的序列位置，却要读取不断增长的历史 KV Cache；下一轮又依赖本轮采样结果，所以单个 Sequence 无法跨 token 并行。它通常具有较低的算术强度，更容易受到内存带宽、Batching 和调度效率影响。
+
+### 3.6 Token 怎样重新变回文字？
+
+<SlideCard title="Detokenize and stream">
+
+## Detokenizer
+
+- 把新增的 token ID 转换为可以显示的文本片段
+- 处理某些 token 跨字符或跨字节边界的情况
+
+## Streaming
+
+- 请求完全结束前，持续把新增文本发送给客户端
+- 让用户更早看到第一个结果
+
+## 请求结束后
+
+- 返回停止原因和 Usage 等元数据
+- 释放或复用 Sequence 状态与 KV Cache
+- 记录延迟、吞吐、Cache 使用和错误指标
+
+</SlideCard>
+
+<SlideCard title="现在重新看完整链路">
+
+```text
+request
+   -> chat template
+   -> tokenizer
+   -> waiting queue
+   -> scheduler
+   -> prefill
+   -> KV Cache
+   -> decode step
+   -> scheduler
+   -> decode step ...
+   -> detokenize
+   -> stream / response
+   -> metrics
+```
+
+> 这不是一个只向前执行一次的流水线。Prefill 之后，请求会在 Scheduler、Decode 和 KV Cache 之间循环，直到生成结束。
+
+</SlideCard>
+
+## 4. Prefill、Decode 和 KV Cache 为什么必须一起理解？
+
+### 4.1 如果没有 KV Cache？
+
+<SlideCard title="Recompute or reuse">
+
+## without KV Cache
+
+为了继续生成下一个 token，模型每一步都要重新处理：
+
+```text
+Prompt + 所有已经生成的 token
+```
+
+- 历史 token 的 K/V 被重复计算
+- Attention、MLP 和中间激活也重新执行
+- 序列越长，重复工作越多
+
+## with KV Cache
+
+- 历史 token 的 K/V 已经保存
+- 当前步骤只计算最新输入位置的新状态
+- 新的 Query 直接读取历史 K/V 做 Attention
+
+> KV Cache 用内存换取了计算时间。它消除了大量历史重算，却把系统压力转移到了 Cache 容量、内存带宽和生命周期管理上。
+
+</SlideCard>
+
+### 4.2 两个阶段为什么表现不同？
+
+<SlideCard title="Prefill vs. Decode">
+
+| 对比               | Prefill               | Decode                     |
+| ------------------ | --------------------- | -------------------------- |
+| 每次处理的新 token | 整个 Prompt           | 每个 Sequence 通常 1 个    |
+| 并行性             | Prompt 位置可批量处理 | 单 Sequence 跨 token 串行  |
+| 建立或读取的状态   | 建立初始 KV Cache     | 读取历史并追加新 K/V       |
+| 常见性能倾向       | 更容易利用大矩阵计算  | 更容易受内存带宽和调度影响 |
+| 直接影响的用户体验 | 首 token 到达         | 后续 token 的生成节奏      |
+
+</SlideCard>
+
+<SlideCard title="工作负载改变后会发生什么？">
+
+## Prompt 更长
+
+- Prefill 处理的 token 更多
+- 初始 KV Cache 更大
+- TTFT 通常上升
+
+## 输出更长
+
+- Decode 轮数更多
+- 总生成时间累积
+- KV Cache 继续增长
+
+## 并发更高
+
+- 更多 Sequence 竞争设备时间和 Cache 容量
+- Scheduler 的选择变得更重要
+
+</SlideCard>
+
+<Note title="不要把趋势误认为是固定倍数" class="title-underline">
+
+Prompt 增长 8 倍，Prefill 工作通常会显著增加，但 TTFT 不一定严格增长 8 倍。TTFT 还包含 Tokenization、排队、调度、采样和传输；Prefill 自身也受算子实现、Batching 和硬件利用率影响。
+
+</Note>
+
+## 5. Scheduler：从单请求推理进入 Serving
+
+### 5.1 顺序执行还不够
+
+<SlideCard title="One request vs. online serving">
+
+## 只有一个请求
+
+```text
+prefill -> decode -> decode -> ... -> finish
+```
+
+- 顺序执行就能得到结果
+- 不需要决定“先服务谁”
+
+## 在线 Serving
+
+```text
+new requests + running requests + limited compute + limited cache
+```
+
+- 请求不断到达，长度各不相同
+- Prefill 和 Decode 同时争用设备
+- 多个 Sequence 竞争 KV Cache
+- 系统还要满足延迟、吞吐和公平性目标
+
+</SlideCard>
+
+### 5.2 Scheduler 在权衡什么？
+
+<SlideCard title="Scheduler optimizes trade-offs">
+
+## 吞吐与延迟
+
+- 更大的 Batch 往往提高设备利用率和 Token Throughput
+- 等待更多请求组成 Batch，也会增加 Queueing Delay 和 TTFT
+
+## Prefill 与 Decode 的干扰
+
+- 长 Prompt 的 Prefill 可能长时间占用计算资源
+- 正在 Decode 的请求需要稳定获得执行机会，才能保持较低 TPOT
+
+## 公平与效率
+
+- 优先短请求可以降低平均延迟，却可能让长请求饥饿
+- 优先 Cache Locality 可以减少重算或搬运，却不一定符合严格 FIFO
+
+</SlideCard>
+
+<SlideCard title="资源不足时没有免费选择">
+
+## 等待
+
+- 保留已有状态，但增加排队或暂停时间
+
+## 抢占或换出
+
+- 把机会让给其他请求，但需要额外的状态管理和搬运
+
+## 淘汰后重算
+
+- 释放 Cache 容量，却在恢复时重新付出计算成本
+
+## 直接拒绝
+
+- 保护系统稳定性，但降低可用容量
+
+</SlideCard>
+
+<Note title="利用率不是最终目标" class="title-underline">
+
+一个系统可以让 GPU 始终繁忙，却让请求长时间排队；也可以追求很低的单请求延迟，却无法形成有效 Batch。Serving 优化面对的是吞吐、尾延迟、公平性、KV Cache 容量和成本的共同约束。
+
+</Note>
+
+## 6. Metrics：系统的“快”不是一个数字
+
+### 6.1 用户在等待什么？
+
+<SlideCard title="Latency is not one number">
+
+## End-to-end Latency
+
+- 从客户端发出请求，到收到完整响应
+- 包含前处理、排队、Prefill、全部 Decode、后处理和网络传输
+
+## TTFT — Time To First Token
+
+- 从请求发出，到客户端收到第一个输出 token
+- 通常包含前端处理、排队、调度、Prefill、第一次采样和传输
+
+## TPOT — Time Per Output Token
+
+- 第一个 token 之后，生成后续 token 的平均耗时
+- 适合概括一次请求或一组请求的平均 Decode 节奏
+
+## ITL — Inter-token Latency
+
+- 客户端观测到的相邻输出 token 到达间隔
+- 逐 token 记录后，可以继续分析抖动和分布
+
+</SlideCard>
+
+<SlideCard title="把总延迟拆开">
+
+## 总延迟计算
+
+$$
+\begin{aligned}
+T_{\mathrm{TTFT}}
+&\approx T_{\mathrm{frontend}}
++ T_{\mathrm{queue}}
++ T_{\mathrm{schedule}}
++ T_{\mathrm{prefill}}
++ T_{\mathrm{transfer}}^{(1)}, \\
+T_{\mathrm{E2E}}
+&\approx T_{\mathrm{TTFT}}
++ \sum_{i=2}^{N} T_{\mathrm{ITL}}^{(i)}.
+\end{aligned}
+$$
+
+- $N$ 是实际生成的 token 数
+- $T_{\mathrm{ITL}}^{(i)}$ 表示第 $i-1$ 个与第 $i$ 个输出 token 到达客户端的时间间隔
+
+> 看到总延迟变大时，不能立刻归因于“模型变慢”。问题可能发生在排队、Prompt、Decode 轮数、Cache 访问、网络传输，甚至冷启动。
+
+</SlideCard>
+
+### 6.2 系统在完成多少工作？
+
+<SlideCard title="Throughput has multiple units">
+
+## Request Throughput
+
+- 单位时间完成多少个请求
+- 会受到请求输入和输出长度分布影响
+
+## Token Throughput
+
+- 单位时间处理或生成多少 token
+- 应区分 Input Token 与 Output Token
+
+## Utilization 与容量
+
+- GPU 利用率高，不代表 TTFT 或 P99 一定好
+- KV Cache 占满，不代表没有碎片或低价值数据
+- 还需要观察设备内存、队列长度、Cache 使用和错误率
+
+</SlideCard>
+
+<SlideCard title="看到一个数字以后先问什么？">
+
+## 80 tokens/s
+
+- 是 Prefill 还是 Decode 的速度？
+- 是单请求还是整个服务的吞吐？
+- 输入和实际输出分别有多少 token？
+
+## 1.2 s latency
+
+- 是 TTFT 还是完整请求耗时？
+- 是否包含冷启动和排队？
+- 报告的是一次结果、平均值还是 P99？
+
+## 一个可解释的 Benchmark 还需要
+
+- 模型、量化、硬件和软件版本
+- Warmup、并发、采样参数与上下文配置
+- 多次运行及其统计方式
+
+</SlideCard>
+
+<Note title="指标必须和工作负载一起出现" class="title-underline">
+
+没有输入/输出 token、并发和分位数，单独一个 `tokens/s` 很难支持可复现的系统结论。指标不是给系统贴上“快”或“慢”的标签，而是帮助定位请求在哪个阶段付出了时间和资源。
+
+</Note>
+
+## 7. 实践验证摘要：理论是否符合真实观测？
+
+这一节只保留验证结果，用来检查前文的请求链路能否解释真实系统。完整的实验环境、测量方法、测试脚本、故障分析、两版 CSV、vLLM Metal 部署过程和复现步骤记录在实验报告[《在 Apple Silicon 上运行 Qwen3-4B：本地 LLM 推理服务实验》](/blog/llm-inference-request-lifecycle-practice/)中。
+
+<SlideCard title="四个问题，四组观测">
+
+## 冷启动与稳态
+
+- 第一次请求总耗时约 1.710 秒，紧接着重复请求约 1.160 秒
+- 两次 Decode 速度分别为 85.88 和 86.64 token/s
+- 差异主要来自首次模型加载与初始化，正式测量前需要 Warmup
+
+## 输入长度
+
+- 固定 Output 为 32 token，实际 Prompt 从 129 增至 2272 token
+- Prefill 从 67.7 ms 增至 1264.3 ms
+- TPOT 从 11.47 ms 增至 13.39 ms，长历史也会影响 Decode 单步成本
+
+## 输出长度
+
+- 固定 Prompt 为 250 token，Prefill 始终约 104 ms
+- 实际 Output 从 32 增至 128 token，Decode 从 366.5 ms 增至 1508.1 ms
+- 配置上限 512 不等于实际输出；模型生成 EOS 后在 292 token 停止
+
+## vLLM Serving
+
+- Metal Plugin 激活，MLX-LM 完成模型加载和 Warmup
+- `/health`、`/v1/models`、`/v1/chat/completions` 均返回 HTTP 200
+- 理论中的 API、Tokenizer、Scheduler、KV Cache、Worker 和返回路径得到运行时对应
+
+</SlideCard>
+
+<SlideCard title="实验也可能先证伪实验设计">
+
+## 第一版为什么异常？
+
+- 用大量重复文本构造 Prompt，只在开头加入随机 Nonce
+- 2050-token 组第一次 Prefill 为 1081.3 ms，后四次却只有 13.8～21.7 ms
+- 高度重复的输入让缓存复用成为混杂因素，不能再把计时当作完整 Prefill
+
+## 怎样修正？
+
+- 从 Prompt 前部开始随机采样单词，降低共享长前缀的可能
+- 固定模型、输出长度、并发和采样参数
+- 每组 Warmup 后运行 5 次，保留原始数据并报告中位数
+
+## 留下的方法论
+
+异常值没有被删除，因为它说明“改变了配置”不等于“隔离了变量”。观测与预测冲突时，应该先确认系统究竟执行了多少工作。
+
+</SlideCard>
+
+<SlideCard title="这些证据支持到哪里？">
+
+## 能够支持
+
+- 在当前配置下，输入长度主要增加 Prefill 时间和初始 KV Cache
+- 实际输出长度主要增加顺序执行的 Decode 轮数
+- 更长的上下文会缓慢提高 Decode 的单 token 成本
+- Warmup、真实 token 数和多次测量是可解释 Benchmark 的前提
+
+## 仍然不能支持
+
+- 没有并发实验，不能评价 Continuous Batching 和吞吐上限
+- 没有流式时间戳，不能报告严格 TTFT / Inter-token Latency
+- 没有 P50 / P95 / P99，不能评价尾延迟
+- Ollama 与 vLLM Metal 执行栈不同，不能做公平性能排名
+- Apple Silicon 上的结果不能直接推广到 CUDA GPU 或多机服务
+
+</SlideCard>
+
+<Note title="完整实践记录" class="title-underline">
+
+如果需要复现实验或查看失败过程，请继续阅读[完整实验报告](/blog/llm-inference-request-lifecycle-practice/)。其中保留了运行命令、指标定义、原始数据范围、Metal Plugin 排查过程、服务日志与验收依据。
+
+</Note>
+## 8. 重新回答最初的问题
+
+<SlideCard title="From request to response">
+
+## 一次请求经历了什么？
+
+1. API Server 解析消息、模型和采样参数。
+2. Chat Template 把消息组织成模型约定的格式。
+3. Tokenizer 把文本转换为 token ID。
+4. Scheduler 决定执行时机、Batch 和 KV Cache 资源。
+5. Prefill 处理 Prompt，建立初始 KV Cache 并产生首 token。
+6. Decode 读取历史 K/V、追加新 K/V，再预测下一个 token。
+7. Scheduler 在轮次之间继续组织请求，直到生成结束。
+8. Detokenizer 把 token 转回文本，API Server 流式或一次性返回。
+9. Metrics 记录排队、TTFT、TPOT、吞吐、Cache 使用和错误。
+
+</SlideCard>
+
+<SlideCard title="阶段 1 最后留下的理解">
+
+## Prompt 决定了什么？
+
+- Tokenizer 后的真实输入长度
+- Prefill 工作量和初始 KV Cache
+- TTFT 的重要组成部分
+
+## 输出决定了什么？
+
+- Decode 轮数和完整生成耗时
+- KV Cache 后续增长
+- 用户看到文本持续输出的节奏
+
+## 系统决定了什么？
+
+- Scheduler 何时让请求运行
+- Batching 怎样改变吞吐与延迟
+- Cache 容量如何限制并发
+- Streaming 和网络怎样改变用户感知
+
+</SlideCard>
+
+<Note title="模型之外，系统仍然决定体验" class="title-underline">
+
+同一份模型权重不会自动带来相同的 Serving 表现。LLM Serving 的性能是**模型计算、请求调度、内存管理、基础设施和服务目标共同形成的结果**。
+
+阶段 1 的真正产出，也不是记住几个缩写，而是能用一条因果链解释请求为什么这样流动、为什么这样耗时，以及应该收集什么证据来验证判断。
+
+</Note>
+
+<Note title="仍然没有回答完的问题" class="title-underline">
+
+- 并发增加后，Scheduler 怎样在 Prefill 和 Decode 之间分配 Token Budget？
+- Batch 变大时，吞吐提高到什么程度会开始伤害 TTFT 和 P99？
+- KV Cache 为什么需要 Block / Page 管理，而不能简单地连续分配？
+- Prefix Cache 命中、淘汰和重算应该怎样进入调度决策？
+
+这些问题会进入下一阶段：Transformer 推理、Attention、Continuous Batching、Prefix Caching 与 KV Cache 管理。
+
+</Note>
+
+<Note title="阅读材料" class="title-underline">
+
+- Jay Alammar，[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)
+- Jay Alammar，[The Illustrated GPT-2](https://jalammar.github.io/illustrated-gpt-2/)
+- Hugging Face，[How to generate text](https://huggingface.co/blog/how-to-generate)
+- Hugging Face，[Text generation](https://huggingface.co/docs/transformers/main/en/llm_tutorial)
+- Hugging Face，[Caching](https://huggingface.co/docs/transformers/main/en/cache_explanation)
+- Hugging Face，[LLM inference optimization](https://huggingface.co/docs/transformers/main/en/llm_optims)
+- vLLM，[vLLM: Easy, Fast, and Cheap LLM Serving with PagedAttention](https://blog.vllm.ai/2023/06/20/vllm.html)
+- vLLM，[Paged Attention](https://docs.vllm.ai/en/latest/design/kernel/paged_attention.html)
+- NVIDIA，[LLM Benchmarking Metrics](https://docs.nvidia.com/nim/benchmarking/llm/latest/metrics.html)
+
+</Note>

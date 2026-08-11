@@ -9,14 +9,40 @@ const posts = (await getCollection('blog'))
 	.filter((post) => !post.data.draft)
 	.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
 
-const categoryCounts = posts.reduce((counts, post) => {
-	for (const category of post.data.categories) {
-		counts.set(category, (counts.get(category) ?? 0) + 1);
-	}
-	return counts;
-}, new Map<string, number>());
+interface CategorySummary {
+	name: string;
+	count: number;
+	earliestPubDate: Date;
+	latestPubDate: Date;
+}
 
-const categories = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
+const categorySummaries = posts.reduce((summaries, post) => {
+	for (const category of post.data.categories) {
+		const current = summaries.get(category);
+
+		if (!current) {
+			summaries.set(category, {
+				name: category,
+				count: 1,
+				earliestPubDate: post.data.pubDate,
+				latestPubDate: post.data.pubDate,
+			});
+			continue;
+		}
+
+		current.count += 1;
+		if (post.data.pubDate < current.earliestPubDate) current.earliestPubDate = post.data.pubDate;
+		if (post.data.pubDate > current.latestPubDate) current.latestPubDate = post.data.pubDate;
+	}
+	return summaries;
+}, new Map<string, CategorySummary>());
+
+const categories = [...categorySummaries.values()].sort(
+	(a, b) =>
+		b.earliestPubDate.valueOf() - a.earliestPubDate.valueOf() ||
+		b.latestPubDate.valueOf() - a.latestPubDate.valueOf() ||
+		a.name.localeCompare(b.name, 'zh-CN'),
+);
 const featuredPost = posts.find((post) => post.id === 'conjecture-verification-practice');
 ---
 
@@ -79,9 +105,9 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 			<section aria-labelledby="topics-heading">
 				<h2 id="topics-heading">文章存档</h2>
 				<ul class="category-links">
-					{categories.map(([category, count]) => (
+					{categories.map(({ name, count }) => (
 						<li>
-							<a href={getCategoryUrl(category)}>{category}</a>
+							<a href={getCategoryUrl(name)}>{name}</a>
 							<small>（{count} 篇文章）</small>
 						</li>
 					))}

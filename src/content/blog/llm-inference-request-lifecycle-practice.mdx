@@ -1,0 +1,701 @@
+---
+title: '本地 LLM 推理服务实验'
+description: '在 Apple M5 Pro 上运行 Qwen3-4B，拆分 Prefill 与 Decode 延迟，排查 Prompt Cache 污染和 vLLM Metal 安装故障，并留下可复现脚本、CSV、日志与验收结果。'
+pubDate: '2026-08-11T18:10:00+08:00'
+categories:
+  - 'AI Infra'
+tags:
+  - 'LLM'
+  - 'Ollama'
+  - 'vLLM'
+  - 'Benchmark'
+draft: false
+mathjax: true
+---
+
+## 实验目标与范围
+
+<SlideCard title="实验概览">
+
+## 实验目标
+
+- 在一台 Apple Silicon Mac 上运行本地 LLM 推理服务，并回答三个性能问题：
+  - Cold Start 与 Steady State 的成本差在哪里？
+  - Prompt 和 Output 变长时，时间分别落在 Prefill 还是 Decode？
+  - vLLM Core、Metal Plugin、MLX Model Runner 与 HTTP API 怎样组成可工作的服务？
+
+## 实验负载
+
+- Model family：Qwen3-4B-Instruct-2507
+- Ollama：GGUF Q4_K_M，用于单请求长度实验
+- vLLM Metal：MLX 4-bit，用于部署服务与验证完整推理链路
+- Context：4096 token
+- Concurrency：1
+
+## 验收结果
+
+```text
+Ollama request        PASS
+Cold/warm isolation  PASS
+Prompt scaling       PASS after one invalid experiment
+Output scaling       PASS
+vLLM Metal plugin    PASS after one partial installation
+OpenAI-compatible API PASS
+```
+
+</SlideCard>
+
+这不是 Ollama 与 vLLM 的性能排名。两条路径使用不同模型制品、量化实现、Kernel 和 Cache 管理；这里用 Ollama 暴露细粒度计时字段，用 vLLM Metal 验证一条更完整的 Serving 路径。
+
+相关的推理系统背景，包括 Tokenizer、Scheduler、Prefill、KV Cache、Decode 和 Metrics，可参考[《LLM 推理系统从请求到返回的完整链路》](/blog/llm-inference-request-lifecycle/)。本文本身是一份可以独立阅读和复现的实验报告。
+
+## 实验环境
+
+<SlideCard title="软硬件环境快照">
+
+## 硬件
+
+- MacBook Pro，Apple M5 Pro
+- 18-core CPU、20-core GPU
+- 48 GB Unified Memory
+
+## Ollama 环境
+
+- Ollama 0.32.7
+- `qwen3:4b-instruct-2507-q4_K_M`
+- Flash Attention enabled
+- KV Cache type：`q8_0`
+
+## vLLM 环境
+
+- Python 3.12
+- vLLM Core 0.27.0+cpu
+- vLLM Metal 0.3.0.dev20260811042359
+- MLX 0.32.0 / MLX-LM 0.31.3
+- `mlx-community/Qwen3-4B-Instruct-2507-4bit`
+
+</SlideCard>
+
+48 GB 内存足以尝试更大的量化模型，但模型能力不是本实验的自变量。4B 模型可以缩短下载、加载和重复测量周期，同时仍然经过真实的 Tokenization、Prefill、KV Cache 和 Autoregressive Decode 路径。
+
+GGUF Q4_K_M 描述 Ollama 侧的权重表示，`OLLAMA_KV_CACHE_TYPE=q8_0` 描述运行时 K/V 的缓存精度。权重量化与 KV Cache 量化是两组不同的数据，不能混为一个“4-bit 模型”配置。
+
+## 测量方法与指标
+
+### 实验矩阵
+
+| ID       | 改变的变量                    | 固定条件                    | 要验证的知识                      |
+| -------- | ----------------------------- | --------------------------- | --------------------------------- |
+| EXP-00   | 请求是否为 Cold Start         | 同一 Prompt / Output        | 加载成本不能混入稳态推理          |
+| EXP-01   | Prompt 构造长度 64/512/2048   | Output 上限 32 token        | Prompt 主要增加 Prefill 与初始 KV |
+| EXP-02   | Output 上限 32/128/512 token  | 同一份约 250-token Prompt   | Output 主要增加顺序 Decode 轮数   |
+| BRING-UP | Ollama 与 vLLM Metal 服务路径 | Model family / context 近似 | 包存在不等于硬件执行链路完整      |
+
+除被测变量外，长度实验使用相同模型、`temperature=0`、`seed=42`、`num_ctx=4096` 和单请求并发。每个配置先 Warmup，再运行 5 次；原始结果逐行写入 CSV，表格报告中位数而不是挑选最快的一次。
+
+### 指标从哪里来？
+
+Ollama 非流式响应提供：
+
+| 字段                   | 实验中的解释                              |
+| ---------------------- | ----------------------------------------- |
+| `prompt_eval_count`    | Tokenizer 后的实际 Prompt token 数        |
+| `prompt_eval_duration` | Prompt Evaluation 时间，作为 Prefill 观测 |
+| `eval_count`           | 实际生成的 Output token 数                |
+| `eval_duration`        | 生成阶段耗时，作为 Decode 观测            |
+| `load_duration`        | 模型加载及相关初始化耗时                  |
+| `total_duration`       | 服务端记录的请求总耗时                    |
+| `done_reason`          | 达到长度上限或模型主动停止                |
+
+换算统一使用纳秒到毫秒：
+
+$$
+\begin{aligned}
+T_{\mathrm{prefill}} &= \frac{\texttt{prompt\_eval\_duration}}{10^6},\\
+T_{\mathrm{decode}} &= \frac{\texttt{eval\_duration}}{10^6},\\
+\widehat{T}_{\mathrm{TPOT}} &= \frac{T_{\mathrm{decode}}}{N_{\mathrm{output}}}.
+\end{aligned}
+$$
+
+这里的 TPOT 带有帽子，因为它只是整段 `eval_duration / eval_count`。`stream=false` 没有记录首个 Chunk 和后续 Chunk 的客户端到达时间，因此本实验没有测到严格 TTFT 与 Inter-token Latency。
+
+<Note title="指标解释原则" class="title-underline">
+
+配置值不是工作量。构造 512 个单词不等于 512 个 Prompt token；`num_predict=512` 也不等于模型一定执行 512 轮 Decode。分析一律使用运行时返回的 `prompt_eval_count`、`eval_count` 和 `done_reason`。
+
+</Note>
+
+## 启动 Ollama 并验证基础推理
+
+### 启动 Ollama 服务
+
+<CoreCard title="终端 A：启动服务" class="title-underline">
+
+```bash
+OLLAMA_FLASH_ATTENTION=1 \
+OLLAMA_KV_CACHE_TYPE=q8_0 \
+ollama serve
+```
+
+```bash
+ollama pull qwen3:4b-instruct-2507-q4_K_M
+```
+
+</CoreCard>
+
+### 问题一：请求还没有进入模型
+
+第一次请求把 Prompt 直接折成两行：
+
+```json
+{
+  "prompt": "请解释一次 LLM 请求如何经过
+  tokenizer、prefill、KV Cache 和 decode。"
+}
+```
+
+服务端立即返回：
+
+```text
+invalid character '\n' in string literal
+```
+
+这是协议层失败，不是 Tokenizer 或 Model Runner 失败。Shell 外层的单引号只能保护参数不被 Shell 展开，不能让非法 JSON 变合法；JSON String 内的换行必须写成 `\n`，或直接保持单行。
+
+<CoreCard title="终端 B：发送测试请求" class="title-underline">
+
+```bash
+curl -s http://127.0.0.1:11434/api/generate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "qwen3:4b-instruct-2507-q4_K_M",
+    "prompt": "请用不超过 150 字解释一次 LLM 推理请求如何经过 tokenizer、prefill、KV Cache 和 decode。",
+    "stream": false,
+    "options": {
+      "temperature": 0,
+      "num_predict": 128,
+      "num_ctx": 4096
+    }
+  }' \
+  -o /tmp/qwen3-local-run.json
+```
+
+```bash
+python3 -m json.tool /tmp/qwen3-local-run.json
+```
+
+</CoreCard>
+
+在自动化脚本中不再拼 JSON 字符串，而是让 `json.dumps()` 负责转义。这个修复把失败边界从“curl 能否发出请求”推进到真正的 Model Execution。
+
+## 冷启动与稳态推理的差异
+
+同一个 36-token Prompt 连续执行两次，实际生成均为 87 token：
+
+<SlideCard title="冷启动与热启动对比">
+
+## 首次请求
+
+- Decode：1.013 s
+- Decode throughput：85.88 token/s
+- Load：636.6 ms
+- Total：1.710 s
+
+## 立即重复请求
+
+- Decode：1.004 s
+- Decode throughput：86.64 token/s
+- Total：1.160 s
+
+## 差异
+
+- Decode 速度相差不到 1%
+- 总耗时减少约 550 ms
+- 差异与首次 Load / Initialization 对应
+
+</SlideCard>
+
+结论不是“第二次模型更快”，而是 Steady-state Decode 基本一致。冷启动多出的模型加载和初始化必须单独标记；否则一次包含 Load 的请求会让 Prompt 或 Decode 背上不属于它们的时间。
+
+## 基准测试脚本与数据记录
+
+### 请求发送与计时
+
+Benchmark 使用 Python 标准库发送请求，并同时记录服务端时间与客户端 Wall Clock：
+
+```python
+def generate(prompt, num_predict):
+    payload = {
+        'model': MODEL,
+        'prompt': prompt,
+        'stream': False,
+        'keep_alive': '10m',
+        'options': {
+            'temperature': 0,
+            'seed': 42,
+            'num_predict': num_predict,
+            'num_ctx': 4096,
+        },
+    }
+
+    request = urllib.request.Request(
+        URL,
+        data=json.dumps(payload).encode('utf-8'),
+        headers={'Content-Type': 'application/json'},
+    )
+
+    start = time.perf_counter()
+    with urllib.request.urlopen(request, timeout=300) as response:
+        result = json.load(response)
+    client_ms = (time.perf_counter() - start) * 1000
+    return result, client_ms
+```
+
+### 结果字段
+
+每次运行写入一行，不在采集阶段丢弃异常值：
+
+```python
+{
+    'experiment': experiment,
+    'target': target,
+    'run': run,
+    'prompt_tokens': result['prompt_eval_count'],
+    'output_tokens': result['eval_count'],
+    'load_ms': result['load_duration'] / 1e6,
+    'prefill_ms': result['prompt_eval_duration'] / 1e6,
+    'decode_ms': result['eval_duration'] / 1e6,
+    'approx_tpot_ms': result['eval_duration'] / 1e6 / result['eval_count'],
+    'total_ms': result['total_duration'] / 1e6,
+    'client_ms': client_ms,
+    'done_reason': result['done_reason'],
+}
+```
+
+`client_ms` 与 `total_ms` 接近，说明在这组本机单请求实验中，HTTP 和 JSON 处理不是主要耗时。不过这不代表远程网络或高并发条件下也可以忽略 Frontend。
+
+## 输入长度对 Prefill 的影响
+
+### 实验预期
+
+固定输出为 32 token，只增加 Prompt：
+
+- Prefill 需要处理更多输入并建立更多初始 K/V，应成为延迟增量的主要来源。
+- Decode 轮数固定，但每轮 Attention 面对的历史更长，TPOT 可能缓慢上升。
+
+### 第一次实验：输入被缓存行为污染
+
+第一版使用大量重复的 `系统` 构造 Prompt，只在开头加入一个 Nonce：
+
+```text
+实验编号 <nonce>。系统 系统 系统 系统 ……
+请从 1 开始输出连续递增的整数……
+```
+
+中位数一度得到：
+
+| 实际 Prompt | Output |  Prefill |   Decode |     Total |
+| ----------: | -----: | -------: | -------: | --------: |
+|         154 |     32 |  94.0 ms | 364.9 ms |  549.8 ms |
+|        1594 |     32 | 825.3 ms | 400.1 ms | 1329.6 ms |
+|        2050 |     32 |  15.6 ms | 415.0 ms |  525.8 ms |
+
+2050-token 组的五次 Prefill 原始值更直接：
+
+```text
+1081.285 ms
+  14.115 ms
+  13.754 ms
+  21.739 ms
+  15.634 ms
+```
+
+第一轮像完整 Prefill，后四轮却快了两个数量级。如果直接计算中位数，会得到“2050 token 比 154 token 更快”的荒谬结论。
+
+<Note title="异常分析" class="title-underline">
+
+高度重复的 Token 序列给 Prompt / Prefix Cache 复用创造了条件。Nonce 只证明某个局部不同，不能证明运行时重新计算了整个后续上下文。Ollama 的计时字段不足以还原具体复用区间，所以这里能确定的是“实验被缓存行为污染”，不能伪装成已经定位到某个内部 Cache Algorithm。
+
+</Note>
+
+这组结果被标记为 **INVALID FOR SCALING**，但没有被删除。异常样本本身是证据：实验改变了 Prompt 长度，却没有成功控制“实际重新计算的 token 数”。
+
+### 修正方法：随机化完整输入
+
+第二版从小型英文词表随机采样，每轮使用独立 Nonce：
+
+```python
+WORDS = [
+    'request', 'token', 'model', 'cache',
+    'memory', 'scheduler', 'prefill', 'decode',
+    'storage', 'latency', 'throughput', 'attention',
+]
+
+nonce = time.time_ns()
+rng = random.Random(nonce)
+body = ' '.join(rng.choice(WORDS) for _ in range(input_words))
+prompt = f'experiment-{nonce} {body}\n{OUTPUT_TASK}'
+```
+
+这不能证明 Cache 绝对没有参与，但消除了长重复前缀这一显著混杂因素。修正后每组五次运行形成连续范围：
+
+|   构造目标 |      实际 Prompt |     Prefill range |    Decode range |
+| ---------: | ---------------: | ----------------: | --------------: |
+|   64 words |   126～131 token |     66.1～81.6 ms | 362.6～367.6 ms |
+|  512 words |   608～621 token |   278.3～295.9 ms | 371.6～378.4 ms |
+| 2048 words | 2256～2283 token | 1252.2～1266.5 ms | 419.6～434.7 ms |
+
+### 修正后的实验结果
+
+<SlideCard title="输入长度实验：5 次运行的中位数">
+
+| Prompt | Output |   Prefill |   Decode |     TPOT | Decode rate |     Total |
+| -----: | -----: | --------: | -------: | -------: | ----------: | --------: |
+|    129 |     32 |   67.7 ms | 367.0 ms | 11.47 ms | 87.19 tok/s |  529.9 ms |
+|    613 |     32 |  285.5 ms | 375.9 ms | 11.75 ms | 85.13 tok/s |  756.5 ms |
+|   2272 |     32 | 1264.3 ms | 428.6 ms | 13.39 ms | 74.67 tok/s | 1805.9 ms |
+
+</SlideCard>
+
+Prompt 从 129 增加到 2272 token，约为 17.6 倍；Prefill 从 67.7 增至 1264.3 ms，约为 18.7 倍。当前区间内，总延迟增长主要来自 Prefill。
+
+相同的 32 个输出 token 也从约 367.0 增至 428.6 ms，TPOT 从 11.47 增至 13.39 ms。Decode 每轮只计算一个新位置，但 Attention 仍要读取更长的历史 KV，因此单 token 成本不会与 Prompt 长度完全解耦。
+
+三个点在当前区间接近线性，不是复杂度证明。Prefill 同时包含 Attention、线性层和其他算子，曲线还受 Kernel 实现、Batching 和硬件利用率影响。
+
+## 输出长度对 Decode 的影响
+
+### 实验预期
+
+固定同一份约 250-token Prompt，只改变 `num_predict`：
+
+- Prefill 应保持接近，因为未来 token 不会在 Prefill 中被预计算。
+- 每个实际 Output token 需要一轮依赖前序结果的 Decode，总 Decode 时间应随轮数累积。
+
+### 实验结果
+
+<SlideCard title="输出长度实验：5 次运行的中位数">
+
+| Prompt | Cap | Actual Output |  Prefill |    Decode |     TPOT |     Total | Stop reason |
+| -----: | --: | ------------: | -------: | --------: | -------: | --------: | ----------- |
+|    250 |  32 |            32 | 104.4 ms |  366.5 ms | 11.45 ms |  570.8 ms | `length`    |
+|    250 | 128 |           128 | 104.6 ms | 1508.1 ms | 11.78 ms | 1710.1 ms | `length`    |
+|    250 | 512 |           292 | 104.4 ms | 3457.1 ms | 11.84 ms | 3658.7 ms | `stop`      |
+
+</SlideCard>
+
+三组 Prefill 都在 104 ms 左右。Output 从 32 增加到 128 时，Decode 时间约增加四倍，TPOT 仍接近 12 ms；主要变化来自更多顺序 Decode Step，而不是每一步突然变慢。
+
+第三组的 512 只是上限。模型在 292 token 时主动结束，`done_reason=stop`，所以 3457.1 ms 只能用 292 个实际 token 解释。把 Cap 当作 Output Length，会虚构 220 轮没有发生的计算。
+
+## 安装与验证 vLLM Metal
+
+### 安装过程
+
+实际安装脚本固定 vLLM Core 0.27.0 的 macOS arm64 Wheel，然后从 vLLM Metal 的 GitHub Latest Release 中寻找 Plugin Wheel：
+
+```bash
+bash -o pipefail ./vllm-metal-install.sh 2>&1 |
+  tee vllm-metal-install.log
+```
+
+脚本保存在[实验产物目录](/labs/llm-inference-request-lifecycle/)中。需要注意：Core Version 被固定，而 Metal Plugin 通过 latest release 解析，因此它记录了当时的安装过程，却不是完全 Hermetic 的构建。
+
+### 问题二：vLLM Core 已安装，但 Metal 后端缺失
+
+第一次安装日志先报告：
+
+```text
+✓ Installed vLLM core
+Fetching latest release...
+Error: Failed to fetch release information.
+Please check your internet connection and try again.
+```
+
+此后 `import vllm` 成功，但 `vllm --version` 长时间没有返回。CLI 入口会执行 Python Import、Plugin Discovery 与平台初始化，所以它不是一个纯粹读取版本字符串的命令。
+
+绕过 CLI，直接检查 Distribution Metadata 和模块：
+
+<CoreCard title="逐层检查运行环境" class="title-underline">
+
+```bash
+source ~/.venv-vllm-metal/bin/activate
+```
+
+```bash
+python -c '
+from importlib.metadata import version
+print("vllm:", version("vllm"))
+print("vllm-metal:", version("vllm-metal"))
+'
+```
+
+```bash
+python -c 'import vllm; print("vllm import ok")'
+python -c 'import mlx.core as mx; print(mx.default_device())'
+python -c 'import vllm_metal; print("vllm-metal import ok")'
+```
+
+</CoreCard>
+
+失败现场是：
+
+```text
+vllm:       0.27.0+cpu
+vllm-metal: package metadata not found
+vllm import: ok
+mlx:        ModuleNotFoundError
+vllm_metal: ModuleNotFoundError
+```
+
+因此根因不是“vLLM Core 坏了”，而是安装脚本在 Core 完成后、Metal Release 查询阶段中断，留下了一个合法但不完整的环境。
+
+### 解决方法与验证结果
+
+网络恢复后重新运行同一个脚本，再次分层检查：
+
+```text
+vllm:       0.27.0+cpu
+vllm-metal: 0.3.0.dev20260811042359
+mlx:        0.32.0
+mlx-lm:     0.31.3
+```
+
+这次故障体现的知识不是某条安装命令，而是 Plugin-based Runtime 的验收方式：Core Package、Platform Plugin、Backend Library、Model Runner 和 Service Endpoint 必须逐层验证。
+
+## 启动 vLLM 服务并检查运行时
+
+### 启动命令
+
+<CoreCard title="终端 A：启动 vLLM API 服务" class="title-underline">
+
+```bash
+source ~/.venv-vllm-metal/bin/activate
+```
+
+```bash
+VLLM_PLUGINS=metal \
+vllm serve mlx-community/Qwen3-4B-Instruct-2507-4bit \
+  --served-model-name qwen3-4b-local \
+  --host 127.0.0.1 \
+  --port 8000 \
+  --max-model-len 4096 \
+  2>&1 | tee vllm-server.log
+```
+
+</CoreCard>
+
+模型加载约 103.96 秒，随后 Profile、KV Cache 创建和 Warmup 又占用约 7.52 秒。只有日志出现 `Application startup complete` 后，HTTP Server 才进入可验收状态；在此之前“命令没有返回”是前台服务进程与初始化过程的正常表现。
+
+### 运行时证据
+
+<SlideCard title="关键日志">
+
+## 计算后端
+
+```text
+Platform plugin metal is activated
+MLX-LM model loaded in 103.96s
+Model warm-up complete
+```
+
+## 模型配置
+
+```text
+Resolved architecture: Qwen3ForCausalLM
+Using max model len 4096
+```
+
+## Paged Attention 与 KV Cache
+
+```text
+model_memory=2.26GB
+kv_budget=33.80GB
+num_blocks=14328
+max_tokens_cached=229248
+```
+
+</SlideCard>
+
+Core Wheel 名称里的 `+cpu` 不能单独证明当前请求只在 CPU 上运行；更直接的运行时证据是 Metal Plugin 激活和 MLX-LM Model Load。日志还显示 Model Runner V2 因缺少 Triton 回退到 V1，这会影响执行路径，因此必须与版本一起记录。
+
+## 验证完整的推理服务链路
+
+验收顺序从最便宜的 Liveness Probe 开始，逐步推进到 Model Registry 和真实生成；任意一层失败都不能声称“服务已跑通”。
+
+### 第一步：检查服务健康状态
+
+```bash
+curl -sS \
+  -w '\nHTTP status: %{http_code}\n' \
+  http://127.0.0.1:8000/health
+```
+
+```text
+HTTP status: 200
+```
+
+### 第二步：检查模型注册信息
+
+```bash
+curl -sS http://127.0.0.1:8000/v1/models |
+  python -m json.tool
+```
+
+```text
+id:            qwen3-4b-local
+owned_by:      vllm
+root:          mlx-community/Qwen3-4B-Instruct-2507-4bit
+max_model_len: 4096
+```
+
+### 第三步：执行真实推理请求
+
+<CoreCard title="终端 B：发送 Chat Completion 请求" class="title-underline">
+
+```bash
+curl -sS http://127.0.0.1:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "qwen3-4b-local",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请用不超过 100 字说明 scheduler 在 LLM Serving 中的作用。"
+      }
+    ],
+    "temperature": 0,
+    "max_tokens": 128
+  }' \
+  -o vllm-response.json
+```
+
+```bash
+python -m json.tool vllm-response.json
+```
+
+</CoreCard>
+
+响应证据：
+
+```text
+prompt_tokens:      25
+completion_tokens:  45
+total_tokens:       70
+finish_reason:      stop
+system_fingerprint: vllm-0.27.0-45e1c693
+```
+
+三个端点均返回 HTTP 200，服务日志也记录了对应请求。到这里，API Validation、Chat Template / Tokenizer、Engine、Scheduler、KV Cache、Metal Worker、Decode 和 Response Serialization 才共同构成一条完成验收的路径。
+
+## 实验结论
+
+<SlideCard title="假设与验证结果">
+
+| 假设                         | 实验证据                                | 结论                      |
+| ---------------------------- | --------------------------------------- | ------------------------- |
+| Cold Start 包含额外加载成本  | 1.710 s → 1.160 s，Decode rate 基本不变 | Supported                 |
+| Prompt 主要推高 Prefill      | 129 → 2272 token，67.7 → 1264.3 ms      | Supported in tested range |
+| 长上下文也影响 Decode        | TPOT 11.47 → 13.39 ms                   | Supported                 |
+| Output 主要累积 Decode       | 32 → 128 token，366.5 → 1508.1 ms       | Supported                 |
+| 配置上限等于实际工作量       | Cap 512，Actual 292，`stop`             | Rejected                  |
+| Core 安装成功等于 Metal 可用 | Plugin 与 MLX 首次均缺失                | Rejected                  |
+
+</SlideCard>
+
+这组实验把几个抽象概念落实成了可观察行为：
+
+- **Tokenizer** 决定实际输入长度，字符数、单词数和配置 Target 都不能替代 Token Count。
+- **Prefill** 消耗随 Prompt 增长，并建立请求的初始 KV Cache。
+- **KV Cache** 避免每轮重算历史，但 Cache Reuse 也可能污染不严谨的 Benchmark。
+- **Decode** 是顺序循环，实际 Output token 数直接决定循环次数。
+- **Scheduler / Engine** 只有连接到可用 Backend 和 Worker 后，才构成真正的 Serving 系统。
+- **Metrics** 必须连同工作负载、Warmup、停止原因和统计方式一起解释。
+
+## 实验限制与证据边界
+
+这份报告能够描述当前单机、单请求、4B 量化模型的行为，但不能推出：
+
+- Continuous Batching 的吞吐上限或并发下的 Queueing Delay；
+- 严格 TTFT、逐 token ITL 或 Streaming Jitter；
+- P50 / P95 / P99 尾延迟；
+- Unified Memory 峰值与 KV Cache 容量曲线；
+- Ollama 与 vLLM Metal 的公平性能排名；
+- CUDA GPU、大模型或多机 Serving 的性能趋势。
+
+下一轮实验需要把 `stream=true` 的 Chunk 到达时间、并发度、内存采样和分位数带入同一套测试脚本，再研究 Batching、Scheduler 与 KV Cache 的权衡。
+
+## 复现实验
+
+### 环境要求
+
+```text
+Apple Silicon arm64
+Python 3.12
+Ollama 0.32.7
+curl
+uv
+```
+
+模型和运行时版本应与“实验环境”一节对齐。若使用其他版本，保留完整版本快照并把结果视作新的实验批次。
+
+### 复现 Ollama 长度实验
+
+```bash
+OLLAMA_FLASH_ATTENTION=1 \
+OLLAMA_KV_CACHE_TYPE=q8_0 \
+ollama serve
+```
+
+```bash
+ollama pull qwen3:4b-instruct-2507-q4_K_M
+python3 benchmark_lengths.py
+```
+
+公开的 `benchmark_lengths.py` 是最后一次输入长度实验的现场快照：EXP-01 v2 处于启用状态，EXP-02 Block 保留为注释。若要重新运行输出长度实验，启用 `output_length` Block 并关闭输入 Block，避免不同实验共享上下文状态。
+
+### 复现 vLLM Metal 部署
+
+```bash
+bash -o pipefail ./vllm-metal-install.sh 2>&1 |
+  tee vllm-metal-install.log
+```
+
+安装完成后不要先相信 CLI Banner，先执行：
+
+```bash
+source ~/.venv-vllm-metal/bin/activate
+python -c 'from importlib.metadata import version; print(version("vllm")); print(version("vllm-metal"))'
+python -c 'import mlx.core as mx; print(mx.default_device())'
+python -c 'import vllm_metal; print("metal plugin import ok")'
+```
+
+然后按照“启动 vLLM 服务并检查运行时”一节运行服务，再依次完成三个验收步骤。
+
+### 结果有效性检查
+
+1. 先 Warmup，再采集 Steady-state 样本。
+2. 一次只改变一个主要变量。
+3. 记录实际 Prompt / Output token，而不是构造 Target。
+4. 保留每次运行，不删除异常值。
+5. 同时记录 `done_reason`、Server Time 与 Client Wall Clock。
+6. 先排除 Cache Reuse，再讨论计算复杂度。
+7. 让结论严格停在证据边界内。
+
+## 实验产物
+
+[Browse `/labs/llm-inference-request-lifecycle/`](/labs/llm-inference-request-lifecycle/) 可以在线查看或下载全部复现产物：
+
+```text
+phase1-lab/
+├── README.md
+├── benchmark_lengths.py
+├── input-length-results-v2.csv
+├── length-results-v1.csv
+├── vllm-metal-install.sh
+├── vllm-metal-install.log
+├── vllm-server.log
+└── vllm-response.json
+```
+
+CSV 是逐次运行结果，日志保留安装与启动现场，JSON 是最终 Completion 响应。文章中的数字来自这些文件，当统计方式或系统解释发生变化时，可以重新从原始证据计算。

@@ -1,7 +1,6 @@
 ---
 import type { CollectionEntry } from 'astro:content';
 import { getCollection } from 'astro:content';
-import FormattedDate from '../../components/FormattedDate.astro';
 import { SITE_TITLE } from '../../consts';
 import PageLayout from '../../layouts/PageLayout.astro';
 import { getCategorySlug, getPostUrl } from '../../utils/posts';
@@ -33,42 +32,90 @@ export async function getStaticPaths() {
 
 const { category, posts } = Astro.props;
 const description = `共 ${posts.length} 篇归档于 ${category} 分类的文章`;
+const isAiInfra = getCategorySlug(category) === 'ai-infra';
+const archiveDateFormatter = new Intl.DateTimeFormat('zh-CN', {
+	year: 'numeric',
+	month: '2-digit',
+	day: '2-digit',
+	timeZone: 'Asia/Shanghai',
+});
+const formatArchiveDate = (date: Date) => archiveDateFormatter.format(date).replaceAll('/', '-');
+const firstPublishedAt = posts.at(0)?.data.pubDate;
+const lastPublishedAt = posts.at(-1)?.data.pubDate;
+const archiveRange =
+	firstPublishedAt && lastPublishedAt
+		? firstPublishedAt.valueOf() === lastPublishedAt.valueOf()
+			? formatArchiveDate(firstPublishedAt)
+			: `${formatArchiveDate(firstPublishedAt)} 至 ${formatArchiveDate(lastPublishedAt)}`
+		: '';
 ---
 
 <PageLayout title={`${category} | ${SITE_TITLE}`} {description} mainClass="category-page">
 	<header class="page-heading">
 		<h1>{category}</h1>
-		<ul class="category-summary">
-			<li>{description}，按发布时间由旧到新排列</li>
-		</ul>
+		{
+			isAiInfra ? (
+				<ul class="category-summary">
+					<li>学习主题：LLM 推理与 Serving</li>
+					<li>当前阶段：请求链路、Prefill、Decode、KV Cache 与本地推理服务</li>
+					<li>文章：共 {posts.length} 篇；理论知识与验证实验并列阅读</li>
+				</ul>
+			) : (
+				<ul class="category-summary">
+					<li>{description}</li>
+					{archiveRange && <li>收录时间：{archiveRange}</li>}
+					<li>文章按发布时间由旧到新排列，编号即建议阅读顺序</li>
+				</ul>
+			)
+		}
 	</header>
 
 	<section aria-label={`${category} 分类下的文章`}>
-		<h2>文章目录</h2>
-		<ol class="post-list">
-			{
-				posts.map((post) => (
+		<h2>{isAiInfra ? '学习内容' : '文章目录'}</h2>
+		{
+			isAiInfra ? (
+				<ol class="post-list ai-infra-list">
 					<li>
-						<a class="post-title" href={getPostUrl(post)}>
-							{post.data.title}
-						</a>
-						<small class="post-meta">
-							（<FormattedDate date={post.data.pubDate} />
-							{post.data.tags.slice(0, 3).map((tag) => (
-								<span> · #{tag}</span>
-							))}
-							）
-						</small>
+						<span class="archive-label archive-label-gray">推理基础</span>{' '}
+						{posts.map((post, index) => (
+							<>
+								{index > 0 && <span class="post-separator"> | </span>}
+								<a class="post-title" href={getPostUrl(post)}>
+									{post.data.title}
+								</a>
+							</>
+						))}
 					</li>
-				))
-			}
-		</ol>
+				</ol>
+			) : (
+				<ol class="post-list">
+					{posts.map((post) => (
+						<li>
+							<time
+								class="archive-label archive-label-gray"
+								datetime={post.data.pubDate.toISOString()}
+							>
+								{formatArchiveDate(post.data.pubDate)}
+							</time>{' '}
+							<a class="post-title" href={getPostUrl(post)}>
+								{post.data.title}
+							</a>
+						</li>
+					))}
+				</ol>
+			)
+		}
 	</section>
 </PageLayout>
 
 <style>
+	:global(.page-frame.category-page) {
+		font-family: var(--font-body);
+		line-height: 1.75;
+	}
+
 	.page-heading {
-		margin-bottom: 2rem;
+		margin: 0;
 	}
 
 	.page-heading h1 {
@@ -79,38 +126,75 @@ const description = `共 ${posts.length} 篇归档于 ${category} 分类的文�
 	}
 
 	.category-summary {
-		margin: 0;
-		padding-left: 1.5rem;
+		margin: 0.25rem 0;
+		padding: 0 0 0 0.5rem;
+		list-style-position: inside;
+		list-style-type: disc;
+		text-align: left;
 	}
 
 	.category-summary li {
-		margin: 0.25rem 0;
+		margin: 0 1rem;
+		padding: 0;
+		text-align: justify;
+		overflow-wrap: normal;
+		word-break: normal;
 	}
 
 	section {
-		margin-top: 2rem;
+		margin: 0;
 	}
 
 	section h2 {
-		margin: 0 0 0.75rem;
-		font-size: 1.2rem;
+		margin: 0;
+		padding: 1.5rem 0 0.5rem;
+		font-size: 1.25rem;
+		line-height: 1.75rem;
 	}
 
 	.post-list {
-		margin: 0.25rem 0 0;
-		padding-left: 1.75rem;
+		margin: 0.75rem 1rem;
+		padding: 0 0 0 0.5rem;
+		list-style-position: inside;
+		list-style-type: decimal;
+		text-align: justify;
 	}
 
 	.post-list li {
-		margin: 0.45rem 0;
-		padding-left: 0.1rem;
+		margin: 0;
+		padding: 0;
+		text-align: justify;
+		overflow-wrap: normal;
+		word-break: normal;
 	}
 
-	.post-meta {
-		margin-left: 0.25rem;
-		color: rgb(var(--gray));
-		font-size: 0.75rem;
-		font-weight: 400;
-		line-height: 1.5;
+	.archive-label {
+		display: inline;
+		padding: 0 0.25rem;
+		border-color: #94a3b8;
+		color: inherit;
+		font: inherit;
+		white-space: nowrap;
+	}
+
+	.archive-label-gray {
+		background: #f1f5f9;
+	}
+
+	.post-title {
+		font-weight: 500;
+		line-height: inherit;
+	}
+
+	.post-separator {
+		white-space: pre;
+	}
+
+	@media (min-width: 768px) {
+		:global(.page-frame.category-page) {
+			border-width: 1px;
+			border-radius: 0;
+			box-shadow: var(--wiki-frame-shadow);
+		}
 	}
 </style>

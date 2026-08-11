@@ -1,3 +1,5 @@
+@import 'katex/dist/katex.min.css';
+
 :root {
 	--accent: #3730a3;
 	--accent-hover: #312e81;
@@ -6,6 +8,8 @@
 	--gray-light: 226, 232, 240;
 	--gray-dark: 51, 65, 85;
 	--prose-body: 15, 23, 42;
+	--inline-code-background: #e9edf3;
+	--inline-code-color: #334155;
 	--page-background: #fafbfc;
 	--content-background: rgb(229 229 229 / 10%);
 	--frame-border: #e5e7eb;
@@ -28,6 +32,7 @@
 
 html {
 	background: var(--page-background);
+	font-size: 90%;
 	scroll-behavior: smooth;
 }
 
@@ -39,7 +44,7 @@ body {
 	background: var(--page-background);
 	color: rgb(var(--gray-dark));
 	font-family: var(--font-heading);
-	font-size: 16px;
+	font-size: 1rem;
 	line-height: 1.625;
 	text-align: left;
 	word-wrap: break-word;
@@ -251,9 +256,9 @@ samp {
 	padding: 0.12em 0.38em;
 	border: 0;
 	border-radius: 1px;
-	background: #e9edf3;
+	background: var(--inline-code-background) !important;
 	box-shadow: 2px 2px 4px -1px rgb(15 23 42 / 24%);
-	color: #334155;
+	color: var(--inline-code-color) !important;
 	font-size: 0.875em;
 	-webkit-box-decoration-break: clone;
 	box-decoration-break: clone;
@@ -571,6 +576,7 @@ hr {
 		0 4px 6px -1px rgba(0, 0, 0, 0.1),
 		0 2px 4px -2px rgba(0, 0, 0, 0.1);
 	color: rgb(15 23 42);
+	font-family: var(--font-sans);
 	font-size: 1rem;
 	line-height: 1.25rem;
 	text-align: justify;
@@ -597,10 +603,6 @@ hr {
 .prose .slideshow:has(.article-image) > div {
 	flex: 0 1 auto;
 	overflow: visible;
-}
-
-.prose .slideshow :not(.katex):not(.katex *):not(pre):not(pre *) {
-	font-family: sans-serif !important;
 }
 
 .prose .slideshow h1 {
@@ -755,27 +757,19 @@ hr {
 	text-indent: 0;
 }
 
-.prose :is(.slideshow, .code-card, .note) :not(pre) > code {
-	padding: 0 0.125rem;
-	background: transparent;
-	color: rgb(15 23 42);
-	font-size: 0.85em;
-	font-weight: 200;
-}
-
 .prose :is(.slideshow, .code-card, .note) :not(pre) > code::before,
 .prose :is(.slideshow, .code-card, .note) :not(pre) > code::after {
 	content: none;
 }
 
-.prose :is(.slideshow, .code-card, .note) .katex-html {
+.prose :is(.code-card, .note) .katex-html {
 	font-size: 90%;
 }
 
 .prose :is(.slideshow, .code-card, .note) .katex-display {
 	max-width: 100%;
 	margin: 1em 0;
-	padding: 0;
+	padding: 0.5rem 0;
 	overflow-x: auto;
 	overflow-y: hidden;
 	text-align: center;
@@ -783,8 +777,9 @@ hr {
 }
 
 .prose :is(.slideshow, .code-card, .note) .katex-display > .katex {
-	max-width: 100%;
+	max-width: none;
 	text-align: center;
+	white-space: nowrap;
 }
 
 .prose .slideshow p:has(> img) {
@@ -837,10 +832,6 @@ hr {
 		color: rgb(203 213 225);
 	}
 
-	.prose :is(.slideshow, .code-card, .note) :not(pre) > code {
-		color: rgb(241 245 249);
-	}
-
 	.prose .slideshow table,
 	.prose .slideshow th,
 	.prose .slideshow td {
@@ -849,10 +840,6 @@ hr {
 }
 
 @media (max-width: 720px) {
-	body {
-		font-size: 15px;
-	}
-
 	main {
 		width: calc(100% - 2rem);
 		padding: 1.5rem 0 3rem;
