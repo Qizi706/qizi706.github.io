@@ -1,11 +1,11 @@
 # 本地 LLM 推理服务实验产物
 
 This directory contains the reproducibility artifacts for the experiment report
-《在 Apple Silicon 上运行 Qwen3-4B：本地 LLM 推理服务实验》.
+《本地 LLM 推理服务实验》.
 
 Article:
 
-https://qizi706.github.io/blog/llm-inference-request-lifecycle-practice/
+<https://qizi706.github.io/blog/llm-inference-request-lifecycle-practice/>
 
 ## Files
 

@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/BlogPost.astro';
+import LearningStage from '../components/LearningStage.astro';
 import '../styles/global.css';
 ---
 
@@ -63,131 +64,331 @@ import '../styles/global.css';
 	</section>
 
 	<section class="about-section" aria-labelledby="learning-title">
-		<div class="section-label">02 / current quest</div>
-		<h2 id="learning-title">2026.07 — 2026.08 学习路线</h2>
-		<div class="quest-line">
-			<input
-				class="quest-checkbox"
-				type="checkbox"
-				disabled
-				aria-label="AI Infra 全局认知尚未完成"
-			/>
-			<span>AI Infra 全局认知 <span class="muted">/ 2 weeks</span></span>
-			<span class="quest-state" aria-hidden="true"></span>
-		</div>
+		<div class="section-label">02 / learning roadmap</div>
+		<h2 id="learning-title">AI Infra 学习路线</h2>
 
-		<div class="learning-grid">
-			<div>
-				<h3>需要回答的问题</h3>
-				<ol>
-					<li>LLM 训练和推理有什么区别？</li>
-					<li>一次请求如何经过 LLM Serving 链路？</li>
-					<li>prefill、decode 和 KV Cache 分别解决什么问题？</li>
-					<li>吞吐、延迟、TTFT、TPOT、显存利用率如何衡量？</li>
-					<li>模型、推理引擎、调度器、GPU、网络、存储和监控如何协作？</li>
-				</ol>
+		<LearningStage period="2026.07 — 2026.08" title="阶段 1 · AI Infra 全局认知" status="done">
+			<div class="quest-line">
+				<input
+					class="quest-checkbox"
+					type="checkbox"
+					checked
+					disabled
+					aria-label="AI Infra 全局认知已完成"
+				/>
+				<span>AI Infra 全局认知 <span class="muted">/ 2 weeks</span></span>
+				<span class="quest-state" aria-hidden="true"></span>
 			</div>
-			<div>
-				<h3>阶段产出</h3>
-				<ul>
-					<li>跑通一个本地小模型推理。</li>
-					<li>跑通一次 vLLM 服务。</li>
-					<li>测试输入/输出长度对响应时间的影响。</li>
-					<li>完成《LLM 推理系统从请求到返回的完整链路》笔记。</li>
-				</ul>
-			</div>
-		</div>
 
-		<details class="reading-list">
-			<summary>reading queue <span>展开阅读清单</span></summary>
-			<div class="reading-columns">
+			<div class="learning-grid">
 				<div>
-					<h3>理解 LLM 和 Transformer</h3>
-					<ul>
-						<li>
-							<a
-								href="https://jalammar.github.io/illustrated-transformer/"
-								target="_blank"
-								rel="noreferrer">The Illustrated Transformer</a
-							>
-						</li>
-						<li>
-							<a
-								href="https://jalammar.github.io/illustrated-gpt-2/"
-								target="_blank"
-								rel="noreferrer">The Illustrated GPT-2</a
-							>
-						</li>
-					</ul>
-					<h3>理解推理和生成</h3>
-					<ul>
-						<li>
-							<a href="https://huggingface.co/blog/how-to-generate" target="_blank" rel="noreferrer"
-								>How to generate text</a
-							>
-						</li>
-						<li>
-							<a
-								href="https://huggingface.co/docs/transformers/main/en/llm_tutorial"
-								target="_blank"
-								rel="noreferrer">Transformers: Text generation</a
-							>
-						</li>
-					</ul>
+					<h3>需要回答的问题</h3>
+					<ol>
+						<li>LLM 训练和推理有什么区别？</li>
+						<li>一次请求如何经过 LLM Serving 链路？</li>
+						<li>prefill、decode 和 KV Cache 分别解决什么问题？</li>
+						<li>吞吐、延迟、TTFT、TPOT、显存利用率如何衡量？</li>
+						<li>模型、推理引擎、调度器、GPU、网络、存储和监控如何协作？</li>
+					</ol>
 				</div>
 				<div>
-					<h3>理解 KV Cache</h3>
+					<h3>阶段产出</h3>
 					<ul>
+						<li>跑通一个本地小模型推理。</li>
+						<li>跑通一次 vLLM 服务。</li>
+						<li>测试输入/输出长度对响应时间的影响。</li>
 						<li>
-							<a
-								href="https://huggingface.co/docs/transformers/main/en/cache_explanation"
-								target="_blank"
-								rel="noreferrer">KV Cache explained</a
-							>
+							完成<a href="/blog/llm-inference-request-lifecycle/"
+								>《LLM 推理系统从请求到返回的完整链路》</a
+							>。
 						</li>
 						<li>
-							<a
-								href="https://huggingface.co/docs/transformers/main/en/llm_optims"
-								target="_blank"
-								rel="noreferrer">Optimizing inference</a
-							>
-						</li>
-					</ul>
-					<h3>性能与系统</h3>
-					<ul>
-						<li>
-							<a href="https://blog.vllm.ai/2023/06/20/vllm.html" target="_blank" rel="noreferrer"
-								>vLLM + PagedAttention</a
-							>
-						</li>
-						<li>
-							<a
-								href="https://docs.vllm.ai/en/latest/design/kernel/paged_attention.html"
-								target="_blank"
-								rel="noreferrer">Paged Attention</a
-							>
-						</li>
-						<li>
-							<a
-								href="https://docs.nvidia.com/nim/benchmarking/llm/latest/metrics.html"
-								target="_blank"
-								rel="noreferrer">LLM Benchmarking Metrics</a
-							>
+							完成<a href="/blog/llm-inference-request-lifecycle-practice/"
+								>《本地 LLM 推理服务实验》</a
+							>及可复现实验产物。
 						</li>
 					</ul>
 				</div>
 			</div>
-		</details>
 
-		<pre
-			class="pipeline"
-			aria-label="LLM inference pipeline"><code>prompt
+			<details class="reading-list">
+				<summary>reading queue <span>展开阅读清单</span></summary>
+				<div class="reading-columns">
+					<div>
+						<h3>理解 LLM 和 Transformer</h3>
+						<ul>
+							<li>
+								<a
+									href="https://jalammar.github.io/illustrated-transformer/"
+									target="_blank"
+									rel="noreferrer">The Illustrated Transformer</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://jalammar.github.io/illustrated-gpt-2/"
+									target="_blank"
+									rel="noreferrer">The Illustrated GPT-2</a
+								>
+							</li>
+						</ul>
+						<h3>理解推理和生成</h3>
+						<ul>
+							<li>
+								<a
+									href="https://huggingface.co/blog/how-to-generate"
+									target="_blank"
+									rel="noreferrer">How to generate text</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://huggingface.co/docs/transformers/main/en/llm_tutorial"
+									target="_blank"
+									rel="noreferrer">Transformers: Text generation</a
+								>
+							</li>
+						</ul>
+					</div>
+					<div>
+						<h3>理解 KV Cache</h3>
+						<ul>
+							<li>
+								<a
+									href="https://huggingface.co/docs/transformers/main/en/cache_explanation"
+									target="_blank"
+									rel="noreferrer">KV Cache explained</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://huggingface.co/docs/transformers/main/en/llm_optims"
+									target="_blank"
+									rel="noreferrer">Optimizing inference</a
+								>
+							</li>
+						</ul>
+						<h3>性能与系统</h3>
+						<ul>
+							<li>
+								<a href="https://blog.vllm.ai/2023/06/20/vllm.html" target="_blank" rel="noreferrer"
+									>vLLM + PagedAttention</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://docs.vllm.ai/en/latest/design/kernel/paged_attention.html"
+									target="_blank"
+									rel="noreferrer">Paged Attention</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://docs.nvidia.com/nim/benchmarking/llm/latest/metrics.html"
+									target="_blank"
+									rel="noreferrer">LLM Benchmarking Metrics</a
+								>
+							</li>
+						</ul>
+					</div>
+				</div>
+			</details>
+
+			<pre
+				class="pipeline"
+				aria-label="LLM inference pipeline"><code>prompt
   -&gt; tokenizer
   -&gt; prefill  -&gt;  KV Cache
   -&gt; decode   -&gt;  scheduler / batching
   -&gt; response
 
 constraint: KV Cache consumes GPU memory</code></pre>
+		</LearningStage>
+
+		<LearningStage
+			period="2026.08 — 2026.09"
+			title="阶段 2 · LLM 推理核心知识"
+			status="pending"
+			open
+		>
+			<div class="quest-line">
+				<input
+					class="quest-checkbox"
+					type="checkbox"
+					disabled
+					aria-label="LLM 推理核心知识进行中"
+				/>
+				<span>LLM 推理核心知识 <span class="muted">/ 1 month</span></span>
+				<span class="quest-state" aria-hidden="true"></span>
+			</div>
+
+			<div class="learning-grid">
+				<div>
+					<h3>需要回答的问题</h3>
+					<ol>
+						<li>KV Cache 避免了哪些重复计算，Decode 为什么仍要读取全部历史 K/V？</li>
+						<li>Prefill 为什么通常计算密集，Decode 为什么更容易受显存带宽影响？</li>
+						<li>Client Concurrency、Active Sequences、Batch Size 和 Token Budget 有什么区别？</li>
+						<li>为什么吞吐饱和后，继续增加并发仍会推高 TTFT 和 P99？</li>
+						<li>Continuous Batching 与 Chunked Prefill 如何协调长 Prefill 和持续 Decode？</li>
+						<li>Prefix Caching 和 Speculative Decoding 分别消除了什么浪费，又受什么条件限制？</li>
+						<li>模型权重、激活、KV Cache 和临时 Buffer 如何共同决定显存容量？</li>
+					</ol>
+				</div>
+				<div>
+					<h3>阶段产出</h3>
+					<ul>
+						<li>实现一个 Toy Attention，对比重算历史与复用 KV Cache 的 Decode。</li>
+						<li>完成目标模型的权重、KV Cache 与运行时显存预算。</li>
+						<li>分别改变 Client Concurrency、输入长度与服务端 max_num_seqs。</li>
+						<li>记录 TTFT、TPOT、ITL、吞吐、P50/P95/P99 与 KV Cache 使用率。</li>
+						<li>用混合长短请求验证 Continuous Batching 与 Chunked Prefill 的调度取舍。</li>
+						<li>完成《vLLM 推理性能实验：并发、Batch Size、输入长度对吞吐和延迟的影响》。</li>
+					</ul>
+				</div>
+			</div>
+
+			<h3 class="subsection-title">四周路线</h3>
+			<div class="month-plan" aria-label="阶段二四周学习计划">
+				<article>
+					<span>week 01</span>
+					<h4>Transformer 与 KV Cache</h4>
+					<p>画出单请求推理链路，推导每 token 的 KV Cache，并实现 Toy Attention 验证复用。</p>
+				</article>
+				<article>
+					<span>week 02</span>
+					<h4>Batching、调度与显存</h4>
+					<p>理解 Continuous Batching、Token Budget 和 PagedAttention，写下吞吐与延迟预测。</p>
+				</article>
+				<article>
+					<span>week 03</span>
+					<h4>三种推理优化</h4>
+					<p>比较 Prefix Caching、Speculative Decoding 与 Chunked Prefill 的收益条件和代价。</p>
+				</article>
+				<article>
+					<span>week 04</span>
+					<h4>vLLM 性能实验</h4>
+					<p>固定环境、预热并重复实验；每次只改变一个变量，最终用数据解释因果关系。</p>
+				</article>
+			</div>
+
+			<details class="reading-list">
+				<summary>reading queue <span>展开阅读清单</span></summary>
+				<div class="reading-columns">
+					<div>
+						<h3>计算与 KV Cache</h3>
+						<ul>
+							<li>
+								<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noreferrer"
+									>Attention Is All You Need</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://developer.nvidia.com/blog/mastering-llm-techniques-inference-optimization/"
+									target="_blank"
+									rel="noreferrer">NVIDIA: Inference Optimization</a
+								>
+							</li>
+							<li>
+								<a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noreferrer"
+									>Efficient Memory Management for LLM Serving with PagedAttention</a
+								>
+							</li>
+						</ul>
+
+						<h3>Batching 与调度</h3>
+						<ul>
+							<li>
+								<a
+									href="https://www.usenix.org/conference/osdi22/presentation/yu"
+									target="_blank"
+									rel="noreferrer"
+									>Orca: A Distributed Serving System for Transformer-Based Generative Models</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://docs.vllm.ai/en/latest/configuration/optimization/"
+									target="_blank"
+									rel="noreferrer">vLLM Optimization and Tuning</a
+								>
+							</li>
+							<li>
+								<a href="https://arxiv.org/abs/2403.02310" target="_blank" rel="noreferrer"
+									>Sarathi-Serve: Taming the Throughput-Latency Tradeoff</a
+								>
+							</li>
+						</ul>
+					</div>
+					<div>
+						<h3>Cache 与 Decode 优化</h3>
+						<ul>
+							<li>
+								<a
+									href="https://docs.vllm.ai/en/stable/features/automatic_prefix_caching/"
+									target="_blank"
+									rel="noreferrer">vLLM Automatic Prefix Caching</a
+								>
+							</li>
+							<li>
+								<a href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noreferrer"
+									>Fast Inference from Transformers via Speculative Decoding</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://docs.vllm.ai/en/stable/features/speculative_decoding/"
+									target="_blank"
+									rel="noreferrer">vLLM Speculative Decoding</a
+								>
+							</li>
+						</ul>
+
+						<h3>Benchmark、指标与显存</h3>
+						<ul>
+							<li>
+								<a
+									href="https://docs.vllm.ai/en/stable/benchmarking/cli/"
+									target="_blank"
+									rel="noreferrer">vLLM Benchmark CLI</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://docs.vllm.ai/en/stable/usage/metrics/"
+									target="_blank"
+									rel="noreferrer">vLLM Production Metrics</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://nvidia.github.io/TensorRT-LLM/reference/memory.html"
+									target="_blank"
+									rel="noreferrer">TensorRT-LLM Memory Usage</a
+								>
+							</li>
+						</ul>
+					</div>
+				</div>
+			</details>
+
+			<pre
+				class="pipeline"
+				aria-label="LLM serving performance model"><code>workload: prompt / output / arrival rate
+  -&gt; waiting queue
+  -&gt; scheduler: sequence batch / token budget
+  -&gt; prefill &lt;-&gt; decode
+  -&gt; KV Cache: allocate / reuse / release
+  -&gt; TTFT / TPOT / throughput / P99
+
+constraints: compute + HBM bandwidth + KV capacity + scheduling</code></pre>
+
+			<p class="stage-gate">
+				<strong>验收：</strong>能够结合实验数据解释：为什么吞吐在并发增加后趋于饱和，而 TTFT、TPOT
+				或 P99 仍可能恶化；以及调度、显存、Batching 和 KV Cache 如何共同决定系统性能。
+			</p>
+		</LearningStage>
 	</section>
 
 	<footer class="about-footer">
@@ -366,7 +567,8 @@ constraint: KV Cache consumes GPU memory</code></pre>
 	}
 
 	.learning-grid,
-	.reading-columns {
+	.reading-columns,
+	.month-plan {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 1.5rem;
@@ -397,6 +599,39 @@ constraint: KV Cache consumes GPU memory</code></pre>
 		text-decoration-color: rgb(var(--accent) / 35%);
 	}
 
+	.subsection-title {
+		margin: 1.35rem 0 0.65rem;
+		font-size: 0.95rem;
+	}
+
+	.month-plan {
+		gap: 0.75rem;
+	}
+
+	.month-plan article {
+		padding: 0.75rem 0.8rem;
+		border: 1px dashed rgb(var(--gray-light));
+		background: rgb(226 232 240 / 24%);
+	}
+
+	.month-plan span {
+		color: var(--accent);
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+
+	.month-plan h4 {
+		margin: 0.2rem 0 0.35rem;
+		font-size: 0.85rem;
+	}
+
+	.month-plan p {
+		margin: 0;
+		font-size: 0.82rem;
+	}
+
 	.pipeline {
 		margin: 1.25rem 0 0;
 		border: 1px solid rgb(var(--gray-light));
@@ -404,6 +639,13 @@ constraint: KV Cache consumes GPU memory</code></pre>
 		color: rgb(var(--black));
 		font-size: 0.78rem;
 		line-height: 1.7;
+	}
+
+	.stage-gate {
+		margin: 0.85rem 0 0;
+		padding-left: 0.75rem;
+		border-left: 3px solid var(--accent);
+		font-size: 0.88rem;
 	}
 
 	.about-footer {
@@ -425,7 +667,8 @@ constraint: KV Cache consumes GPU memory</code></pre>
 		}
 
 		.learning-grid,
-		.reading-columns {
+		.reading-columns,
+		.month-plan {
 			grid-template-columns: 1fr;
 			gap: 0.75rem;
 		}
