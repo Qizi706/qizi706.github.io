@@ -51,6 +51,26 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 		<h1>{SITE_TITLE}</h1>
 	</header>
 
+	<figure class="epigraph">
+		<blockquote cite="https://arxiv.org/abs/2002.05202">
+			<p class="quote-original" lang="en">
+				“We offer no explanation as to why these architectures seem to work; we attribute their
+				success, as all else, to divine benevolence.”
+			</p>
+			<p class="quote-translation" lang="zh-CN">
+				“对于为什么架构似乎行之有效，我们不做任何说明；与世间万事一样，我们将它们的成功归功于神的眷顾。”
+			</p>
+			<footer>
+				<span aria-hidden="true">——</span>
+				<cite>
+					<a href="https://arxiv.org/abs/2002.05202" target="_blank" rel="noreferrer">
+						Noam Shazeer 《GLU Variants Improve Transformer》 arXiv:2002.05202 · 2020
+					</a>
+				</cite>
+			</footer>
+		</blockquote>
+	</figure>
+
 	<section class="personal-section" aria-labelledby="personal-heading">
 		<div class="personal-intro">
 			<p class="description-text">
@@ -160,8 +180,64 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 		margin-top: 2rem;
 	}
 
+	.epigraph {
+		width: auto;
+		margin: 2rem 0 2.25rem max(0rem, calc((100% - 34rem) / 2));
+	}
+
+	.epigraph blockquote {
+		margin: 0;
+		padding: 0.15rem 0 0.1rem 1.4rem;
+		border-left: 3px solid rgb(var(--gray-light));
+	}
+
+	.quote-original {
+		margin: 0;
+		color: #334155;
+		font-family: var(--font-body);
+		font-size: 0.98rem;
+		font-style: italic;
+		font-weight: 600;
+		line-height: 1.7;
+		text-wrap: pretty;
+	}
+
+	.quote-translation {
+		margin: 0.7rem 0 0;
+		color: #334155;
+		font-family: var(--font-body);
+		font-size: 0.98rem;
+		font-style: italic;
+		font-weight: 500;
+		line-height: 1.7;
+	}
+
+	.epigraph footer {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 0.2rem 0.4rem;
+		margin-top: 0.85rem;
+		color: #334155;
+		font-size: 0.68rem;
+		line-height: 1.7;
+		text-align: right;
+	}
+
+	:global(.page-frame.home-page) .epigraph footer a {
+		color: #475569;
+		font-family: var(--font-body);
+		font-weight: 500;
+	}
+
 	.personal-section {
 		margin-top: 2rem;
+	}
+
+	@media (max-width: 520px) {
+		.epigraph blockquote {
+			padding-left: 1.2rem;
+		}
 	}
 
 	.personal-links,
