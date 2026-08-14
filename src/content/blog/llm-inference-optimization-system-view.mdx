@@ -1,0 +1,235 @@
+---
+title: 'LLM 推理优化的系统视角：计算、内存与调度'
+description: '阶段 2 的 LLM Inference 学习记录：从 Prefill、Decode 与 KV Cache 出发，把 MQA/GQA、FlashAttention、PagedAttention、Continuous Batching、量化与 Speculative Decoding 放回各自解决的瓶颈。'
+pubDate: '2026-08-13T20:00:00+08:00'
+categories:
+  - 'AI Infra'
+tags:
+  - 'LLM'
+  - '推理优化'
+  - 'KV Cache'
+  - 'vLLM'
+draft: true
+mathjax: true
+---
+
+## 1. 阶段 2：先找到浪费发生在哪里
+
+阶段 1 的[《LLM 推理系统从请求到返回的完整链路》](/blog/llm-inference-request-lifecycle/)回答了一个基础问题：文本怎样经过 Tokenizer、Scheduler、Prefill、KV Cache 和 Decode，最终以流式响应返回客户端。
+
+阶段 2 要继续追问：**这条链路为什么慢，有限的计算、显存容量和显存带宽分别消耗在了哪里？**
+
+[NVIDIA 的《Mastering LLM Techniques: Inference Optimization》](https://developer.nvidia.com/blog/mastering-llm-techniques-inference-optimization/)给出了一张横跨模型、Kernel、Runtime 与 Serving 的优化地图：
+
+- 用 KV Cache 避免 Decode 时重复计算历史 token 的 K/V；
+- 用 MQA / GQA 减少必须保存和读取的 KV Head；
+- 用 FlashAttention 减少 Attention 在 GPU 内存层级之间的数据搬运；
+- 用 PagedAttention 降低 KV Cache 预留和碎片造成的浪费；
+- 用 Quantization、Sparsity 和 Distillation 缩小模型；
+- 用 Parallelism 把权重与计算分散到多个设备；
+- 用 In-flight Batching 提高动态请求下的设备利用率；
+- 用 Speculative Inference 减少大模型串行执行的 Decode 轮数。
+
+这些技术不是一组可以同时打开的“加速开关”。它们修改的状态不同，消除的浪费不同，引入的代价也不同。理解它们之前，首先要把一次推理拆成 Prefill、Decode 和多请求 Serving 三种工作状态。
+
+<SlideCard title="同一份模型，三种不同的性能问题">
+
+## Prefill
+
+- 已知完整 Prompt，可以同时处理许多输入位置
+- 主要计算形态更接近 Matrix-Matrix Multiplication
+- 常见工作区间下更容易利用 GPU 计算能力
+
+## Decode
+
+- 单个 Sequence 每轮只能确定一个新 token
+- 每轮都要读取模型权重和不断增长的历史 K/V
+- Batch 较小时，常见瓶颈是显存带宽而非峰值 FLOPS
+
+## Online Serving
+
+- 请求到达时间、Prompt 长度和生成长度都不固定
+- Scheduler 要让 Prefill 与持续进行的 Decode 共享设备
+- 吞吐、TTFT、TPOT、公平性和 KV Cache 容量相互制约
+
+</SlideCard>
+
+这里的“Prefill 计算密集、Decode 带宽受限”是性能倾向，不是脱离条件的定律。短 Prompt、很小的 Prefill Batch 也可能无法打满计算单元；Decode Batch 增大后，权重搬运被更多 Sequence 分摊，瓶颈也可能移动。最终应由工作负载和 Profiling 证明当前系统落在哪个区间。
+
+## 2. KV Cache：省掉了什么，为什么还不够？
+
+### 2.1 自回归生成中的不变量
+
+在第 $l$ 层，位置 $i$ 的隐藏状态经过线性投影得到：
+
+$$
+K_i^{(l)} = h_i^{(l)}W_K^{(l)}, \qquad
+V_i^{(l)} = h_i^{(l)}W_V^{(l)}.
+$$
+
+当模型计算当前位置 $t$ 时，Dense Causal Attention 仍需要让新的 Query 与从位置 $1$ 到 $t$ 的全部 Key 计算相关性，再用这些权重聚合全部 Value：
+
+$$
+O_t^{(l)} = \operatorname{softmax}\left(
+\frac{Q_t^{(l)}(K_{1:t}^{(l)})^T}{\sqrt{d_h}}
+\right)V_{1:t}^{(l)}.
+$$
+
+历史 token 已经确定，因此同一层中的历史 K/V 在后续 Decode 轮次中不会改变。KV Cache 利用的正是这个不变量。
+
+<SlideCard title="一次 Decode Step 中，状态怎样变化？">
+
+```text
+Prefill finishes
+  cache = K/V of prompt tokens [1, P]
+
+Decode step t
+  input:  latest accepted token
+  read:   cached K/V [1, P + t - 1]
+  compute: Q/K/V for the new position
+  write:  append new K/V to cache
+  output: logits -> sample next token
+
+Next engine step
+  scheduler decides when this sequence runs again
+```
+
+</SlideCard>
+
+如果没有 KV Cache，第 $t$ 轮 Decode 必须重新处理 Prompt 与此前已经生成的 token，历史位置在每一层产生的 K/V、Attention 和 MLP 计算都会一遍遍重做。有了 Cache，每轮只为最新位置执行新的 Transformer 计算，并复用历史 K/V。
+
+但“复用”不等于“不再访问”。在标准 Dense Attention 中，新的 Query 仍必须与所有历史 Key 比较，并聚合所有历史 Value。因此 KV Cache 消除了**历史状态的重复计算**，却保留了**对历史状态的读取**；随着上下文增长，每一步 Decode 要读取的 K/V 也继续增长。优化由此从计算问题转化成了容量、带宽和生命周期管理问题。
+
+### 2.2 每个 token 到底占多少 KV Cache？
+
+对常见 Decoder-only Transformer，一个 token 的逻辑 KV Cache 大小可近似写成：
+
+$$
+S_{\mathrm{KV/token}}
+= 2 \times L \times H_{\mathrm{KV}} \times D_h \times B.
+$$
+
+- $2$：分别保存 Key 与 Value；
+- $L$：Transformer Layer 数；
+- $H_{\mathrm{KV}}$：Key/Value Head 数，而不是必然等于 Query Head 数；
+- $D_h$：每个 Head 的维度；
+- $B$：每个缓存元素的字节数。
+
+对于长度不同的活跃请求，单副本在未进行 KV 分片时的逻辑总量更准确地写成：
+
+$$
+S_{\mathrm{KV,total}}
+\approx S_{\mathrm{KV/token}} \times \sum_{r \in \mathrm{active}} T_r.
+$$
+
+NVIDIA 原文使用 `batch_size × sequence_length` 表达总量，这适合等长 Batch 的近似。真实 Serving 中的 Sequence 长度不同，应该累计所有活跃请求已缓存的 token 数；Block 对齐、最后一个未填满的 Block、Allocator 元数据和并行切分还会使物理占用偏离这个逻辑值。
+
+以原文中的 Llama 2 7B、FP16、MHA 配置为例：$L=32$、$H_{\mathrm{KV}}=32$、$D_h=128$、$B=2$，因此每 token 约占 512 KiB，4096 token 约占 2 GiB。这个结果也解释了为什么不能只看“7B 权重约 14 GB”：并发和上下文增长后，KV Cache 会成为另一块随请求动态增长的大内存。
+
+<Note title="显存预算不能只写成权重 + KV Cache" class="title-underline">
+
+原文用模型权重与 KV Cache 建立主要直觉是合理的，但容量规划还要给激活、Attention/Collective Workspace、CUDA Graph、Runtime 与 Allocator 留空间。真正可用于 KV Block 的容量必须从运行时观测，而不能直接用“显存总量减权重”代替。
+
+</Note>
+
+### 2.3 围绕 KV Cache，优化发生在四个不同方向
+
+| 方向           | 代表机制             | 真正减少的东西                                     | 没有减少的东西                     |
+| -------------- | -------------------- | -------------------------------------------------- | ---------------------------------- |
+| 少生成状态     | MQA / GQA            | 每 token 的 KV Head 数                             | Query Head 数不必同步减少          |
+| 少搬运中间结果 | FlashAttention       | Attention 计算中的 HBM I/O 与中间矩阵物化          | 逻辑 Attention 语义与已有 KV 历史  |
+| 少浪费物理空间 | PagedAttention       | 过度预留、外部碎片和请求间难以复用的空洞           | 每个有效 token 应保存的逻辑 K/V    |
+| 少执行串行轮次 | Speculative Decoding | Target Model 为生成相同 token 数所需的串行验证轮次 | Draft、验证和拒绝 token 的额外工作 |
+
+这四种优化经常同时出现在“KV Cache 优化”或“推理加速”的讨论里，但它们并不等价。比如 PagedAttention 能让逻辑连续的 K/V 放在物理不连续的 Block 中，却不会让一个 token 的 K/V Tensor 变小；GQA 能直接减小每 token 的 K/V，却是模型架构属性，不能仅靠 Serving 配置把任意 MHA 模型无损切换过去。
+
+## 3. 把原文中的技术放回正确层次
+
+### 3.1 Model Architecture：改变必须计算或保存的内容
+
+MHA 为每个 Query Head 保留各自的 Key/Value Head。MQA 让所有 Query Head 共享一组 K/V，GQA 则让一组 Query Head 共享一组 K/V。若其他维度不变，把 $H_{\mathrm{KV}}$ 从 32 降到 8，理论上的 KV Cache 容量与相关读取字节数都会降为原来的四分之一。
+
+代价是这不是纯 Runtime 优化。模型需要以相应结构训练或 Uptraining，Head 数减少也可能影响模型质量。应先从模型 `config.json` 读取 `num_attention_heads` 与 `num_key_value_heads`，再计算预算，不能只凭模型参数量猜测 KV Cache。
+
+Quantization、Sparsity 和 Distillation 也位于这一侧：它们通过减少表示精度、有效参数或模型规模降低权重容量与带宽压力，但需要接受精度损失风险、校准或训练成本，以及特定硬件和 Kernel 是否真正支持的问题。权重量化、激活量化和 KV Cache 量化是三个不同对象，不能合并成一个“低比特模型”结论。
+
+### 3.2 Kernel / Runtime：改变同一语义的执行与内存管理
+
+FlashAttention 不近似 Attention 结果，而是通过 Tiling 与算子融合改变计算顺序，避免把完整 Attention 中间矩阵反复写入和读出 HBM。它优化的是 I/O 路径：数据进入更快的片上存储后尽量完成更多计算。
+
+PagedAttention 解决的是另一类问题。由于输出长度不可预知，若每个请求一开始就按最大长度预留连续 KV 空间，会产生过度预留、内部碎片和外部碎片。PagedAttention 把 Sequence 的 KV Cache 切成固定 token 数的 Block，用 Block Table 维护逻辑位置到物理 Block 的映射，需要增长时再分配。
+
+这个设计与页表很像：上层看到连续的 token 位置，底层物理空间不必连续。但类比也有边界。PagedAttention 的核心首先是 GPU KV Block 的分配与寻址，并不意味着它必须像操作系统虚拟内存那样依赖 Page Fault 或把冷页交换到磁盘。
+
+### 3.3 Serving / Scheduler：改变请求怎样共享设备
+
+Static Batching 让同一 Batch 中已经完成的 Sequence 等待最长 Sequence，空出的执行槽不能及时服务新请求。Continuous Batching（原文称 In-flight Batching）在每个迭代边界移除已完成的 Sequence，并把新请求加入后续执行轮次，更适合长度高度动态的 LLM 请求。
+
+它消除的是**Batch 内等待和设备空槽**，不是单请求的模型计算量。更多活跃 Sequence 可以分摊权重读取、提高 Token Throughput，但也会竞争执行机会和 KV Cache；如果到达率超过服务能力，Queueing Delay、TTFT 与 P99 仍会继续上升。
+
+这里还要区分四个经常被混写成 `batch_size` 的量：
+
+- Client Concurrency：客户端同时未完成的请求数；
+- Active Sequences：当前已进入引擎并保留状态的 Sequence 数；
+- Sequence Batch：某次 Engine Step 实际被选择执行的 Sequence；
+- Token Budget：这一轮允许调度的 token 总数。
+
+它们可能相关，但不相等。阶段 2 后续的并发实验必须分别记录和控制这些变量，否则“增大 Batch 后吞吐提高”无法说明究竟是哪一层发生了变化。
+
+## 4. 一张优化决策表
+
+| 技术                          | 所在层次            | 消除的主要浪费                         | 主要代价或限制                           |
+| ----------------------------- | ------------------- | -------------------------------------- | ---------------------------------------- |
+| KV Cache                      | Model Runtime       | 历史 token 的 K/V 与前向计算被重复执行 | 占用容量，每步仍读取历史 K/V             |
+| MQA / GQA                     | Model Architecture  | 过多 KV Head 带来的容量和带宽          | 需要模型支持，存在质量权衡               |
+| FlashAttention                | Kernel              | Attention 中间结果的 HBM 往返          | 依赖适配的 Kernel、形状与硬件            |
+| PagedAttention                | Memory Manager      | 预留、碎片与连续分配约束               | Block Table、对齐和管理开销              |
+| Quantization                  | Model / Kernel      | 权重、激活或 KV 的表示字节数           | 精度、校准和 Kernel 支持                 |
+| Tensor / Pipeline Parallelism | Distributed Runtime | 单设备放不下权重或算力不足             | Collective、点对点通信与 Pipeline Bubble |
+| Continuous Batching           | Scheduler           | 动态长度请求造成的空槽和等待           | 调度竞争可能恶化单请求与尾延迟           |
+| Speculative Decoding          | Serving / Model     | Target Model 的串行 Decode Step        | 收益依赖接受率，并增加 Draft 与验证成本  |
+
+所以，优化不应从“现在流行哪种技术”开始，而应从证据链开始：
+
+```text
+workload + SLO
+  -> time is spent in prefill, decode, queueing, or transfer?
+  -> constrained by compute, bandwidth, capacity, or scheduling?
+  -> which state or data movement is redundant?
+  -> choose mechanism
+  -> verify whether the bottleneck moved
+```
+
+Parallelism 也不只是“用了更多 GPU 所以更快”。Pipeline Parallelism 按 Layer 切分，可能产生 Pipeline Bubble；Tensor Parallelism 切分单层矩阵或 Attention Head，会引入 Collective；Sequence Parallelism 沿 Sequence 维度切分部分操作。它们首先解决单设备容量和计算规模问题，是否降低单请求延迟取决于通信、Batch 和拓扑。
+
+原文称 Data Parallelism 与推理的相关性较低，这在“降低单请求的单副本内存”这个语境下成立：每个 Replica 仍要保存完整权重。但在 Online Serving 中，多副本仍是横向扩展总吞吐、隔离故障和跨节点承载流量的常用方法。讨论 Parallelism 时必须说明目标是单请求加速、单副本容量，还是整个服务的 Scale-out。
+
+## 5. 从阅读结论变成可证伪预测
+
+这一部分目前建立的是机制模型，还不是实验结论。后续实践至少要检验下面四个预测：
+
+1. 固定模型、Output 和并发，只增加未命中 Prefix Cache 的 Prompt，Prefill 时间与初始 KV Cache 应明显增加；更长历史还会增加 Decode 每步读取的 K/V，TPOT 预计随之上升。
+2. 固定 Prompt/Output 分布，逐步增加 Client Concurrency，Token Throughput 应先提高再趋于饱和；越过容量点后，即使吞吐不再增长，Queueing、TTFT 和 P99 仍可能恶化。
+3. 在混合长短请求中，Continuous Batching 应比等待整个 Static Batch 完成更少浪费执行槽；但长 Prefill 是否干扰已有 Decode，需要继续通过 ITL 和尾延迟判断。
+4. KV Cache 的逻辑容量可由模型配置与活跃 token 数预测；运行时物理占用与公式的差值，应由 Block 对齐、Workspace、Graph、Allocator 和其他状态解释，而不是直接当作“测量误差”。
+
+验证时需要保留 Warmup、版本、真实 Input/Output token、每请求流式时间戳、P50/P95/P99、服务端队列与 KV Cache 指标。尤其要避免阶段 1 已经遇到过的 Prefix Cache 污染：如果不同测试样本共享长前缀，观测到的 Prefill 可能不是完整 Prompt 的实际计算量。
+
+<Note title="这一部分留下的核心理解" class="title-underline">
+
+KV Cache 是理解 LLM 推理优化的支点：它用容量换掉历史重算，又让 Decode 的瓶颈转向内存带宽与 Cache 管理。MQA/GQA 改变每 token 保存多少状态，FlashAttention 改变 Attention 怎样搬运数据，PagedAttention 改变这些状态怎样分配，Continuous Batching 改变多个请求怎样共享它们，Speculative Decoding 则尝试减少必须串行经历的 Target Model 轮次。
+
+判断一项优化是否有效，最终要回答三件事：**它消除了哪一种浪费，引入了什么新成本，以及原来的瓶颈被转移到了哪里。**
+
+</Note>
+
+<Note title="本部分资料" class="title-underline">
+
+- NVIDIA，[Mastering LLM Techniques: Inference Optimization](https://developer.nvidia.com/blog/mastering-llm-techniques-inference-optimization/)
+- Noam Shazeer，[Fast Transformer Decoding: One Write-Head is All You Need](https://arxiv.org/abs/1911.02150)
+- Joshua Ainslie et al.，[GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints](https://arxiv.org/abs/2305.13245)
+- Tri Dao et al.，[FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)
+- Woosuk Kwon et al.，[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)
+- Yaniv Leviathan et al.，[Fast Inference from Transformers via Speculative Decoding](https://arxiv.org/abs/2211.17192)
+
+</Note>
