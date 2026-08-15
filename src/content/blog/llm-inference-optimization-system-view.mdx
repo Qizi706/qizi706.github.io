@@ -1,6 +1,6 @@
 ---
-title: 'LLM 推理优化的系统视角：计算、内存与调度'
-description: '阶段 2 的 LLM Inference 学习记录：从 Prefill、Decode 与 KV Cache 出发，把 MQA/GQA、FlashAttention、PagedAttention、Continuous Batching、量化与 Speculative Decoding 放回各自解决的瓶颈。'
+title: 'LLM 推理优化的系统视角：从机制地图到可证伪实验'
+description: '阶段 2 的 LLM Inference 学习记录：从 Prefill、Decode 与 KV Cache 出发，区分计算、容量、带宽和调度瓶颈，并把机制理解收口为可复现的 Serving 实验。'
 pubDate: '2026-08-13T20:00:00+08:00'
 categories:
   - 'AI Infra'
@@ -17,7 +17,7 @@ mathjax: true
 
 阶段 1 的[《LLM 推理系统从请求到返回的完整链路》](/blog/llm-inference-request-lifecycle/)回答了一个基础问题：文本怎样经过 Tokenizer、Scheduler、Prefill、KV Cache 和 Decode，最终以流式响应返回客户端。
 
-阶段 2 要继续追问：**这条链路为什么慢，有限的计算、显存容量和显存带宽分别消耗在了哪里？**
+阶段 2 要继续追问：**这条链路为什么慢，有限的计算、显存容量和显存带宽分别消耗在了哪里？工作负载又如何经过 Scheduler 和 KV Cache，最终影响 TTFT、TPOT、吞吐与尾延迟？**
 
 [NVIDIA 的《Mastering LLM Techniques: Inference Optimization》](https://developer.nvidia.com/blog/mastering-llm-techniques-inference-optimization/)给出了一张横跨模型、Kernel、Runtime 与 Serving 的优化地图：
 
@@ -31,6 +31,8 @@ mathjax: true
 - 用 Speculative Inference 减少大模型串行执行的 Decode 轮数。
 
 这些技术不是一组可以同时打开的“加速开关”。它们修改的状态不同，消除的浪费不同，引入的代价也不同。理解它们之前，首先要把一次推理拆成 Prefill、Decode 和多请求 Serving 三种工作状态。
+
+这一阶段也需要主动划定边界：前半部分建立优化机制地图，后半部分只围绕 **Scheduler × KV Cache × Workload** 设计实验。CUDA Kernel、复杂分布式部署、不同量化方案的精度比较和多引擎横向 Benchmark 暂时不进入实践范围，否则每个变量都会同时改变，最终很难解释结果来自哪里。
 
 <SlideCard title="同一份模型，三种不同的性能问题">
 
@@ -204,32 +206,155 @@ Parallelism 也不只是“用了更多 GPU 所以更快”。Pipeline Paralleli
 
 原文称 Data Parallelism 与推理的相关性较低，这在“降低单请求的单副本内存”这个语境下成立：每个 Replica 仍要保存完整权重。但在 Online Serving 中，多副本仍是横向扩展总吞吐、隔离故障和跨节点承载流量的常用方法。讨论 Parallelism 时必须说明目标是单请求加速、单副本容量，还是整个服务的 Scale-out。
 
-## 5. 从阅读结论变成可证伪预测
+## 5. 从机制地图收口到一个问题
 
-这一部分目前建立的是机制模型，还不是实验结论。后续实践至少要检验下面四个预测：
+前面建立的是机制模型，还不是实验结论。下一步不再继续横向加入优化技术，而是集中回答一个问题：
 
-1. 固定模型、Output 和并发，只增加未命中 Prefix Cache 的 Prompt，Prefill 时间与初始 KV Cache 应明显增加；更长历史还会增加 Decode 每步读取的 K/V，TPOT 预计随之上升。
-2. 固定 Prompt/Output 分布，逐步增加 Client Concurrency，Token Throughput 应先提高再趋于饱和；越过容量点后，即使吞吐不再增长，Queueing、TTFT 和 P99 仍可能恶化。
-3. 在混合长短请求中，Continuous Batching 应比等待整个 Static Batch 完成更少浪费执行槽；但长 Prefill 是否干扰已有 Decode，需要继续通过 ITL 和尾延迟判断。
-4. KV Cache 的逻辑容量可由模型配置与活跃 token 数预测；运行时物理占用与公式的差值，应由 Block 对齐、Workspace、Graph、Allocator 和其他状态解释，而不是直接当作“测量误差”。
+> 在固定模型、推理引擎和硬件后，Input/Output 长度分布、Client Concurrency 与公共前缀如何改变 Scheduler 的决策和 KV Cache 的占用，并最终影响 TTFT、TPOT、Token Throughput 与尾延迟？
 
-验证时需要保留 Warmup、版本、真实 Input/Output token、每请求流式时间戳、P50/P95/P99、服务端队列与 KV Cache 指标。尤其要避免阶段 1 已经遇到过的 Prefix Cache 污染：如果不同测试样本共享长前缀，观测到的 Prefill 可能不是完整 Prompt 的实际计算量。
+这条问题链可以分成五层：
 
-<Note title="这一部分留下的核心理解" class="title-underline">
+```text
+workload
+  -> scheduler selects sequences and token budget
+  -> KV cache lookup, allocation, growth and release
+  -> model execution and data movement
+  -> queueing, prefill and decode time
+  -> TTFT / TPOT / throughput / tail latency
+```
+
+实验的目的不是证明“某项技术一定更快”，而是判断当前工作负载落在哪种瓶颈区间，以及改变一个变量后瓶颈是否移动。
+
+### 5.1 四条可证伪假设
+
+| 编号 | 改变的变量                          | 保持不变                                 | 预测                                                                                          | 反证或替代解释                                                                                    |
+| ---- | ----------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| H1   | 未命中 Prefix Cache 的 Input Tokens | 模型、Output、并发、引擎参数             | Prompt 变长时 TTFT 与初始 KV 占用上升；历史变长还可能抬高 TPOT                                | TTFT 没有稳定趋势；Tokenizer、Prefix Cache、前端或测量噪声主导了结果                              |
+| H2   | Client Concurrency                  | 模型、请求长度分布、生成参数             | Token Throughput 先提高再趋于饱和；越过容量点后 TTFT、TPOT 或 P99 继续恶化                    | 测试范围没有到达饱和点，或 CPU、HTTP、Tokenizer 等先成为瓶颈                                      |
+| H3   | 长短请求的混合比例                  | 总请求规模、短请求分布、引擎参数         | 长 Prefill 到达后，已有 Decode 请求的 ITL 尾部可能出现尖峰                                    | 引擎使用 Chunked Prefill、资源隔离或其他策略，长 Prefill 没有形成可观测干扰                       |
+| H4   | 公共前缀是否可复用                  | 总 Input/Output、并发、模型与 Block 配置 | Prefix Cache 命中会减少重复 Prefill 和独占 KV Block，降低 TTFT；同时延长共享 Block 的驻留时间 | 没有真正命中完整 Block；物理占用被 Workspace、Graph 或 Allocator 遮蔽，现有指标不足以分离 KV 状态 |
+
+如果结果不支持预测，应先记录 `Refuted` 或 `Inconclusive`，再检查替代解释，不能事后修改假设让所有结果都显得正确。
+
+### 5.2 指标必须先定义再采集
+
+每个请求至少记录下面这些原始时间点和事实：
+
+```text
+t_arrival   client submits the request
+t_first     client receives the first output token
+t_i         client receives output token i
+t_last      client receives the last output token
+t_finish    client receives the terminal event
+input_tokens / output_tokens / status / error
+```
+
+由原始数据计算：
+
+```text
+TTFT = t_first - t_arrival
+ITL_i = t_i - t_(i-1)
+TPOT = (t_last - t_first) / (output_tokens - 1)
+E2E = t_finish - t_arrival
+Output Token Throughput = sum(output_tokens) / measurement_window
+```
+
+`TPOT` 只对至少生成两个 token 的成功请求计算。TTFT 包含客户端可见的排队、前端处理、Prefill 和传输时间；如果引擎暴露 Queueing 与 Model Execution 指标，再进一步拆分，不能仅凭客户端时间反推出服务端内部阶段。
+
+聚合时保留 P50/P95/P99 和样本数。平均值可以补充整体趋势，但不能代替分布；ITL 还应保留时间序列，用来判断长 Prefill 到达是否与 Decode Stall 同时发生。
+
+### 5.3 最小实验矩阵
+
+实际取值需要根据模型上下文上限和硬件容量缩放，下面的数值只是第一轮起点：
+
+| 实验              | Input Token                  | Output Token     | Concurrency        | Prefix            | 要回答的问题                                |
+| ----------------- | ---------------------------- | ---------------- | ------------------ | ----------------- | ------------------------------------------- |
+| Baseline          | 128                          | 64               | 1                  | 随机              | 单请求稳态性能和测量噪声有多大？            |
+| Length Sweep      | 128 / 512 / 2048             | 64               | 1                  | 随机              | Prompt 增长怎样影响 TTFT、TPOT 与 KV 占用？ |
+| Concurrency Sweep | 固定长度分布                 | 64               | 1 / 2 / 4 / 8 / 16 | 随机              | 吞吐在哪一点饱和，尾延迟何时开始恶化？      |
+| Mixed Workload    | 80% 短 Prompt、20% 长 Prompt | 固定或记录实际值 | 固定               | 随机              | 长 Prefill 是否干扰已有 Decode？            |
+| Prefix Reuse      | 固定总长度                   | 64               | 固定               | 无共享 / 共享前缀 | Prefix Cache 节省了什么，又占用了什么？     |
+
+Length Sweep 和 Concurrency Sweep 必须分开进行，避免同时改变长度与并发后无法归因。第一轮 Concurrency Sweep 可以使用 Closed-loop Client，但结论只能描述“并发增加时”的容量曲线，不能把 Concurrency 直接等同于固定 Arrival Rate；需要研究 SLO 与真实到达过程时，再增加 Open-loop 负载。
+
+### 5.4 控制变量与实验有效性
+
+每次运行保存以下环境信息：
+
+- 模型名称、Revision、量化方式和 `config.json` 中的 Attention/KV Head 配置；
+- 推理引擎版本或 Git Commit、完整启动参数和关键环境变量；
+- GPU 型号、显存、Driver、CUDA 与相关 Runtime 版本；
+- Prefix Cache、Chunked Prefill、KV Cache 数据类型和最大上下文配置；
+- Prompt 生成方法、真实 Input/Output Token、请求到达模式和随机种子；
+- Warm-up 次数、正式重复次数、测试顺序和异常请求。
+
+阶段 1 已经遇到过 Prefix Cache 污染。除 Prefix Reuse 实验外，不同样本必须使用不同且足够早出现差异的 token 前缀；必要时关闭 Prefix Cache 或在实验组之间重启服务。不能只改变字符串末尾，因为长公共前缀仍可能让大部分 Prefill 命中缓存。
+
+Cold Start、Warm-up 与 Steady State 分开报告。正式测试顺序应随机化或轮换，避免温度、后台负载和长时间运行造成的漂移总是偏向同一实验组。原始数据阶段不删除异常值；超时、Early EOS、取消和失败请求都应保留状态，再说明聚合时如何处理。
+
+如果暂时只能使用 Apple Silicon 与 Ollama，可以完成客户端可见的长度、并发和缓存实验，但结论应限定为该软硬件栈的观测结果，不能据此断言 vLLM Scheduler 或 CUDA Kernel 的内部行为。源码验证与 CUDA 环境实验可以分开推进，不必因为缺少 GPU 而停止建立因果模型。
+
+### 5.5 用实验问题约束源码阅读
+
+源码阅读只追踪一轮请求状态变化，不从仓库入口开始遍历所有模块：
+
+```text
+request admitted
+  -> scheduler chooses token budget
+  -> KV cache finds or allocates blocks
+  -> model runner executes one engine step
+  -> sampled token updates request state
+  -> finished or cancelled request releases resources
+```
+
+阅读时固定 vLLM 版本或 Commit，产出一张调用链、一张 Request 状态机和一组不变量。需要重点验证：被调度的 token 是否已经获得 KV Slot、Prefix 命中以什么状态为前提、KV Block 在完成/取消/抢占路径上何时释放，以及 Scheduler 如何在 Prefill 与 Decode 之间分配 Token Budget。
+
+这里的目标不是记住类名，而是把实验中的现象定位到状态与决策。若当前源码与论文描述不同，以固定版本的实际实现为准，并单独记录差异。
+
+### 5.6 Phase 2 的交付物与完成标准
+
+Phase 2 最终应留下：
+
+- 可配置 Input/Output 长度、并发、公共前缀和到达模式的 Benchmark Harness；
+- 环境清单、服务启动命令、负载复现命令、原始 CSV 与绘图脚本；
+- 四条假设的 `Supported / Refuted / Inconclusive` 结论与证据；
+- Request 状态机、Scheduler/KV Cache 调用链和关键不变量；
+- 一篇区分事实、源码结论、实验结果、推断与局限性的实践报告。
+
+满足下面条件后，这一阶段就可以停止，而不是继续收集优化名词：
+
+1. 同一环境下重复运行能够复现主要趋势，并保留版本和原始数据；
+2. 能解释并发增加后吞吐、TTFT 与 TPOT 为什么可能出现不同方向的变化；
+3. 至少记录一个不符合原预测的结果，并提出能够区分替代解释的下一组实验；
+4. 能从一次客户端观测追踪到 Scheduler 决策与 KV Cache 生命周期，但不把尚未测量的内部行为写成实验事实；
+5. 能明确指出当前瓶颈，以及改变机制后瓶颈预计会转移到哪里。
+
+<Note title="这一阶段留下的核心理解" class="title-underline">
 
 KV Cache 是理解 LLM 推理优化的支点：它用容量换掉历史重算，又让 Decode 的瓶颈转向内存带宽与 Cache 管理。MQA/GQA 改变每 token 保存多少状态，FlashAttention 改变 Attention 怎样搬运数据，PagedAttention 改变这些状态怎样分配，Continuous Batching 改变多个请求怎样共享它们，Speculative Decoding 则尝试减少必须串行经历的 Target Model 轮次。
 
-判断一项优化是否有效，最终要回答三件事：**它消除了哪一种浪费，引入了什么新成本，以及原来的瓶颈被转移到了哪里。**
+但机制地图只是实验的起点。判断一项优化是否有效，最终要回答三件事：**它消除了哪一种浪费，引入了什么新成本，以及原来的瓶颈被转移到了哪里。**
 
 </Note>
 
-<Note title="本部分资料" class="title-underline">
+<Note title="阅读顺序" class="title-underline">
+
+下一步只围绕调度与 KV Cache 精读三份材料：
+
+1. Gyeong-In Yu et al.，[Orca: A Distributed Serving System for Transformer-Based Generative Models](https://www.usenix.org/conference/osdi22/presentation/yu)：先理解 Request-level Batching 的限制和 Iteration-level Scheduling；
+2. Woosuk Kwon et al.，[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)：理解 Block 管理、共享与评测方法；
+3. [vLLM Architecture Overview](https://docs.vllm.ai/en/stable/design/arch_overview/)：配合固定版本源码追踪一轮 Engine Step。
+
+只有当 Mixed Workload 实验实际暴露长 Prefill 干扰 Decode 后，再阅读 Amey Agrawal et al. 的 [Sarathi-Serve](https://www.usenix.org/conference/osdi24/presentation/agrawal)，用 Chunked Prefill 与 Stall-free Scheduling 解释和验证这个问题。
+
+</Note>
+
+<Note title="机制地图参考资料" class="title-underline">
 
 - NVIDIA，[Mastering LLM Techniques: Inference Optimization](https://developer.nvidia.com/blog/mastering-llm-techniques-inference-optimization/)
 - Noam Shazeer，[Fast Transformer Decoding: One Write-Head is All You Need](https://arxiv.org/abs/1911.02150)
 - Joshua Ainslie et al.，[GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints](https://arxiv.org/abs/2305.13245)
 - Tri Dao et al.，[FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)
-- Woosuk Kwon et al.，[Efficient Memory Management for Large Language Model Serving with PagedAttention](https://arxiv.org/abs/2309.06180)
 - Yaniv Leviathan et al.，[Fast Inference from Transformers via Speculative Decoding](https://arxiv.org/abs/2211.17192)
 
 </Note>

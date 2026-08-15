@@ -207,7 +207,7 @@ constraint: KV Cache consumes GPU memory</code></pre>
 
 		<LearningStage
 			period="2026.08 — 2026.09"
-			title="阶段 2 · LLM 推理核心知识"
+			title="阶段 2 · Serving 调度与 KV Cache 实验"
 			status="pending"
 			open
 		>
@@ -216,9 +216,9 @@ constraint: KV Cache consumes GPU memory</code></pre>
 					class="quest-checkbox"
 					type="checkbox"
 					disabled
-					aria-label="LLM 推理核心知识进行中"
+					aria-label="Serving 调度与 KV Cache 实验进行中"
 				/>
-				<span>LLM 推理核心知识 <span class="muted">/ 1 month</span></span>
+				<span>Serving 调度与 KV Cache 实验 <span class="muted">/ 1 month</span></span>
 				<span class="quest-state" aria-hidden="true"></span>
 			</div>
 
@@ -226,24 +226,23 @@ constraint: KV Cache consumes GPU memory</code></pre>
 				<div>
 					<h3>需要回答的问题</h3>
 					<ol>
-						<li>KV Cache 避免了哪些重复计算，Decode 为什么仍要读取全部历史 K/V？</li>
-						<li>Prefill 为什么通常计算密集，Decode 为什么更容易受显存带宽影响？</li>
+						<li>Input/Output 长度分布如何改变 Prefill、Decode 与 KV Cache 占用？</li>
 						<li>Client Concurrency、Active Sequences、Batch Size 和 Token Budget 有什么区别？</li>
-						<li>为什么吞吐饱和后，继续增加并发仍会推高 TTFT 和 P99？</li>
-						<li>Continuous Batching 与 Chunked Prefill 如何协调长 Prefill 和持续 Decode？</li>
-						<li>Prefix Caching 和 Speculative Decoding 分别消除了什么浪费，又受什么条件限制？</li>
-						<li>模型权重、激活、KV Cache 和临时 Buffer 如何共同决定显存容量？</li>
+						<li>并发增加时，Token Throughput 为什么先提高再饱和，而尾延迟继续恶化？</li>
+						<li>长 Prefill 到达后，是否会干扰已有请求的 Decode ITL？如何验证而不是猜测？</li>
+						<li>Prefix Cache 命中减少了哪些计算和独占 Block，又如何改变驻留与淘汰？</li>
+						<li>客户端观测如何对应到 Scheduler 决策和 KV Cache 生命周期？</li>
 					</ol>
 				</div>
 				<div>
 					<h3>阶段产出</h3>
 					<ul>
-						<li>实现一个 Toy Attention，对比重算历史与复用 KV Cache 的 Decode。</li>
-						<li>完成目标模型的权重、KV Cache 与运行时显存预算。</li>
-						<li>分别改变 Client Concurrency、输入长度与服务端 max_num_seqs。</li>
-						<li>记录 TTFT、TPOT、ITL、吞吐、P50/P95/P99 与 KV Cache 使用率。</li>
-						<li>用混合长短请求验证 Continuous Batching 与 Chunked Prefill 的调度取舍。</li>
-						<li>完成《vLLM 推理性能实验：并发、Batch Size、输入长度对吞吐和延迟的影响》。</li>
+						<li>冻结四条可证伪假设，提前定义支持、反证与证据不足的条件。</li>
+						<li>实现可配置长度、并发、公共前缀与到达模式的 Benchmark Harness。</li>
+						<li>保存环境、启动命令、逐请求时间戳、原始 CSV 与绘图脚本。</li>
+						<li>完成 Length、Concurrency、Mixed Workload 与 Prefix Reuse 实验。</li>
+						<li>画出一次 Engine Step 的调用链、Request 状态机与 KV Block 生命周期。</li>
+						<li>完成一篇区分实验结果、源码事实、推断与局限性的实践报告。</li>
 					</ul>
 				</div>
 			</div>
@@ -252,23 +251,25 @@ constraint: KV Cache consumes GPU memory</code></pre>
 			<div class="month-plan" aria-label="阶段二四周学习计划">
 				<article>
 					<span>week 01</span>
-					<h4>Transformer 与 KV Cache</h4>
-					<p>画出单请求推理链路，推导每 token 的 KV Cache，并实现 Toy Attention 验证复用。</p>
+					<h4>收口机制地图</h4>
+					<p>完成计算、容量、带宽与调度模型；冻结四条可证伪假设、实验边界和指标定义。</p>
 				</article>
 				<article>
 					<span>week 02</span>
-					<h4>Batching、调度与显存</h4>
-					<p>理解 Continuous Batching、Token Budget 和 PagedAttention，写下吞吐与延迟预测。</p>
+					<h4>Benchmark Harness</h4>
+					<p>记录逐请求流式时间戳和真实 token；完成 Baseline、Length 与 Concurrency Sweep。</p>
 				</article>
 				<article>
 					<span>week 03</span>
-					<h4>三种推理优化</h4>
-					<p>比较 Prefix Caching、Speculative Decoding 与 Chunked Prefill 的收益条件和代价。</p>
+					<h4>混合负载与源码纵切</h4>
+					<p>
+						运行 Mixed Workload 和 Prefix Reuse；沿 Scheduler、KV Cache、Model Runner 追踪一轮执行。
+					</p>
 				</article>
 				<article>
 					<span>week 04</span>
-					<h4>vLLM 性能实验</h4>
-					<p>固定环境、预热并重复实验；每次只改变一个变量，最终用数据解释因果关系。</p>
+					<h4>解释、复现与交付</h4>
+					<p>汇总分布和异常结果，判断假设 Supported、Refuted 或 Inconclusive，并完成实验报告。</p>
 				</article>
 			</div>
 
@@ -276,76 +277,42 @@ constraint: KV Cache consumes GPU memory</code></pre>
 				<summary>reading queue <span>展开阅读清单</span></summary>
 				<div class="reading-columns">
 					<div>
-						<h3>计算与 KV Cache</h3>
-						<ul>
-							<li>
-								<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noreferrer"
-									>Attention Is All You Need</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://developer.nvidia.com/blog/mastering-llm-techniques-inference-optimization/"
-									target="_blank"
-									rel="noreferrer">NVIDIA: Inference Optimization</a
-								>
-							</li>
-							<li>
-								<a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noreferrer"
-									>Efficient Memory Management for LLM Serving with PagedAttention</a
-								>
-							</li>
-						</ul>
-
-						<h3>Batching 与调度</h3>
+						<h3>按顺序精读</h3>
 						<ul>
 							<li>
 								<a
 									href="https://www.usenix.org/conference/osdi22/presentation/yu"
 									target="_blank"
-									rel="noreferrer"
-									>Orca: A Distributed Serving System for Transformer-Based Generative Models</a
+									rel="noreferrer">1. Orca: Iteration-level Scheduling</a
+								>
+							</li>
+							<li>
+								<a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noreferrer"
+									>2. PagedAttention: KV Block Management</a
 								>
 							</li>
 							<li>
 								<a
-									href="https://docs.vllm.ai/en/latest/configuration/optimization/"
+									href="https://docs.vllm.ai/en/stable/design/arch_overview/"
 									target="_blank"
-									rel="noreferrer">vLLM Optimization and Tuning</a
+									rel="noreferrer">3. vLLM Architecture Overview</a
 								>
 							</li>
+						</ul>
+
+						<h3>出现长 Prefill 干扰后</h3>
+						<ul>
 							<li>
-								<a href="https://arxiv.org/abs/2403.02310" target="_blank" rel="noreferrer"
-									>Sarathi-Serve: Taming the Throughput-Latency Tradeoff</a
+								<a
+									href="https://www.usenix.org/conference/osdi24/presentation/agrawal"
+									target="_blank"
+									rel="noreferrer">Sarathi-Serve: Chunked Prefill and Stall-free Scheduling</a
 								>
 							</li>
 						</ul>
 					</div>
 					<div>
-						<h3>Cache 与 Decode 优化</h3>
-						<ul>
-							<li>
-								<a
-									href="https://docs.vllm.ai/en/stable/features/automatic_prefix_caching/"
-									target="_blank"
-									rel="noreferrer">vLLM Automatic Prefix Caching</a
-								>
-							</li>
-							<li>
-								<a href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noreferrer"
-									>Fast Inference from Transformers via Speculative Decoding</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://docs.vllm.ai/en/stable/features/speculative_decoding/"
-									target="_blank"
-									rel="noreferrer">vLLM Speculative Decoding</a
-								>
-							</li>
-						</ul>
-
-						<h3>Benchmark、指标与显存</h3>
+						<h3>实验时查阅</h3>
 						<ul>
 							<li>
 								<a
@@ -363,9 +330,34 @@ constraint: KV Cache consumes GPU memory</code></pre>
 							</li>
 							<li>
 								<a
-									href="https://nvidia.github.io/TensorRT-LLM/reference/memory.html"
+									href="https://docs.vllm.ai/en/stable/features/automatic_prefix_caching/"
 									target="_blank"
-									rel="noreferrer">TensorRT-LLM Memory Usage</a
+									rel="noreferrer">vLLM Automatic Prefix Caching</a
+								>
+							</li>
+						</ul>
+
+						<h3>源码纵切面</h3>
+						<ul>
+							<li>
+								<a
+									href="https://docs.vllm.ai/en/stable/api/vllm/v1/request/"
+									target="_blank"
+									rel="noreferrer">Request and RequestStatus</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://docs.vllm.ai/en/stable/api/vllm/config/scheduler/"
+									target="_blank"
+									rel="noreferrer">Scheduler Configuration</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://docs.vllm.ai/en/stable/api/vllm/v1/core/kv_cache_coordinator/"
+									target="_blank"
+									rel="noreferrer">KV Cache Coordinator</a
 								>
 							</li>
 						</ul>
@@ -375,18 +367,20 @@ constraint: KV Cache consumes GPU memory</code></pre>
 
 			<pre
 				class="pipeline"
-				aria-label="LLM serving performance model"><code>workload: prompt / output / arrival rate
+				aria-label="LLM serving performance model"><code>workload: input / output distribution + concurrency / arrival process
   -&gt; waiting queue
   -&gt; scheduler: sequence batch / token budget
   -&gt; prefill &lt;-&gt; decode
-  -&gt; KV Cache: allocate / reuse / release
+  -&gt; KV Cache: lookup / allocate / reuse / release
+  -&gt; model execution + data movement
   -&gt; TTFT / TPOT / throughput / P99
 
 constraints: compute + HBM bandwidth + KV capacity + scheduling</code></pre>
 
 			<p class="stage-gate">
-				<strong>验收：</strong>能够结合实验数据解释：为什么吞吐在并发增加后趋于饱和，而 TTFT、TPOT
-				或 P99 仍可能恶化；以及调度、显存、Batching 和 KV Cache 如何共同决定系统性能。
+				<strong>验收：</strong>能够在固定环境中复现主要趋势，判断四条假设是 Supported、Refuted 还是
+				Inconclusive；解释吞吐饱和后 TTFT、TPOT 或 P99 为什么仍可能恶化，并把客户端观测追踪到
+				Scheduler 决策与 KV Cache 生命周期，同时明确区分测量、源码事实和推断。
 			</p>
 		</LearningStage>
 	</section>
