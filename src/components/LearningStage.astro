@@ -2,12 +2,12 @@
 interface Props {
 	period: string;
 	title: string;
-	status?: 'pending' | 'done';
+	status?: 'pending' | 'active' | 'done';
 	open?: boolean;
 }
 
 const { period, title, status = 'pending', open = false } = Astro.props;
-const statusLabel = status === 'done' ? '已完成' : '进行中';
+const statusLabel = status === 'done' ? '已完成' : status === 'active' ? '进行中' : '待开始';
 ---
 
 <details class:list={['learning-stage', `is-${status}`]} {open}>
@@ -90,6 +90,10 @@ const statusLabel = status === 'done' ? '已完成' : '进行中';
 
 	.is-done .status {
 		color: #15803d;
+	}
+
+	.is-active .status {
+		color: var(--accent);
 	}
 
 	.is-pending .status {

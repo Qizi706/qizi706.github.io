@@ -5,25 +5,53 @@ import '../styles/global.css';
 ---
 
 <Layout
-	title="(Pending) 近期进展"
-	description="个人项目与近期学习路线"
+	title="Systems & AI Infrastructure"
+	description="系统软件项目、可复现实验、AI Infrastructure 学习路线与 AI 协作原则"
 	pubDate={new Date('2026-08-06')}
+	updatedDate={new Date('2026-08-16')}
 	hideTitleDivider
 >
+	<section class="profile-brief" aria-label="技术方向与工作方法">
+		<div class="section-label">00 / profile</div>
+		<p class="profile-summary">
+			以系统软件与数据基础设施为主线：已在 xv6 与 BusTub
+			中完成虚拟内存、文件系统、缓冲池、并发索引、查询执行与 MVCC
+			等核心模块；当前将这些系统能力迁移到单机 LLM Serving，聚焦请求链路、KV Cache、调度与性能工程。
+		</p>
+		<dl class="profile-ledger">
+			<div>
+				<dt>focus</dt>
+				<dd>AI Infrastructure / Systems</dd>
+			</div>
+			<div>
+				<dt>foundation</dt>
+				<dd>OS · Storage Engine · Concurrency</dd>
+			</div>
+			<div>
+				<dt>working set</dt>
+				<dd>C · C++ · Python · RISC-V · Linux</dd>
+			</div>
+			<div>
+				<dt>method</dt>
+				<dd>implement → benchmark → source trace → write</dd>
+			</div>
+		</dl>
+	</section>
+
 	<section class="about-section" aria-labelledby="projects-title">
-		<div class="section-label">01 / projects</div>
-		<h2 id="projects-title">个人项目</h2>
+		<div class="section-label">01 / implemented systems</div>
+		<h2 id="projects-title">系统项目</h2>
 
 		<details class="project" open>
 			<summary>
-				<span>MIT 6.s081</span>
+				<span>MIT 6.S081</span>
 				<small>RISC-V · xv6 · C · Linux</small>
 			</summary>
 			<div class="project-body">
-				<p class="project-meta">2026.02 — 2026.04 · personal project</p>
+				<p class="project-meta">2026.02 — 2026.04 · independent implementation</p>
 				<p>
-					以基于 RISC-V 指令集架构的微型操作系统 xv6
-					为基础，对内存管理、进程管理、文件系统和中断处理等模块进行扩展与优化。
+					基于 RISC-V / xv6 扩展内存、进程、Trap
+					与文件系统路径，重点验证虚拟内存、异常处理和持久化语义。
 				</p>
 				<ul>
 					<li>实现独立内核页表与用户页表映射机制，掌握 trampoline、trapframe 与页表切换流程。</li>
@@ -41,10 +69,9 @@ import '../styles/global.css';
 				<small>BusTub · C++ · Linux</small>
 			</summary>
 			<div class="project-body">
-				<p class="project-meta">2025.11 — 2025.12 · personal project</p>
+				<p class="project-meta">2025.11 — 2025.12 · independent implementation</p>
 				<p>
-					开发支持简单 SQL 操作的单机数据库 BusTub，覆盖缓冲池管理、B+
-					树索引、查询执行器与多版本并发控制。
+					围绕单机数据库内核完成存储、索引、执行、优化与事务链路，实现可并发访问的 BusTub 核心模块。
 				</p>
 				<ul>
 					<li>
@@ -67,36 +94,57 @@ import '../styles/global.css';
 		<div class="section-label">02 / learning roadmap</div>
 		<h2 id="learning-title">AI Infra 学习路线</h2>
 
-		<LearningStage period="2026.07 — 2026.08" title="阶段 1 · AI Infra 全局认知" status="done">
+		<LearningStage
+			period="2026.07.27 — 2026.08.11"
+			title="阶段 1 · LLM Serving 请求链路与基线"
+			status="done"
+		>
 			<div class="quest-line">
 				<input
 					class="quest-checkbox"
 					type="checkbox"
 					checked
 					disabled
-					aria-label="AI Infra 全局认知已完成"
+					aria-label="LLM Serving 请求链路与基线已完成"
 				/>
-				<span>AI Infra 全局认知 <span class="muted">/ 2 weeks</span></span>
-				<span class="quest-state" aria-hidden="true"></span>
+				<span>request lifecycle baseline <span class="muted">/ 16 days</span></span>
+				<span class="quest-state is-done" aria-hidden="true">[done]</span>
 			</div>
+
+			<dl class="phase-ledger" aria-label="阶段一证据摘要">
+				<div>
+					<dt>scope</dt>
+					<dd>single-node · single-request · 4B quantized model</dd>
+				</div>
+				<div>
+					<dt>runtime</dt>
+					<dd>Ollama · vLLM Metal</dd>
+				</div>
+				<div>
+					<dt>evidence</dt>
+					<dd>2 articles · benchmark script · CSV · raw logs</dd>
+				</div>
+				<div>
+					<dt>boundary</dt>
+					<dd>no streaming concurrency or tail-latency claim</dd>
+				</div>
+			</dl>
 
 			<div class="learning-grid">
 				<div>
-					<h3>需要回答的问题</h3>
+					<h3>核心问题</h3>
 					<ol>
-						<li>LLM 训练和推理有什么区别？</li>
-						<li>一次请求如何经过 LLM Serving 链路？</li>
-						<li>prefill、decode 和 KV Cache 分别解决什么问题？</li>
-						<li>吞吐、延迟、TTFT、TPOT、显存利用率如何衡量？</li>
-						<li>模型、推理引擎、调度器、GPU、网络、存储和监控如何协作？</li>
+						<li>请求如何经过 API、Tokenizer、Scheduler、Model Runner 与 Backend？</li>
+						<li>Prefill、Decode 与 KV Cache 分别承担什么计算和状态？</li>
+						<li>输入/输出长度如何改变 Prefill、Decode 与端到端耗时？</li>
+						<li>实验结论依赖哪些环境、负载、统计口径和证据边界？</li>
 					</ol>
 				</div>
 				<div>
-					<h3>阶段产出</h3>
+					<h3>已交付证据</h3>
 					<ul>
-						<li>跑通一个本地小模型推理。</li>
-						<li>跑通一次 vLLM 服务。</li>
-						<li>测试输入/输出长度对响应时间的影响。</li>
+						<li>完成 Qwen3-4B 的本地推理与 vLLM Metal 服务基线。</li>
+						<li>对输入/输出长度进行单变量实验，保留脚本、CSV、响应与日志。</li>
 						<li>
 							完成<a href="/blog/llm-inference-request-lifecycle/"
 								>《LLM 推理系统从请求到返回的完整链路》</a
@@ -105,7 +153,7 @@ import '../styles/global.css';
 						<li>
 							完成<a href="/blog/llm-inference-request-lifecycle-practice/"
 								>《本地 LLM 推理服务实验》</a
-							>及可复现实验产物。
+							>，显式区分近似指标、严格指标与未验证结论。
 						</li>
 					</ul>
 				</div>
@@ -206,9 +254,9 @@ constraint: KV Cache consumes GPU memory</code></pre>
 		</LearningStage>
 
 		<LearningStage
-			period="2026.08 — 2026.09"
-			title="阶段 2 · Serving 调度与 KV Cache 实验"
-			status="pending"
+			period="2026.08.12 — 2026.09.12"
+			title="阶段 2 · 单机 LLM Serving 性能与调度"
+			status="active"
 			open
 		>
 			<div class="quest-line">
@@ -216,104 +264,139 @@ constraint: KV Cache consumes GPU memory</code></pre>
 					class="quest-checkbox"
 					type="checkbox"
 					disabled
-					aria-label="Serving 调度与 KV Cache 实验进行中"
+					aria-label="单机 LLM Serving 性能与调度进行中"
 				/>
-				<span>Serving 调度与 KV Cache 实验 <span class="muted">/ 1 month</span></span>
-				<span class="quest-state" aria-hidden="true"></span>
+				<span>serving performance & scheduling <span class="muted">/ 32 days</span></span>
+				<span class="quest-state is-active" aria-hidden="true">[active]</span>
 			</div>
+
+			<dl class="phase-ledger" aria-label="阶段二实验契约">
+				<div>
+					<dt>question</dt>
+					<dd>负载、调度预算与 KV 容量如何共同决定吞吐和尾延迟</dd>
+				</div>
+				<div>
+					<dt>baseline</dt>
+					<dd>Qwen3-4B · vLLM Engine · Metal backend · single-node</dd>
+				</div>
+				<div>
+					<dt>variables</dt>
+					<dd>request rate · concurrency · sequence length · scheduler budget</dd>
+				</div>
+				<div>
+					<dt>evidence</dt>
+					<dd>stream timestamps · CSV/JSON · server metrics · config/logs</dd>
+				</div>
+			</dl>
 
 			<div class="learning-grid">
 				<div>
-					<h3>需要回答的问题</h3>
+					<h3>核心问题</h3>
 					<ol>
+						<li>单层 Self-Attention 如何完成 Q/K/V、缩放点积、因果 Mask、Softmax 与输出计算？</li>
+						<li>Decode 时哪些 K/V 可以复用，KV Cache 的计算收益、容量与 block 生命周期是什么？</li>
 						<li>Input/Output 长度分布如何改变 Prefill、Decode 与 KV Cache 占用？</li>
-						<li>Client Concurrency、Active Sequences、Batch Size 和 Token Budget 有什么区别？</li>
+						<li>Request Rate、Client Concurrency、Active Sequences 与 Token Budget 如何区分？</li>
 						<li>并发增加时，Token Throughput 为什么先提高再饱和，而尾延迟继续恶化？</li>
-						<li>长 Prefill 到达后，是否会干扰已有请求的 Decode ITL？如何验证而不是猜测？</li>
-						<li>Prefix Cache 命中减少了哪些计算和独占 Block，又如何改变驻留与淘汰？</li>
-						<li>客户端观测如何对应到 Scheduler 决策和 KV Cache 生命周期？</li>
+						<li>
+							长 Prefill 如何干扰 Decode ITL，Continuous Batching 与 Chunked Prefill 如何缓解？
+						</li>
+						<li>客户端时序如何对应到 Scheduler 决策和 KV Block 生命周期？</li>
 					</ol>
 				</div>
 				<div>
-					<h3>阶段产出</h3>
+					<h3>必交证据</h3>
 					<ul>
-						<li>冻结四条可证伪假设，提前定义支持、反证与证据不足的条件。</li>
-						<li>实现可配置长度、并发、公共前缀与到达模式的 Benchmark Harness。</li>
-						<li>保存环境、启动命令、逐请求时间戳、原始 CSV 与绘图脚本。</li>
-						<li>完成 Length、Concurrency、Mixed Workload 与 Prefix Reuse 实验。</li>
-						<li>画出一次 Engine Step 的调用链、Request 状态机与 KV Block 生命周期。</li>
-						<li>完成一篇区分实验结果、源码事实、推断与局限性的实践报告。</li>
+						<li>冻结四条可证伪假设，预先定义 Supported、Refuted 与 Inconclusive。</li>
+						<li>
+							Toy Attention：手算一个最小样例，标注张量形状，并用测试校验 Cache / No-Cache Decode
+							数值等价。
+						</li>
+						<li>容量模型：估算权重、KV Cache、运行时 Buffer 与可容纳序列数。</li>
+						<li>实现可配置长度、并发、公共前缀与到达模式的流式 Benchmark Harness。</li>
+						<li>采集 TTFT、TPOT、ITL、E2E、吞吐、分位数及 Queue/KV 服务端指标。</li>
+						<li>完成 Length、Concurrency、Mixed Workload 与 Prefix Reuse 单变量实验。</li>
+						<li>交付 Scheduler 源码纵切、原始 CSV/JSON、配置日志与可复现技术报告。</li>
 					</ul>
 				</div>
 			</div>
 
-			<h3 class="subsection-title">四周路线</h3>
-			<div class="month-plan" aria-label="阶段二四周学习计划">
+			<h3 class="subsection-title">执行窗口</h3>
+			<div class="month-plan" aria-label="阶段二学习与验收计划">
 				<article>
-					<span>week 01</span>
-					<h4>收口机制地图</h4>
-					<p>完成计算、容量、带宽与调度模型；冻结四条可证伪假设、实验边界和指标定义。</p>
-				</article>
-				<article>
-					<span>week 02</span>
-					<h4>Benchmark Harness</h4>
-					<p>记录逐请求流式时间戳和真实 token；完成 Baseline、Length 与 Concurrency Sweep。</p>
-				</article>
-				<article>
-					<span>week 03</span>
-					<h4>混合负载与源码纵切</h4>
+					<span>08.12 — 08.18 / week 01</span>
+					<h4>Attention 计算基线与 KV Cache</h4>
 					<p>
-						运行 Mixed Workload 和 Prefix Reuse；沿 Scheduler、KV Cache、Model Runner 追踪一轮执行。
+						跟踪单层 Q/K/V 数据流，完成手算样例与 Toy Attention；再推导 Cache 复用、容量和复杂度。
 					</p>
+					<p class="week-gate"><b>gate</b> shape trace + hand case + equivalence tests</p>
 				</article>
 				<article>
-					<span>week 04</span>
-					<h4>解释、复现与交付</h4>
-					<p>汇总分布和异常结果，判断假设 Supported、Refuted 或 Inconclusive，并完成实验报告。</p>
+					<span>08.19 — 08.25 / week 02</span>
+					<h4>Benchmark Harness 与负载扫描</h4>
+					<p>记录真实 Token 与逐请求流式时序；独立扫描长度、Request Rate 和 Client Concurrency。</p>
+					<p class="week-gate"><b>gate</b> warmup + repeat + raw CSV/JSON</p>
+				</article>
+				<article>
+					<span>08.26 — 09.01 / week 03</span>
+					<h4>Scheduler、混合负载与 Prefix Reuse</h4>
+					<p>跟踪一次 Engine Step，验证调度预算、长短请求混合与公共前缀复用的影响。</p>
+					<p class="week-gate"><b>artifact</b> source trace + workload matrix</p>
+				</article>
+				<article>
+					<span>09.02 — 09.08 / week 04</span>
+					<h4>对照实验与技术报告</h4>
+					<p>固定版本、模型和负载分布；对关键变量重复测量，用客户端与服务端证据解释结果。</p>
+					<p class="week-gate"><b>gate</b> reproducible report + figures + limitations</p>
+				</article>
+				<article class="review-window">
+					<span>09.09 — 09.12 / review</span>
+					<h4>异常复测与证据封装</h4>
+					<p>复测反常数据，补齐配置快照、原始产物、复现命令与结论适用边界。</p>
+					<p class="week-gate"><b>release</b> article + lab bundle</p>
 				</article>
 			</div>
 
+			<p class="scope-note">
+				<span>[scope]</span> 先补齐单层 Attention 与 KV Cache 所需的最小计算链路，不要求先推完整 Transformer
+				Block 或 Kernel；本阶段仅讨论单机 Serving，Speculative Decoding 与分布式并行移出范围。
+			</p>
+
 			<details class="reading-list">
-				<summary>reading queue <span>展开阅读清单</span></summary>
+				<summary>reference set <span>核心材料 / 按需扩展</span></summary>
 				<div class="reading-columns">
 					<div>
-						<h3>按顺序精读</h3>
+						<h3>core / 机制与系统</h3>
 						<ul>
 							<li>
-								<a
-									href="https://www.usenix.org/conference/osdi22/presentation/yu"
-									target="_blank"
-									rel="noreferrer">1. Orca: Iteration-level Scheduling</a
+								<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noreferrer"
+									>Attention Is All You Need</a
 								>
 							</li>
 							<li>
 								<a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noreferrer"
-									>2. PagedAttention: KV Block Management</a
+									>Efficient Memory Management for LLM Serving with PagedAttention</a
 								>
 							</li>
 							<li>
 								<a
-									href="https://docs.vllm.ai/en/stable/design/arch_overview/"
+									href="https://www.usenix.org/conference/osdi22/presentation/yu"
 									target="_blank"
-									rel="noreferrer">3. vLLM Architecture Overview</a
+									rel="noreferrer"
+									>Orca: A Distributed Serving System for Transformer-Based Generative Models</a
 								>
 							</li>
 						</ul>
 
-						<h3>出现长 Prefill 干扰后</h3>
+						<h3>core / 实现与测量</h3>
 						<ul>
 							<li>
 								<a
-									href="https://www.usenix.org/conference/osdi24/presentation/agrawal"
+									href="https://docs.vllm.ai/en/stable/configuration/optimization/"
 									target="_blank"
-									rel="noreferrer">Sarathi-Serve: Chunked Prefill and Stall-free Scheduling</a
+									rel="noreferrer">vLLM Optimization and Tuning</a
 								>
 							</li>
-						</ul>
-					</div>
-					<div>
-						<h3>实验时查阅</h3>
-						<ul>
 							<li>
 								<a
 									href="https://docs.vllm.ai/en/stable/benchmarking/cli/"
@@ -328,6 +411,16 @@ constraint: KV Cache consumes GPU memory</code></pre>
 									rel="noreferrer">vLLM Production Metrics</a
 								>
 							</li>
+						</ul>
+					</div>
+					<div>
+						<h3>extension / 调度与 Cache</h3>
+						<ul>
+							<li>
+								<a href="https://arxiv.org/abs/2403.02310" target="_blank" rel="noreferrer"
+									>Sarathi-Serve: Taming the Throughput-Latency Tradeoff</a
+								>
+							</li>
 							<li>
 								<a
 									href="https://docs.vllm.ai/en/stable/features/automatic_prefix_caching/"
@@ -337,7 +430,25 @@ constraint: KV Cache consumes GPU memory</code></pre>
 							</li>
 						</ul>
 
-						<h3>源码纵切面</h3>
+						<h3>environment / Backend 边界</h3>
+						<ul>
+							<li>
+								<a
+									href="https://docs.vllm.ai/projects/vllm-metal/en/latest/"
+									target="_blank"
+									rel="noreferrer">vLLM Metal</a
+								>
+							</li>
+							<li>
+								<a
+									href="https://docs.vllm.ai/projects/vllm-metal/en/latest/configuration/"
+									target="_blank"
+									rel="noreferrer">vLLM Metal Configuration</a
+								>
+							</li>
+						</ul>
+
+						<h3>source / vertical slice</h3>
 						<ul>
 							<li>
 								<a
@@ -367,22 +478,96 @@ constraint: KV Cache consumes GPU memory</code></pre>
 
 			<pre
 				class="pipeline"
-				aria-label="LLM serving performance model"><code>workload: input / output distribution + concurrency / arrival process
-  -&gt; waiting queue
-  -&gt; scheduler: sequence batch / token budget
-  -&gt; prefill &lt;-&gt; decode
-  -&gt; KV Cache: lookup / allocate / reuse / release
-  -&gt; model execution + data movement
-  -&gt; TTFT / TPOT / throughput / P99
+				aria-label="LLM serving performance model"><code>load: request_rate != client_concurrency
+  -&gt; queue: queue_time / waiting_requests
+  -&gt; scheduler: active_sequences + token_budget
+  -&gt; prefill / chunked_prefill &lt;-&gt; decode
+  -&gt; KV blocks: allocate / reuse / release
+  -&gt; client: TTFT / TPOT / ITL / E2E / throughput
+  -&gt; server: running / waiting / KV_cache_usage
 
-constraints: compute + HBM bandwidth + KV capacity + scheduling</code></pre>
+scope: backend + hardware + model + version + workload</code></pre>
 
 			<p class="stage-gate">
-				<strong>验收：</strong>能够在固定环境中复现主要趋势，判断四条假设是 Supported、Refuted 还是
-				Inconclusive；解释吞吐饱和后 TTFT、TPOT 或 P99 为什么仍可能恶化，并把客户端观测追踪到
-				Scheduler 决策与 KV Cache 生命周期，同时明确区分测量、源码事实和推断。
+				<strong>验收标准：</strong>在固定环境与负载分布下，能用客户端流式时序和服务端 Queue /
+				Scheduler / KV 指标解释吞吐饱和与尾延迟恶化；报告保留原始产物、复现命令、反例及 Backend /
+				Hardware / Version 适用边界。
 			</p>
 		</LearningStage>
+	</section>
+
+	<section class="about-section principles-section" aria-labelledby="principles-title">
+		<div class="section-label">03 / operating principles</div>
+		<h2 id="principles-title">学习与 AI 协作原则</h2>
+
+		<p class="principles-lead">
+			<strong>不回避 AI，不外包判断。</strong>独立编程用于维护建模、实现、调试与解释能力；AI
+			用于扩大代码库探索、验证和工程交付效率。最终结论只由代码、测试、测量与可复现证据确认。
+		</p>
+
+		<div class="mode-grid" aria-label="三种 AI 协作模式">
+			<article>
+				<header>
+					<span>M0</span>
+					<h3>独立模式</h3>
+				</header>
+				<p>用于核心机制、第一轮调试与最终解释；AI 不介入问题求解。</p>
+				<small>own: model · invariant · implementation</small>
+			</article>
+			<article>
+				<header>
+					<span>M1</span>
+					<h3>教练模式</h3>
+				</header>
+				<p>用于源码导航、概念澄清与反例生成；AI 提问和 Review，不直接接管结论。</p>
+				<small>own: source trace · hypothesis · trade-off</small>
+			</article>
+			<article>
+				<header>
+					<span>M2</span>
+					<h3>Agent 模式</h3>
+				</header>
+				<p>用于脚手架、测试、数据处理与重构；AI 在明确契约和验收标准内执行。</p>
+				<small>own: scope · acceptance · final diff</small>
+			</article>
+		</div>
+
+		<div class="protocol-grid">
+			<div>
+				<h3>before delegation</h3>
+				<ul>
+					<li>定义 Question、Prediction 与 Invariant。</li>
+					<li>限定 Action 与 Allowed AI Help，写明不可外包的判断。</li>
+					<li>指定 Artifact，并用测试、指标或可观察行为定义 Acceptance。</li>
+				</ul>
+			</div>
+			<div>
+				<h3>after delivery</h3>
+				<ul>
+					<li>审阅完整 Diff，运行测试并复现实验。</li>
+					<li>脱离对话解释关键路径，独立修改一个约束。</li>
+					<li>记录 Feedback、Reflection、适用边界与下一项决策。</li>
+				</ul>
+			</div>
+		</div>
+
+		<pre
+			class="pipeline principle-loop"
+			aria-label="Evidence-driven learning loop"><code>question -&gt; prediction
+  -&gt; minimum necessary reading
+  -&gt; implementation
+  -&gt; test / benchmark
+  -&gt; explanation -&gt; review -&gt; correction</code></pre>
+
+		<p class="moat-formula">
+			<span>competitive edge =</span>
+			<strong>systems depth × AI leverage × evidence ownership × external feedback</strong>
+		</p>
+
+		<p class="principle-gate">
+			<strong>验收标准：</strong>能够在不查看 AI
+			对话的情况下解释机制、复现实验并修改约束；否则只视为完成交付，不视为掌握。
+		</p>
 	</section>
 
 	<footer class="about-footer">
@@ -395,9 +580,75 @@ constraints: compute + HBM bandwidth + KV capacity + scheduling</code></pre>
 	.section-label,
 	.project-meta,
 	.quest-line,
+	.profile-ledger,
+	.phase-ledger,
+	.week-gate,
+	.scope-note,
+	.mode-grid,
+	.protocol-grid,
+	.moat-formula,
 	.pipeline,
 	.about-footer {
 		font-family: var(--font-mono);
+	}
+
+	.profile-brief {
+		margin: 0.5rem 0 2.5rem;
+	}
+
+	.profile-summary {
+		max-width: 72ch;
+		margin: 0.45rem 0 1rem;
+		font-size: 1rem;
+		line-height: 1.85;
+	}
+
+	.profile-ledger,
+	.phase-ledger {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		margin: 0;
+		border-top: 1px solid rgb(var(--gray-light));
+		border-bottom: 1px solid rgb(var(--gray-light));
+		font-size: 0.72rem;
+	}
+
+	.profile-ledger > div,
+	.phase-ledger > div {
+		display: grid;
+		grid-template-columns: 6.5rem minmax(0, 1fr);
+		gap: 0.65rem;
+		padding: 0.5rem 0.65rem;
+		border-bottom: 1px dashed rgb(var(--gray-light));
+	}
+
+	.profile-ledger > div:nth-child(odd),
+	.phase-ledger > div:nth-child(odd) {
+		border-right: 1px dashed rgb(var(--gray-light));
+	}
+
+	.profile-ledger > div:nth-last-child(-n + 2),
+	.phase-ledger > div:nth-last-child(-n + 2) {
+		border-bottom: 0;
+	}
+
+	.profile-ledger dt,
+	.profile-ledger dd,
+	.phase-ledger dt,
+	.phase-ledger dd {
+		margin: 0;
+	}
+
+	.profile-ledger dt,
+	.phase-ledger dt {
+		color: var(--accent);
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.profile-ledger dd,
+	.phase-ledger dd {
+		color: rgb(var(--gray));
 	}
 
 	.about-section > h2 {
@@ -482,6 +733,10 @@ constraints: compute + HBM bandwidth + KV capacity + scheduling</code></pre>
 		font-size: 0.72rem;
 	}
 
+	.project-body > p:not(.project-meta) {
+		font-size: 0.92rem;
+	}
+
 	.project-body ul,
 	.learning-grid ul,
 	.learning-grid ol,
@@ -506,7 +761,7 @@ constraints: compute + HBM bandwidth + KV capacity + scheduling</code></pre>
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
-		margin: 0.75rem 0 1.25rem;
+		margin: 0.75rem 0 0.85rem;
 		padding: 0.55rem 0.7rem;
 		border: 1px dashed rgb(var(--gray-light));
 		background: rgb(226 232 240 / 24%);
@@ -547,13 +802,12 @@ constraints: compute + HBM bandwidth + KV capacity + scheduling</code></pre>
 		font-size: 0.7rem;
 	}
 
-	.quest-state::before {
-		content: '[pending]';
+	.quest-state.is-done {
+		color: #15803d;
 	}
 
-	.quest-checkbox:checked ~ .quest-state::before {
-		content: '[done]';
-		color: #15803d;
+	.quest-state.is-active {
+		color: var(--accent);
 	}
 
 	.muted {
@@ -566,6 +820,11 @@ constraints: compute + HBM bandwidth + KV capacity + scheduling</code></pre>
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 1.5rem;
+	}
+
+	.learning-grid {
+		margin-top: 1rem;
+		gap: 1.25rem;
 	}
 
 	.learning-grid h3,
@@ -626,7 +885,39 @@ constraints: compute + HBM bandwidth + KV capacity + scheduling</code></pre>
 		font-size: 0.82rem;
 	}
 
+	.month-plan .week-gate {
+		margin-top: 0.55rem;
+		padding-top: 0.45rem;
+		border-top: 1px dashed rgb(var(--gray-light));
+		color: rgb(var(--gray));
+		font-size: 0.68rem;
+	}
+
+	.week-gate b {
+		margin-right: 0.45rem;
+		color: var(--accent);
+		font-weight: 500;
+		text-transform: uppercase;
+	}
+
+	.review-window {
+		grid-column: 1 / -1;
+	}
+
+	.scope-note {
+		margin: 0.85rem 0 0;
+		padding-left: 0.7rem;
+		border-left: 2px solid rgb(var(--gray-light));
+		color: rgb(var(--gray));
+		font-size: 0.74rem;
+	}
+
+	.scope-note span {
+		color: var(--accent);
+	}
+
 	.pipeline {
+		overflow-x: auto;
 		margin: 1.25rem 0 0;
 		border: 1px solid rgb(var(--gray-light));
 		background: rgb(226 232 240 / 45%);
@@ -636,6 +927,128 @@ constraints: compute + HBM bandwidth + KV capacity + scheduling</code></pre>
 	}
 
 	.stage-gate {
+		margin: 0.85rem 0 0;
+		padding-left: 0.75rem;
+		border-left: 3px solid var(--accent);
+		font-size: 0.88rem;
+	}
+
+	.principles-section {
+		margin-top: 2.75rem;
+	}
+
+	.principles-lead {
+		margin: 0 0 1rem;
+		padding-left: 0.75rem;
+		border-left: 3px solid var(--accent);
+		font-size: 0.94rem;
+		line-height: 1.8;
+	}
+
+	.mode-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.7rem;
+	}
+
+	.mode-grid article {
+		min-width: 0;
+		padding: 0.75rem 0.8rem;
+		border: 1px dashed rgb(var(--gray-light));
+		background: rgb(226 232 240 / 24%);
+	}
+
+	.mode-grid header {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+	}
+
+	.mode-grid header span {
+		color: var(--accent);
+		font-size: 0.7rem;
+		letter-spacing: 0.06em;
+	}
+
+	.mode-grid h3 {
+		margin: 0;
+		font-size: 0.88rem;
+	}
+
+	.mode-grid p {
+		margin: 0.45rem 0 0.65rem;
+		font-family: var(--font-body);
+		font-size: 0.82rem;
+	}
+
+	.mode-grid small {
+		display: block;
+		padding-top: 0.45rem;
+		border-top: 1px dashed rgb(var(--gray-light));
+		color: rgb(var(--gray));
+		font-size: 0.64rem;
+		line-height: 1.55;
+	}
+
+	.protocol-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1.25rem;
+		margin-top: 1.1rem;
+		padding: 0.75rem 0;
+		border-top: 1px solid rgb(var(--gray-light));
+		border-bottom: 1px solid rgb(var(--gray-light));
+	}
+
+	.protocol-grid h3 {
+		margin: 0 0 0.45rem;
+		color: var(--accent);
+		font-size: 0.74rem;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+
+	.protocol-grid ul {
+		margin: 0;
+		padding-left: 1.2rem;
+		font-family: var(--font-body);
+		font-size: 0.84rem;
+	}
+
+	.protocol-grid li {
+		margin: 0.28rem 0;
+	}
+
+	.protocol-grid li::marker {
+		color: var(--accent);
+	}
+
+	.principle-loop {
+		margin-top: 1rem;
+	}
+
+	.moat-formula {
+		display: flex;
+		align-items: baseline;
+		gap: 0.7rem;
+		margin: 0.85rem 0 0;
+		padding: 0.6rem 0.7rem;
+		border: 1px dashed rgb(var(--gray-light));
+		font-size: 0.72rem;
+	}
+
+	.moat-formula span {
+		flex: 0 0 auto;
+		color: var(--accent);
+		text-transform: uppercase;
+	}
+
+	.moat-formula strong {
+		font-family: var(--font-mono);
+		font-weight: 500;
+	}
+
+	.principle-gate {
 		margin: 0.85rem 0 0;
 		padding-left: 0.75rem;
 		border-left: 3px solid var(--accent);
@@ -665,6 +1078,46 @@ constraints: compute + HBM bandwidth + KV capacity + scheduling</code></pre>
 		.month-plan {
 			grid-template-columns: 1fr;
 			gap: 0.75rem;
+		}
+
+		.profile-ledger,
+		.phase-ledger {
+			grid-template-columns: 1fr;
+		}
+
+		.profile-ledger > div,
+		.profile-ledger > div:nth-child(odd),
+		.phase-ledger > div,
+		.phase-ledger > div:nth-child(odd) {
+			grid-template-columns: 5.8rem minmax(0, 1fr);
+			border-right: 0;
+			border-bottom: 1px dashed rgb(var(--gray-light));
+		}
+
+		.profile-ledger > div:nth-last-child(2),
+		.phase-ledger > div:nth-last-child(2) {
+			border-bottom: 1px dashed rgb(var(--gray-light));
+		}
+
+		.review-window {
+			grid-column: auto;
+		}
+
+		.mode-grid,
+		.protocol-grid {
+			grid-template-columns: 1fr;
+			gap: 0.75rem;
+		}
+
+		.moat-formula {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 0.25rem;
+		}
+
+		.quest-line {
+			align-items: flex-start;
+			flex-wrap: wrap;
 		}
 
 		.about-footer {
