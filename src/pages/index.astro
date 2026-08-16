@@ -5,9 +5,19 @@ import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 import PageLayout from '../layouts/PageLayout.astro';
 import { getCategoryUrl, getPostUrl } from '../utils/posts';
 
-const posts = (await getCollection('blog'))
+const allPosts = await getCollection('blog');
+const posts = allPosts
 	.filter((post) => !post.data.draft)
 	.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+const draftPosts = import.meta.env.DEV
+	? allPosts
+			.filter((post) => post.data.draft)
+			.sort(
+				(a, b) =>
+					(b.data.updatedDate ?? b.data.pubDate).valueOf() -
+					(a.data.updatedDate ?? a.data.pubDate).valueOf(),
+			)
+	: [];
 
 interface CategorySummary {
 	name: string;
@@ -91,6 +101,35 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 			<li><a href="/about/">(Pending) 近期进展</a></li>
 		</ul>
 	</section>
+
+	{
+		import.meta.env.DEV && draftPosts.length > 0 && (
+			<section class="draft-section" aria-labelledby="draft-heading">
+				<div class="draft-heading">
+					<h2 id="draft-heading">本地草稿</h2>
+					<span class="draft-badge">DEV ONLY · {draftPosts.length}</span>
+				</div>
+				<p class="draft-description">
+					这些页面只在本地开发服务器中生成。点击标题可直接检查文章内容和渲染效果。
+				</p>
+				<ul class="draft-links">
+					{draftPosts.map((post) => {
+						const lastModified = post.data.updatedDate ?? post.data.pubDate;
+
+						return (
+							<li>
+								<a href={getPostUrl(post)}>{post.data.title}</a>
+								<small>
+									{post.data.categories.join(' / ') || '未分类'} · 更新于{' '}
+									<FormattedDate date={lastModified} />
+								</small>
+							</li>
+						);
+					})}
+				</ul>
+			</section>
+		)
+	}
 
 	{
 		featuredPost && (
@@ -242,7 +281,8 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 
 	.personal-links,
 	.featured-links,
-	.category-links {
+	.category-links,
+	.draft-links {
 		margin: 0.25rem 0;
 		padding: 0 0 0 0.5rem;
 		list-style-position: inside;
@@ -251,7 +291,8 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 
 	.personal-links li,
 	.featured-links li,
-	.category-links li {
+	.category-links li,
+	.draft-links li {
 		margin: 0 1rem;
 		padding: 0;
 		text-align: justify;
@@ -261,8 +302,64 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 
 	.personal-links li::marker,
 	.featured-links li::marker,
-	.category-links li::marker {
+	.category-links li::marker,
+	.draft-links li::marker {
 		color: #d1d5db;
+	}
+
+	.draft-section {
+		padding: 1rem 1.1rem;
+		border: 1px dashed #cbd5e1;
+		border-radius: 2px;
+		background: rgb(248 250 252 / 72%);
+	}
+
+	.draft-heading {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.draft-heading h2 {
+		margin-bottom: 0.35rem;
+	}
+
+	.draft-badge {
+		flex: none;
+		padding: 0.1rem 0.4rem;
+		border: 1px solid #cbd5e1;
+		border-radius: 2px;
+		color: #64748b;
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+		line-height: 1.4;
+		letter-spacing: 0.04em;
+	}
+
+	.draft-description {
+		margin: 0 0 0.65rem;
+		color: #64748b;
+		font-size: 0.82rem;
+		line-height: 1.55;
+	}
+
+	.draft-links {
+		margin-bottom: 0;
+	}
+
+	.draft-links li {
+		margin-top: 0.3rem;
+		margin-bottom: 0.3rem;
+	}
+
+	.draft-links small {
+		display: block;
+		margin: 0.05rem 0 0 1.1rem;
+		color: #64748b;
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		line-height: 1.5;
 	}
 
 	.personal-intro {
@@ -345,5 +442,13 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 		margin-left: 0.25rem;
 		color: #0f172a;
 		font-size: 0.8rem;
+	}
+
+	@media (max-width: 520px) {
+		.draft-heading {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 0;
+		}
 	}
 </style>
