@@ -1,6 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 import FormattedDate from '../components/FormattedDate.astro';
+import LearningStage from '../components/LearningStage.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 import PageLayout from '../layouts/PageLayout.astro';
 import { getCategoryUrl, getPostUrl } from '../utils/posts';
@@ -100,6 +101,53 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 		<ul class="personal-links">
 			<li><a href="/about/">(Pending) 近期进展</a></li>
 		</ul>
+	</section>
+
+	<section class="tomorrow-section" aria-labelledby="tomorrow-heading">
+		<h2 id="tomorrow-heading">明日学习</h2>
+		<LearningStage
+			period="2026.08.18 · 150 min"
+			title="M1 · Batch Size 曲线与吞吐拐点"
+			status="active"
+			open
+		>
+			<p class="tomorrow-objective">
+				<strong>目标：</strong>固定 <code>T=128</code>，扫描 <code>{'B∈{1,2,4,8}'}</code
+				>，判断总吞吐是否继续增长、单 Sequence 成本怎样变化，以及当前 CPU/NumPy
+				路径是否已经出现收益收窄。
+			</p>
+
+			<dl class="tomorrow-contract" aria-label="明日学习契约">
+				<div>
+					<dt>question</dt>
+					<dd>Batch 增大时，吞吐与单请求完成时间为什么可能同时上升？</dd>
+				</div>
+				<div>
+					<dt>prediction</dt>
+					<dd>Positions/s 先提高但不会线性增长；Wall Time 随 B 增大。</dd>
+				</div>
+				<div>
+					<dt>artifact</dt>
+					<dd>正确性测试、原始 CSV、P50/P95 汇总表和一段结果解释。</dd>
+				</div>
+				<div>
+					<dt>gate</dt>
+					<dd>所有 B 通过 Oracle；能区分总吞吐、Batch Wall Time 与每 Sequence 成本。</dd>
+				</div>
+			</dl>
+
+			<ol class="tomorrow-steps">
+				<li><b>20 min</b>：写下预测，确认当前测试通过，冻结维度、dtype、Seed 和 BLAS 线程。</li>
+				<li><b>50 min</b>：让 Benchmark 支持 B 扫描，为每个 Sequence 对照独立 Oracle。</li>
+				<li><b>40 min</b>：每个 B 做 3 次 Warm-up、30 次计时，并随机化 B 的运行顺序。</li>
+				<li><b>40 min</b>：汇总 Wall Time、Wall Time/B、Positions/s、P50/P95，回写实验文章。</li>
+			</ol>
+
+			<p class="tomorrow-decision">
+				<strong>下一步判断：</strong>若曲线与正确性门禁通过，进入 M2 MHA/GQA；若没有出现拐点，记录
+				<code>Not reached</code>，不要继续盲目增大 B。若 Oracle 失败，停止计时并先修复状态隔离。
+			</p>
+		</LearningStage>
 	</section>
 
 	{
@@ -314,6 +362,62 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 		background: rgb(248 250 252 / 72%);
 	}
 
+	.tomorrow-objective {
+		margin: 0.8rem 0;
+		color: #334155;
+		font-size: 0.9rem;
+		line-height: 1.6;
+	}
+
+	.tomorrow-contract {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.55rem;
+		margin: 0.8rem 0;
+	}
+
+	.tomorrow-contract div {
+		padding: 0.55rem 0.65rem;
+		border: 1px solid #e2e8f0;
+		background: rgb(248 250 252 / 60%);
+	}
+
+	.tomorrow-contract dt {
+		color: #64748b;
+		font-family: var(--font-mono);
+		font-size: 0.66rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.tomorrow-contract dd {
+		margin: 0.25rem 0 0;
+		color: #334155;
+		font-size: 0.8rem;
+		line-height: 1.5;
+	}
+
+	.tomorrow-steps {
+		margin: 0.8rem 0;
+		padding-left: 1.35rem;
+		color: #334155;
+		font-size: 0.82rem;
+		line-height: 1.55;
+	}
+
+	.tomorrow-steps li {
+		margin: 0.3rem 0;
+	}
+
+	.tomorrow-decision {
+		margin: 0.75rem 0 0;
+		padding-top: 0.65rem;
+		border-top: 1px dashed #cbd5e1;
+		color: #475569;
+		font-size: 0.8rem;
+		line-height: 1.55;
+	}
+
 	.draft-heading {
 		display: flex;
 		align-items: baseline;
@@ -445,6 +549,10 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 	}
 
 	@media (max-width: 520px) {
+		.tomorrow-contract {
+			grid-template-columns: 1fr;
+		}
+
 		.draft-heading {
 			align-items: flex-start;
 			flex-direction: column;

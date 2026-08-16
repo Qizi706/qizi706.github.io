@@ -1,0 +1,866 @@
+---
+title: '给 C++ 使用者的 Python 复健：为 LLM 推理实验补齐最小基础'
+description: '面向当前 AI Infra 学习任务的 Python 最小知识集：从对象绑定、类型注解和工程结构，到 NumPy Shape、view/copy、broadcasting、Benchmark 与 asyncio。'
+pubDate: '2026-08-17T22:30:00+08:00'
+updatedDate: '2026-08-17T22:30:00+08:00'
+categories:
+  - 'AI Infra'
+tags:
+  - 'Python'
+  - 'NumPy'
+  - 'Benchmark'
+  - 'asyncio'
+  - 'LLM Serving'
+draft: false
+mathjax: false
+---
+
+## 1. Aside：我需要重新学一遍 Python 吗？
+
+不需要。
+
+我现在主要使用 C++，Python 语法有所遗忘，但当前代码已经使用了：
+
+- 类型注解、`dataclass` 和 `pathlib`；
+- `argparse`、模块入口与 `pyproject.toml`；
+- 列表推导、生成器表达式、解包与关键字参数；
+- NumPy 的矩阵乘法、切片、`axis`、`stack`、`concatenate` 和 `swapaxes`；
+- `unittest`、`assert_allclose`、Warm-up、重复计时与 CSV 原始数据。
+
+这说明问题不是“从零开始”，而是几个关键语义已经变得不够牢固。它们恰好会影响当前的 Attention、KV Cache、Batch 与 Serving Benchmark。
+
+<SlideCard title="当前最需要补齐的三个缺口">
+
+## Python 对象语义
+
+- 变量是名称绑定，不是 C++ 对象本体
+- 赋值通常不会复制对象
+- 可变默认参数、共享引用和浅冻结容易制造隐藏状态
+
+## NumPy 张量语义
+
+- Shape、Axis、Dtype 与 Stride 共同决定一次操作的含义
+- 基础切片通常产生 View，Advanced Indexing 产生 Copy
+- Broadcasting 和 Batched Matmul 可能在不报错时执行错误语义
+
+## 实验与并发语义
+
+- Python Wall Time 可能混入解释器、分配器与 BLAS 行为
+- `asyncio` Concurrency 不等于线程并行，更不等于服务端 Batch
+- 性能实验需要先验证正确性，再保存原始数据
+
+</SlideCard>
+
+<Note title="本文的范围" class="title-underline">
+
+目标不是掌握 Python 的所有语言特性，而是能够独立维护当前 [`attention-kv-caceh` Lab](/labs/attention-kv-caceh/)，完成 `B=1/2/4/8` 扫描，读懂 vLLM 中常见的 Python 结构，并为后续流式 Serving Harness 做准备。
+
+Web Framework、GUI、数据分析 Notebook、复杂装饰器、Descriptor、Metaclass、Multiprocessing 与 Python C Extension 暂不进入学习范围。
+
+</Note>
+
+## 2. 从 C++ 切换到 Python 的最小心智模型
+
+### 2.1 名称绑定，不是“变量里装着对象”
+
+在 C++ 中，下面的赋值通常会调用拷贝语义：
+
+```cpp
+std::vector<int> a{1, 2};
+auto b = a;
+b.push_back(3);
+// a 仍然是 {1, 2}
+```
+
+Python 的赋值默认只让新名称指向同一个对象：
+
+```python
+a = [1, 2]
+b = a
+b.append(3)
+
+assert a == [1, 2, 3]
+assert a is b
+```
+
+因此函数参数也不应该简单理解为 C++ 的“传值”或“传引用”。更准确的模型是：**调用时把对象引用绑定到函数内部的新名称上。**
+
+```python
+def append_sample(rows: list[float], value: float) -> None:
+    rows.append(value)  # 修改调用者传入的同一个 list
+
+
+samples = [1.0]
+append_sample(samples, 2.0)
+assert samples == [1.0, 2.0]
+```
+
+重新绑定局部名称不会替换调用者的对象：
+
+```python
+def replace_rows(rows: list[float]) -> None:
+    rows = [99.0]  # 只让局部名称 rows 指向新对象
+
+
+samples = [1.0]
+replace_rows(samples)
+assert samples == [1.0]
+```
+
+<SlideCard title="赋值、相等与身份">
+
+## `=`
+
+把名称绑定到对象；不承诺复制。
+
+## `==`
+
+比较两个对象的值是否相等。
+
+## `is`
+
+比较是否为同一个对象。最常见的正确用法是 `value is None`。
+
+## 显式复制
+
+- 容器浅复制：`items.copy()` 或 `list(items)`
+- NumPy 数据复制：`array.copy()`
+- 嵌套对象深复制：只在确实需要时使用 `copy.deepcopy`
+
+</SlideCard>
+
+### 2.2 可变对象与默认参数
+
+Python 的默认参数在函数定义时求值一次，而不是每次调用时重新创建。
+
+下面的函数会跨调用共享同一个列表：
+
+```python
+def bad_record(value: float, rows: list[float] = []) -> list[float]:
+    rows.append(value)
+    return rows
+
+
+assert bad_record(1.0) == [1.0]
+assert bad_record(2.0) == [1.0, 2.0]
+```
+
+应使用 `None` 表示“调用时创建”：
+
+```python
+def record(
+    value: float,
+    rows: list[float] | None = None,
+) -> list[float]:
+    if rows is None:
+        rows = []
+    rows.append(value)
+    return rows
+```
+
+这也是阅读 Scheduler、Request State 或 Metrics 代码时必须敏感的地方：函数是否原地修改了传入对象？多个请求是否共享同一份容器？
+
+### 2.3 `frozen=True` 不是深层不可变
+
+当前 Benchmark 用 `@dataclass(frozen=True)` 表示一条计时样本：
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Sample:
+    batch_size: int
+    sequence_length: int
+    elapsed_ms: float
+```
+
+它会阻止字段被重新赋值：
+
+```python
+sample = Sample(batch_size=2, sequence_length=128, elapsed_ms=1.5)
+# sample.batch_size = 4  # FrozenInstanceError
+```
+
+但 `frozen=True` 只是浅层约束。如果字段本身是 `list` 或 `np.ndarray`，对象内部的数据仍可能被修改。它更接近“禁止给成员重新赋值”，不是 C++ 中可以递归推断的深层 `const`。
+
+### 2.4 常用类型与 C++ 对照
+
+| C++                         | 当前 Python 中的选择     | 需要注意的差别                           |
+| --------------------------- | ------------------------ | ---------------------------------------- |
+| `std::vector<T>`            | `list[T]`                | 可放不同对象；数值 Tensor 应使用 ndarray |
+| `std::array<T, N>`          | `tuple[T, ...]`          | Tuple 不可重新修改，但元素可能是可变对象 |
+| `std::unordered_map<K, V>`  | `dict[K, V]`             | 保留插入顺序；Key 必须可哈希             |
+| `std::unordered_set<T>`     | `set[T]`                 | 无索引语义                               |
+| `std::optional<T>`          | `T \| None`              | 使用 `is None` 判断                      |
+| `struct`                    | `@dataclass`             | 类型注解默认不做运行时检查               |
+| RAII Scope                  | `with` Context Manager   | 退出代码块时释放文件、锁或网络资源       |
+| `std::span<T>`              | ndarray View             | View 共享 Buffer，所有权模型并不完全相同 |
+| `std::chrono::steady_clock` | `time.perf_counter_ns()` | 适合测量时间间隔，不代表墙上时间         |
+| `std::future` / Thread Pool | `asyncio.Task`           | Task 是协作式并发，不自动产生 CPU 并行   |
+
+Python 内置 `int` 不是固定宽度整数；普通 `float` 通常对应双精度浮点数。进入 NumPy 后，`np.int64`、`np.float32`、`np.float64` 才重新具有明确的存储宽度。
+
+## 3. 能维护当前实验所需的 Python 语法
+
+### 3.1 直接遍历对象
+
+不要把 C++ 下标循环机械翻译成 Python：
+
+```python
+batch_sizes = [1, 2, 4, 8]
+
+for batch_size in batch_sizes:
+    print(batch_size)
+
+for sample_index, batch_size in enumerate(batch_sizes, start=1):
+    print(sample_index, batch_size)
+```
+
+同时遍历多组数据使用 `zip`：
+
+```python
+batch_sizes = [1, 2, 4, 8]
+wall_times_ms = [1.0, 1.7, 3.0, 5.5]
+
+for batch_size, wall_time_ms in zip(batch_sizes, wall_times_ms, strict=True):
+    print(batch_size, wall_time_ms)
+```
+
+`strict=True` 会在两个序列长度不同时抛出异常，适合实验数据对齐。
+
+### 3.2 List、Generator 与一次性消费
+
+List Comprehension 会立即创建完整列表：
+
+```python
+squared = [batch_size**2 for batch_size in (1, 2, 4, 8)]
+assert squared == [1, 4, 16, 64]
+```
+
+Generator Expression 按需产生元素：
+
+```python
+rows.extend(
+    Sample(
+        batch_size=batch_size,
+        sequence_length=128,
+        elapsed_ms=elapsed_ms,
+    )
+    for elapsed_ms in samples
+)
+```
+
+Generator 通常只能消费一次。需要重复遍历、求长度或随机访问时，应物化成 `list`；只需要向 `extend`、`sum` 或 `max` 连续供值时，可以保持惰性。
+
+### 3.3 切片是左闭右开
+
+Python 切片 `[start:stop:step]` 与 C++ Iterator Range 相似，`stop` 不包含在结果中：
+
+```python
+values = [10, 20, 30, 40]
+
+assert values[:2] == [10, 20]
+assert values[1:3] == [20, 30]
+assert values[-1] == 40
+assert values[::-1] == [40, 30, 20, 10]
+```
+
+但在 NumPy 中，切片除了选择范围，还会影响维度是否保留：
+
+```python
+# x: [B, T, D]
+one_position_2d = x[:, t, :]          # [B, D]
+one_position_3d = x[:, t : t + 1, :]  # [B, 1, D]
+```
+
+Attention 的 Batched Matmul 需要 `[B, 1, D]` 时，错误地写成 `x[:, t, :]` 可能让后续运算发生不符合预期的 Broadcasting。
+
+### 3.4 解包、`*args` 与关键字参数
+
+Python 可以直接解包返回值：
+
+```python
+output, weights, k_cache, v_cache = decode_step(...)
+output, _, k_cache, v_cache = decode_step(...)
+```
+
+当前计时函数中的 `*args` 会收集额外位置参数：
+
+```python
+from collections.abc import Callable
+from time import perf_counter_ns
+
+
+def measure_once(fn: Callable[..., object], *args: object) -> int:
+    start = perf_counter_ns()
+    fn(*args)
+    return perf_counter_ns() - start
+```
+
+函数定义中的单独 `*` 表示后续参数必须按名称传递：
+
+```python
+def record_sample(
+    elapsed_ms: float,
+    *,
+    batch_size: int,
+    sequence_length: int,
+) -> Sample:
+    return Sample(
+        batch_size=batch_size,
+        sequence_length=sequence_length,
+        elapsed_ms=elapsed_ms,
+    )
+```
+
+这样可以避免把多个相同类型的整数按错误顺序传入。
+
+### 3.5 类型注解是静态契约，不是运行时护栏
+
+```python
+from collections.abc import Callable, Sequence
+
+import numpy as np
+
+
+def summarize(
+    samples: Sequence[float],
+    transform: Callable[[float], float] | None = None,
+) -> tuple[float, float]:
+    values = [transform(x) for x in samples] if transform else list(samples)
+    return float(np.median(values)), float(np.percentile(values, 95))
+```
+
+这里需要能读懂：
+
+- `Sequence[float]`：只要求可按序访问，不承诺是 `list`；
+- `Callable[[float], float]`：接收一个 `float` 并返回 `float` 的函数；
+- `T | None`：可能没有值；
+- `tuple[float, float]`：返回两个浮点数。
+
+Python 默认不会在运行时验证这些注解。当前 `pyproject.toml` 中的 Pyright 才负责静态检查；Shape、Dtype 与数值范围仍然需要运行时断言。
+
+## 4. 当前 Lab 所需的工程结构
+
+### 4.1 Package、Module 与入口函数
+
+当前项目结构可以读成：
+
+```text
+attention-kv-caceh/
+├── pyproject.toml
+├── src/attention_kv_caceh/
+│   ├── __init__.py
+│   ├── attention.py
+│   └── benchmark.py
+└── tests/
+    └── test_attention.py
+```
+
+- `attention_kv_caceh` 是 Package；
+- `attention.py` 和 `benchmark.py` 是 Module；
+- `from attention_kv_caceh.attention import ...` 使用绝对导入；
+- `pyproject.toml` 的 `[project.scripts]` 把命令行名称绑定到 `benchmark:main`。
+
+```toml
+[project.scripts]
+attention-kv-caceh = "attention_kv_caceh.benchmark:main"
+```
+
+下面的守卫表示“直接运行这个 Module 时调用 `main`，被 Import 时不调用”：
+
+```python
+if __name__ == "__main__":
+    main()
+```
+
+### 4.2 用 `uv` 固定项目环境
+
+<CoreCard title="当前实验项目的基本命令" class="title-underline">
+
+```bash
+cd public/labs/attention-kv-caceh
+uv sync
+
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  uv run python -m unittest discover -s tests -v
+
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  uv run attention-kv-caceh --csv results/benchmark.csv
+```
+
+</CoreCard>
+
+`uv run` 确保命令运行在项目环境中。不要依赖 Shell 当前碰巧激活的 Python，也不要把系统 Python、项目虚拟环境和 Notebook Kernel 混在同一次实验里。
+
+### 4.3 `pathlib` 与 `with`
+
+```python
+from pathlib import Path
+
+
+def write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as output:
+        output.write(content)
+```
+
+`with` 是 Python 中最接近 RAII Scope 的结构。无论代码正常结束还是中途抛出异常，文件都会执行退出清理。文件、Lock、临时目录和 HTTP Stream 都应优先寻找 Context Manager 接口。
+
+### 4.4 异常、`assert` 与测试
+
+三者承担不同职责：
+
+```python
+def validate_batch_size(batch_size: int) -> None:
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+
+
+validate_batch_size(2)
+
+# 程序内部不变量
+assert k_cache.shape[:2] == (batch_size, sequence_length)
+
+# 数值测试
+np.testing.assert_allclose(expected, actual, rtol=1e-7, atol=1e-8)
+```
+
+- 非法用户输入：显式 `raise ValueError`；
+- 内部逻辑不变量：`assert` 可以快速暴露实现错误；
+- 长期回归保护：写入 `unittest`；
+- 浮点结果：不要直接使用 `==`。
+
+`assert` 可能在优化模式下被移除，因此不能承担外部输入验证或必须执行的业务逻辑。
+
+## 5. NumPy：当前最重要的 Python 能力
+
+### 5.1 把 ndarray 当成“Buffer + Metadata”
+
+一个 ndarray 不只有 Shape。至少要同时检查：
+
+```python
+import numpy as np
+
+rng = np.random.default_rng(42)
+x = rng.normal(size=(2, 128, 64)).astype(np.float32)
+
+assert x.shape == (2, 128, 64)
+assert x.ndim == 3
+assert x.dtype == np.float32
+assert x.nbytes == 2 * 128 * 64 * 4
+
+print(x.strides)
+print(x.flags["C_CONTIGUOUS"])
+```
+
+<SlideCard title="每次 NumPy 运算前先问四件事">
+
+## Shape
+
+每个 Axis 分别表示 Batch、Head、Sequence 还是 Hidden Dimension？
+
+## Dtype
+
+一个元素占多少字节？运算是否发生隐式类型提升？
+
+## Storage
+
+当前对象拥有数据，还是共享另一个数组的 Buffer？
+
+## Layout
+
+Stride 是否连续？Transpose 后的访问模式会不会改变性能？
+
+</SlideCard>
+
+注意：`rng.normal` 默认产生 `float64`。如果实验要模拟模型常用的 `float32` 或更低精度，必须显式转换并记录；不能只在文章里写 dtype，却让代码继续使用默认值。
+
+### 5.2 Axis 是张量语义的一部分
+
+当前稳定 Softmax：
+
+```python
+def softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
+    shifted = x - np.max(x, axis=axis, keepdims=True)
+    exp_x = np.exp(shifted)
+    return exp_x / np.sum(exp_x, axis=axis, keepdims=True)
+```
+
+假设 `scores.shape == [B, 1, T]`：
+
+- `axis=-1` 表示沿历史 token 归一化；
+- `keepdims=True` 让最大值保持 `[B, 1, 1]`；
+- `[B, 1, T] - [B, 1, 1]` 通过 Broadcasting 完成；
+- 如果误写 `axis=0`，程序仍可能运行，却会让不同 Sequence 互相归一化。
+
+因此 Shape 测试不只是防止 Crash，还要防止**合法 Shape 上的错误语义**。
+
+### 5.3 Broadcasting 从最右边的维度开始
+
+两个维度满足下列任一条件即可兼容：
+
+1. 两者相等；
+2. 其中一个为 1。
+
+例如：
+
+```text
+scores:  [B, 1, T]
+max:     [B, 1, 1]
+result:  [B, 1, T]
+```
+
+Broadcasting 通常不会真的复制较小数组，但它也可能产生巨大的中间结果。写代码时不能只问“能不能 Broadcast”，还要问“Broadcast 以后结果 Shape 和内存量是什么”。
+
+### 5.4 `@` 对最后两个维度做矩阵乘法
+
+当前 Batched Attention：
+
+```python
+# q_t:     [B, 1, D_k]
+# k_cache: [B, T, D_k]
+
+k_t = np.swapaxes(k_cache, -1, -2)  # [B, D_k, T]
+scores = q_t @ k_t                  # [B, 1, T]
+```
+
+`@` 把最后两个维度当作矩阵维，前面的维度作为 Batch 维处理。这里每个 `q_t[b]` 只与同一个 `b` 下的 K/V 相乘，所以 Sequence 之间不会发生 Attention。
+
+必须用不同 Sequence 数据的 Oracle 来验证这一点。仅检查输出 Shape `[B, 1, T]`，无法证明 Batch 间没有状态泄漏。
+
+### 5.5 View、Copy 与 Benchmark 假象
+
+基础切片通常产生 View：
+
+```python
+x = np.arange(8)
+view = x[2:5]
+view[0] = 99
+
+assert x[2] == 99
+assert np.shares_memory(x, view)
+```
+
+Advanced Indexing 通常产生 Copy：
+
+```python
+x = np.arange(8)
+copied = x[[2, 3, 4]]
+copied[0] = 99
+
+assert x[2] == 2
+assert not np.shares_memory(x, copied)
+```
+
+当前实验里的几个操作具有不同成本：
+
+| 操作                           | 常见行为         | 对实验的影响                  |
+| ------------------------------ | ---------------- | ----------------------------- |
+| `x[:, t:t+1, :]`               | View             | 通常不复制 Tensor 数据        |
+| `np.swapaxes(x, -1, -2)`       | View             | 改变 Stride，不保证连续       |
+| `np.concatenate([cache, new])` | 分配新数组并复制 | 每个 Decode Step 累积分配成本 |
+| `np.stack(sequences, axis=0)`  | 创建新数组       | 构造 Batch 的成本不应混入计时 |
+| `np.empty(shape, dtype)`       | 分配但不初始化   | 写入前读取会得到未定义内容    |
+| `array.copy()`                 | 显式复制数据     | 需要隔离状态时使用            |
+
+这正是 Dynamic Cache 与 Preallocated Cache 的区别：前者每一步都通过 `concatenate` 重新分配并复制，后者只在开始时分配一次，然后写入有效 Slice。
+
+<Note title="C++ 使用者最容易犯的 NumPy 错误" class="title-underline">
+
+不要把 ndarray Slice 当成独立的 `std::vector`。修改 Slice 可能直接修改原始数组；Transpose/Swapaxes 可能只改变 Metadata；`reshape` 有时是 View、有时需要 Copy。需要隔离状态时显式 `.copy()`，需要验证时使用 `np.shares_memory`、`.base`、`.strides` 与 Contiguous Flag。
+
+</Note>
+
+### 5.6 随机数与数值正确性
+
+使用独立 Generator：
+
+```python
+rng = np.random.default_rng(42)
+x = rng.normal(size=(2, 128, 64))
+```
+
+固定 Seed 只能保证**相同版本和相同调用顺序下的随机流可重复**。如果在循环中新增一次 `rng.normal`，后面的所有输入都会变化。公平对照时，应先构造一次输入和权重，再让不同路径共享它们。
+
+浮点路径使用：
+
+```python
+np.testing.assert_allclose(
+    expected,
+    actual,
+    rtol=1e-7,
+    atol=1e-8,
+)
+```
+
+必须根据 Dtype 与累计运算误差选择容差。不能为了让测试通过而不断放大 `atol`；若误差随 T 或 Head 数增长，应先检查数值稳定性和 Shape 语义。
+
+## 6. 用 Python 写可信的性能实验
+
+### 6.1 计时范围必须足够小且明确
+
+```python
+from collections.abc import Callable
+from time import perf_counter_ns
+
+
+def measure(
+    fn: Callable[..., object],
+    *args: object,
+    warmup: int = 3,
+    repeats: int = 30,
+) -> list[float]:
+    for _ in range(warmup):
+        fn(*args)
+
+    samples_ms = []
+    for _ in range(repeats):
+        start = perf_counter_ns()
+        fn(*args)
+        elapsed_ms = (perf_counter_ns() - start) / 1_000_000
+        samples_ms.append(elapsed_ms)
+
+    return samples_ms
+```
+
+这个函数适合当前 Microbenchmark，但仍要明确：
+
+- 它测量 Wall Time，不是纯 CPU Cycle；
+- Python 调用、数组分配、NumPy Dispatch 与底层 BLAS 都包含在内；
+- 输入和权重应在计时区间外创建；
+- 正确性 Oracle 应在计时前执行；
+- Warm-up 不进入正式样本；
+- 不能只保留中位数。
+
+### 6.2 P50/P95 与原始数据
+
+```python
+import numpy as np
+
+
+def summarize_samples(samples_ms: list[float]) -> dict[str, float]:
+    values = np.asarray(samples_ms, dtype=np.float64)
+    return {
+        "p50_ms": float(np.percentile(values, 50)),
+        "p95_ms": float(np.percentile(values, 95)),
+        "min_ms": float(values.min()),
+        "max_ms": float(values.max()),
+    }
+```
+
+汇总结果用于阅读，原始 CSV 用于审计和重新聚合。出现异常值时，先保留再解释，不要因为它破坏图形就删除。
+
+### 6.3 环境变量必须在进程启动前固定
+
+```bash
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  uv run attention-kv-caceh --csv results/batch-size-scan.csv
+```
+
+不要在 `import numpy` 后才尝试修改 BLAS 线程环境变量。底层 Runtime 可能已经完成初始化，实验未必真的采用新配置。
+
+### 6.4 正确顺序
+
+```text
+write prediction
+  -> freeze environment and inputs
+  -> check Oracle and Shape invariants
+  -> warm up
+  -> measure repeated raw samples
+  -> aggregate P50/P95
+  -> inspect anomalies
+  -> explain boundary
+```
+
+<SlideCard title="Benchmark 中 Python 与系统性能要分开解释">
+
+## Python 层
+
+- 循环次数
+- 函数调用
+- 临时对象和数组分配
+- CSV 与日志 I/O
+
+## NumPy / BLAS 层
+
+- Matmul Shape
+- Thread 数
+- Contiguous Layout
+- Vectorization 与执行策略
+
+## Serving 层
+
+- Client Concurrency
+- Queue 与 Scheduler
+- KV Cache 容量
+- Backend 与硬件利用率
+
+Toy Lab 中观察到的 Python/NumPy 收益，不能直接写成 vLLM Scheduler 或 GPU Kernel 的收益。
+
+</SlideCard>
+
+## 7. 后续 Serving Harness 所需的 `asyncio`
+
+### 7.1 Async 是等待期间让出执行权
+
+`asyncio` 适合大量等待网络响应的任务。它默认运行在单个 Event Loop Thread 中，通过 `await` 协作切换；这不是自动的多核并行。
+
+```python
+import asyncio
+from time import perf_counter_ns
+
+
+async def simulated_request(
+    request_id: int,
+    gate: asyncio.Semaphore,
+) -> tuple[int, float, float]:
+    arrival_ns = perf_counter_ns()
+
+    async with gate:
+        admitted_ns = perf_counter_ns()
+        await asyncio.sleep(0.01)
+        finished_ns = perf_counter_ns()
+
+    queue_ms = (admitted_ns - arrival_ns) / 1_000_000
+    e2e_ms = (finished_ns - arrival_ns) / 1_000_000
+    return request_id, queue_ms, e2e_ms
+
+
+async def main() -> None:
+    gate = asyncio.Semaphore(4)
+    tasks = [
+        asyncio.create_task(simulated_request(request_id, gate))
+        for request_id in range(16)
+    ]
+    results = await asyncio.gather(*tasks)
+    print(results)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+这里要区分：
+
+- 创建了 16 个未完成 Task；
+- Semaphore 只允许 4 个进入受控区间；
+- 这表示 Client Concurrency 上限为 4；
+- 服务端每个 Engine Step 的实际 Sequence Batch 仍由 Scheduler 决定。
+
+### 7.2 流式请求需要记录四类时间
+
+后续 HTTP Client 至少保存：
+
+```text
+arrival_ns      client creates request
+sent_ns         request is admitted and sent
+first_token_ns  first streamed token arrives
+token_times_ns  every following token timestamp
+finish_ns       stream finishes or fails
+```
+
+从这些时间才能计算：
+
+- Client Queue Time；
+- TTFT；
+- 每个 ITL；
+- TPOT；
+- E2E。
+
+不要在 Coroutine 中调用 `time.sleep()`，它会阻塞整个 Event Loop；需要等待时使用 `await asyncio.sleep()`。不要让多个 Task 无保护地修改同一份结果对象；最简单的做法是让每个 Task 返回独立结果，再由调用方汇总。
+
+## 8. 阅读 vLLM Python 源码需要识别什么？
+
+进入源码前，不需要先掌握所有 Python 魔法。先能识别下面的结构：
+
+| 看到的结构                  | 阅读方式                                   |
+| --------------------------- | ------------------------------------------ |
+| `@dataclass`                | 先找状态字段、默认值与可变字段             |
+| `Enum`                      | 画出 Request Status 的合法状态集合         |
+| `Protocol` / `ABC`          | 区分接口契约与具体 Backend 实现            |
+| `T \| None`                 | 找出状态缺失的合法时机                     |
+| `list[Request]` / `dict`    | 判断谁拥有容器、谁会原地修改               |
+| `async def` / `await`       | 找出可能挂起和恢复的位置                   |
+| `with` / `async with`       | 找出资源生命周期边界                       |
+| `yield` / `async for`       | 把函数看成逐步产生结果的 Iterator / Stream |
+| `@property`                 | 读取时可能执行逻辑，不一定只是字段访问     |
+| `raise` / `try` / `finally` | 追踪失败、取消和资源释放路径               |
+
+源码纵切时，优先追踪 Request State、Scheduler Budget、KV Block 生命周期和 Model Runner 调用链。遇到陌生装饰器或泛型语法时按需补齐，不要暂停主线去完整学习 Python Data Model。
+
+## 9. 三道练习门
+
+### 9.1 P0：对象与 ndarray 语义
+
+**Question：** 哪些操作共享状态，哪些操作复制数据？
+
+**Action：** 为 `list` 赋值、浅复制、NumPy Slice、Advanced Indexing、`swapaxes` 和 `concatenate` 分别写一个 5 行以内的小实验。
+
+**Artifact：** 一张表，记录 `shares_memory`、Shape、Stride 与修改是否传播。
+
+**Acceptance：** 在运行前就能预测六个实验的结果，并解释一次预测错误。
+
+### 9.2 P1：完成当前 M1 Batch Size 扫描
+
+**Question：** 固定 `T=128` 时，`B=1/2/4/8` 怎样改变 Wall Time、每 Sequence 成本与 Positions/s？
+
+**Action：**
+
+1. 为 Benchmark 增加 Batch Size 列表；
+2. 每个 B 与逐 Sequence Oracle 对照；
+3. 固定 Dtype、Seed 与 BLAS Thread；
+4. 每组 3 次 Warm-up、30 次正式计时；
+5. 保存原始 CSV，汇总 P50/P95。
+
+**Acceptance：**
+
+- 所有 B 通过数值与 Shape 检查；
+- 能解释吞吐提高为什么不等于单请求更快；
+- 如果没有饱和拐点，结论写成 `Not reached`；
+- 结果回写[阶段 2 实验文章](/blog/vllm-inference-performance-lab/)。
+
+### 9.3 P2：实现最小 Async Concurrency Harness
+
+**Question：** 16 个请求、Concurrency 4 与服务端实际 Batch 有什么区别？
+
+**Action：** 先使用 `asyncio.sleep` 模拟流式请求，记录 Arrival、Admission、First Token、每个 Token 与 Finish；再替换成真实 HTTP Stream。
+
+**Artifact：** 每请求 JSONL 和一张 Client Queue / TTFT / ITL 时间线。
+
+**Acceptance：** 能证明 Semaphore 限制的是客户端同时执行请求数，而不是 vLLM 每轮 Sequence Batch。
+
+## 10. 什么时候算“具备当前需要的 Python 基础”？
+
+不需要背下所有 API。能够独立完成下面的检查，就可以继续阶段 2：
+
+1. 能解释 `b = a` 为什么通常不复制对象；
+2. 知道为什么可变默认参数会跨调用共享状态；
+3. 能读写 `list`、`tuple`、`dict`、Comprehension、Generator 与解包；
+4. 能解释 `Sequence[T]`、`Callable`、`T | None` 和返回 Tuple；
+5. 能用 `dataclass`、`pathlib`、`with`、`argparse` 和 Module Entry Point；
+6. 能为非法输入、内部不变量和浮点等价选择正确的验证方式；
+7. 看到 ndarray 时会先检查 Shape、Axis、Dtype、Stride 和 Ownership；
+8. 能预测基础切片、Advanced Indexing、Transpose 与 Concatenate 的 View/Copy 行为；
+9. 能写包含 Warm-up、重复样本、P50/P95 和原始 CSV 的受控 Benchmark；
+10. 能解释 `asyncio.Task`、Semaphore、Client Concurrency 与 Server Batch 的边界。
+
+<Note title="真正的复健方式" class="title-underline">
+
+不要先花一周看完 Python 教程，再回来做实验。正确顺序是：读完一小节，立即在 `attention-kv-caceh` 中找到对应代码，先预测行为，再修改、测试和解释。完成 P1 后，Python 基础已经从“重新看过”变成了当前 AI Infra 主线中的可审查能力。
+
+</Note>
+
+<Note title="参考资料" class="title-underline">
+
+- Python，[More Control Flow Tools](https://docs.python.org/3/tutorial/controlflow.html)
+- Python，[Data Structures](https://docs.python.org/3/tutorial/datastructures.html)
+- Python，[Data Classes](https://docs.python.org/3/library/dataclasses.html)
+- Python，[asyncio](https://docs.python.org/3/library/asyncio.html)
+- NumPy，[Copies and Views](https://numpy.org/doc/stable/user/basics.copies.html)
+- NumPy，[Broadcasting](https://numpy.org/doc/stable/user/basics.broadcasting.html)
+- NumPy，[Array Shape](https://numpy.org/doc/stable/reference/generated/numpy.ndarray.shape.html)
+- NumPy，[assert_allclose](https://numpy.org/doc/stable/reference/generated/numpy.testing.assert_allclose.html)
+
+</Note>
