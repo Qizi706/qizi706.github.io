@@ -1,0 +1,591 @@
+---
+title: 'vLLM 推理性能实验：并发、batch size、输入长度对吞吐和延迟的影响'
+description: '阶段 2 的 AI Infra 实验产出：在固定模型、vLLM Runtime 与单机环境下，使用流式客户端和服务端指标验证输入长度、并发与调度批次如何影响 TTFT、TPOT、吞吐和尾延迟。'
+pubDate: '2026-08-16T20:30:00+08:00'
+categories:
+  - 'AI Infra'
+tags:
+  - 'LLM'
+  - 'vLLM'
+  - 'Benchmark'
+  - 'Scheduler'
+  - 'KV Cache'
+draft: true
+mathjax: true
+---
+
+## 1. Aside: “并发更高，吞吐就更高”吗？
+
+<SlideCard title="从一个看似合理的优化开始">
+
+## 直觉
+
+- 单请求 Decode 很难充分利用设备
+- 同时运行更多请求，可以把权重读取分摊给更多 token
+- 所以增大并发或 Batch，吞吐应该提高
+
+## 但用户还会感受到
+
+- 请求在 Queue 中等待更久
+- Prefill 与已有 Decode 竞争执行机会
+- KV Cache 被更多活跃 Sequence 占用
+- 首 token 和 token 间延迟可能继续恶化
+
+## 因此真正的问题是
+
+> 吞吐在什么时候开始饱和？饱和以后，延迟和资源状态发生了什么？
+
+</SlideCard>
+
+<SlideCard title="batch size 到底指什么？">
+
+## 客户端看到的并发
+
+同一时刻尚未完成的请求数。
+
+## Scheduler 配置的上限
+
+例如最大 Sequence 数或一次迭代允许调度的 token 总量。
+
+## Engine Step 的实际 Batch
+
+某一轮真正被选中执行的 Sequence，以及它们各自推进的 token 数。
+
+> 这三者会相互影响，但不是同一个变量。
+
+</SlideCard>
+
+<Note title="这篇文章要留下的证据" class="title-underline">
+
+本文不是 vLLM 与其他推理引擎的横向排名，也不预设“Batch 越大越好”。它只在固定 Backend、Hardware、Model 与版本后，改变一个工作负载或调度变量，记录客户端流式时序、服务端 Scheduler/KV 指标和原始结果，再判断预测是得到支持、被反驳，还是证据不足。
+
+Prefill、Decode、KV Cache、PagedAttention 与 Continuous Batching 的机制背景见[《LLM 推理优化的系统视角：从 KV Cache 到调度》](/blog/llm-inference-optimization-system-view/)。
+
+</Note>
+
+## 2. 实验问题与证据边界
+
+### 2.1 核心问题
+
+> 在固定模型、vLLM Runtime 和单机硬件后，Input 长度、Client Concurrency 与 Scheduler Batch Budget 如何改变 Queue、实际执行 Batch 与 KV Cache 占用，并最终影响 TTFT、TPOT、Token Throughput 和尾延迟？
+
+<SlideCard title="实验只沿一条因果链展开">
+
+```text
+workload
+  -> request arrival and queue
+  -> scheduler selects sequences and token budget
+  -> KV cache lookup / allocate / grow / release
+  -> prefill and decode execute
+  -> stream chunks reach client
+  -> TTFT / ITL / TPOT / E2E / throughput / P99
+```
+
+## 客户端证据
+
+- 请求提交、首 Chunk、每个 Chunk 与完成时间
+- 实际 Input / Output token
+- 请求状态、错误、取消和超时
+
+## 服务端证据
+
+- waiting / running requests
+- 每轮调度状态与 Token Budget
+- KV Cache Usage、Block 分配与 Prefix 命中
+- 启动配置、版本与完整日志
+
+</SlideCard>
+
+客户端时序可以证明用户等待时间发生了变化，但不能单独证明变化来自 Scheduler、KV Cache 或 Model Runner。只有两侧时间线能够对齐时，才把内部机制写成实验结论。
+
+### 2.2 本轮不回答什么？
+
+- 不比较 Ollama、vLLM、TensorRT-LLM 等不同引擎的性能排名；
+- 不同时改变模型、量化、Backend 与调度参数；
+- 不把 Apple Silicon / Metal 的结果直接推广到 CUDA GPU；
+- 不研究多机并行、Speculative Decoding 或不同量化方案的精度；
+- 不把客户端并发直接称为模型 Batch Size；
+- 不用理论预期填补尚未采集的结果。
+
+## 3. 事前假设
+
+实验运行前先冻结下面的预测和反证条件。结果统一标记为 `Supported`、`Refuted` 或 `Inconclusive`。
+
+### 3.1 H1：输入长度
+
+<SlideCard title="H1 / Input Length">
+
+## 改变
+
+未命中 Prefix Cache 的实际 Input Token 数。
+
+## 保持不变
+
+模型、Output Token、Client Concurrency、采样参数与 Scheduler 配置。
+
+## 预测
+
+- Prompt 变长时，TTFT 与 Prefill 工作量上升
+- 初始 KV Cache 占用上升
+- 历史状态变长后，TPOT 也可能缓慢上升
+
+## 反证或替代解释
+
+- TTFT 没有稳定趋势
+- Tokenizer、Prefix Cache、前端或系统噪声主导了结果
+- 当前长度范围仍不足以暴露差异
+
+</SlideCard>
+
+### 3.2 H2：客户端并发
+
+<SlideCard title="H2 / Client Concurrency">
+
+## 改变
+
+Closed-loop Client 同时保持的未完成请求数。
+
+## 保持不变
+
+模型、请求长度分布、Output、采样参数与 Scheduler 上限。
+
+## 预测
+
+- Token Throughput 先提高，再逐渐接近饱和
+- 越过容量点以后，TTFT、TPOT 或 P99 继续恶化
+- waiting requests 与 KV Cache Usage 随并发增加
+
+## 反证或替代解释
+
+- 测试范围没有到达饱和点
+- CPU、HTTP、Tokenizer 或客户端先成为瓶颈
+- 请求长度波动遮蔽了并发效应
+
+</SlideCard>
+
+### 3.3 H3：Scheduler Batch Budget
+
+<SlideCard title="H3 / Batch Budget">
+
+## 改变
+
+固定工作负载下，分别调整最大 Sequence 数和一次调度允许的 token 总量。
+
+## 保持不变
+
+Client Concurrency、输入/输出长度分布、模型与其他 Runtime 参数。
+
+## 预测
+
+- 更高预算可能提高单轮实际 Batch 与 Token Throughput
+- 收益不会无限增长，并可能增加单请求等待或干扰
+- 若负载或 KV 容量不足以填满预算，调整上限可能没有效果
+
+## 反证或替代解释
+
+- 实际 Batch 从未触及配置上限
+- Backend 对相应配置没有完整支持
+- 其他约束先限制了 Scheduler
+
+</SlideCard>
+
+### 3.4 H4：长 Prefill 对 Decode 的干扰
+
+<SlideCard title="H4 / Mixed Workload">
+
+## 改变
+
+固定总请求规模下，改变短 Prompt 与长 Prompt 的比例或到达时机。
+
+## 预测
+
+长 Prefill 到达后，已经处于 Decode 的请求可能出现 ITL 尖峰。
+
+## 反证或替代解释
+
+- Chunked Prefill 或其他调度策略降低了干扰
+- 时间戳或服务端指标粒度不足
+- 工作负载没有形成真正的资源竞争
+
+</SlideCard>
+
+Prefix Cache 复用作为扩展实验单独进行，不与 H1 的输入长度扫描混合。否则共享前缀会改变实际 Prefill 工作量，使“输入更长”不再是唯一变量。
+
+## 4. 实验环境
+
+### 4.1 计划基线
+
+<SlideCard title="软硬件与模型快照">
+
+## Hardware
+
+- MacBook Pro，Apple M5 Pro
+- 18-core CPU、20-core GPU
+- 48 GB Unified Memory
+
+## Model
+
+- Qwen3-4B-Instruct-2507
+- MLX 4-bit Model Artifact
+- Context Length 与模型 Revision 在正式实验时冻结
+
+## Runtime
+
+- vLLM Core + vLLM Metal
+- MLX Model Runner
+- OpenAI-compatible Streaming API
+
+## Scope
+
+- Single Node
+- 单模型副本
+- 不做跨 Backend 性能比较
+
+</SlideCard>
+
+> [!IMPORTANT]
+> 正式实验前，把 vLLM Core、vLLM Metal、MLX、Python、macOS、模型 Revision 和完整启动参数替换为当次运行的真实快照。阶段 1 的版本只能作为 bring-up 记录，不能自动当作阶段 2 的实验环境。
+
+### 4.2 必须冻结的配置
+
+```text
+model / revision / quantization
+context length
+kv cache dtype
+prefix caching on/off
+chunked prefill on/off
+max_num_seqs
+max_num_batched_tokens
+sampling parameters
+random seed
+client machine and network path
+```
+
+每一组结果都要能追溯到同一份配置快照。若中途升级 Runtime 或修改 Backend，应建立新的实验批次，不能直接与旧数据合并。
+
+## 5. 测量方法
+
+### 5.1 客户端时间戳
+
+每个请求至少记录：
+
+```text
+t_arrival   client submits the request
+t_first     client receives the first output token
+t_i         client receives output token i
+t_last      client receives the last output token
+t_finish    client receives the terminal event
+
+input_tokens / output_tokens
+status / error / done_reason
+experiment / target / run / request_id
+```
+
+由原始时间戳计算：
+
+$$
+\begin{aligned}
+\mathrm{TTFT} &= t_{\mathrm{first}} - t_{\mathrm{arrival}},\\
+\mathrm{ITL}_i &= t_i - t_{i-1},\\
+\mathrm{TPOT} &= \frac{t_{\mathrm{last}} - t_{\mathrm{first}}}{N_{\mathrm{output}} - 1},\\
+\mathrm{E2E} &= t_{\mathrm{finish}} - t_{\mathrm{arrival}}.
+\end{aligned}
+$$
+
+`TPOT` 只对至少生成两个 token 的成功请求计算。Output Token Throughput 使用测量窗口内所有成功生成 token 的总数除以窗口长度；不能用单请求 `tokens/s` 的平均值代替系统吞吐。
+
+### 5.2 分位数与原始数据
+
+<SlideCard title="每个实验怎样保存结果？">
+
+## Raw
+
+- 每个请求的原始时间戳和 token 数
+- 每次运行的服务端指标快照
+- 失败、超时、取消与 Early EOS 状态
+
+## Aggregate
+
+- TTFT / TPOT / E2E 的 P50、P95、P99
+- Output Token Throughput
+- 样本数、成功率和实际测量窗口
+
+## Reproducibility
+
+- Warm-up 次数与正式重复次数
+- 测试顺序和随机种子
+- 环境、启动命令与 Git Commit
+
+</SlideCard>
+
+原始数据阶段不删除异常值。若聚合时排除某个样本，必须保留原记录并说明规则。ITL 还应保留时间序列，以检查长 Prefill 到达是否与 Decode Stall 同时发生。
+
+### 5.3 Closed-loop 与 Open-loop
+
+第一轮并发扫描使用 Closed-loop Client：固定并发数，一个请求完成后再补充新请求。这能回答“同时保持更多未完成请求时，吞吐和延迟如何变化”。
+
+但 Concurrency 不等于固定 Request Rate。需要研究到达率、排队稳定性或 SLO 时，再增加 Open-loop 负载，按预设时间过程发送请求，即使前一个请求尚未完成也不等待。
+
+## 6. Benchmark Harness
+
+### 6.1 客户端能力
+
+最终 Harness 至少支持：
+
+- 可配置 Input / Output Token 目标；
+- 可配置 Client Concurrency 与请求总数；
+- 随机前缀、共享前缀与 Mixed Workload；
+- Streaming Chunk 时间戳；
+- Warm-up、重复运行和测试顺序随机化；
+- CSV / JSONL 原始输出；
+- 超时、取消、错误与 Early EOS 记录。
+
+<Note title="先记录事实，再计算指标" class="title-underline">
+
+Harness 应优先保存原始事件，而不是只输出最终 P50/P99。指标定义或聚合方式发生变化后，原始时间戳仍然可以重新计算；只有汇总数字则无法检查异常和替代解释。
+
+</Note>
+
+### 6.2 服务端观测
+
+每次运行同步采集：
+
+- vLLM 启动日志与完整参数；
+- waiting / running requests；
+- KV Cache Usage 与 Prefix Cache 指标；
+- Scheduler 相关指标或固定版本源码 Trace；
+- 进程 CPU、Memory 与设备利用率；
+- 请求失败、取消与资源不足日志。
+
+如果当前 vLLM Metal 没有暴露某项 CUDA 版本中的指标，应明确记为“不可观测”，不能用客户端曲线反推出它必然发生。
+
+## 7. 实验矩阵
+
+### 7.1 第一轮扫描
+
+| ID     | 改变的变量                        | 固定条件                     | 第一轮取值          | 要回答的问题                      |
+| ------ | --------------------------------- | ---------------------------- | ------------------- | --------------------------------- |
+| EXP-00 | 无                                | 完整基线                     | 重复运行            | 稳态噪声和失败率有多大？          |
+| EXP-01 | 未命中 Cache 的 Input Token       | Output 64、Concurrency 1     | 128 / 512 / 2048    | Prompt 怎样影响 TTFT 与 KV 占用？ |
+| EXP-02 | Client Concurrency                | 固定长度分布、固定 Scheduler | 1 / 2 / 4 / 8 / 16  | 吞吐何时饱和，尾延迟何时恶化？    |
+| EXP-03 | Scheduler Sequence / Token Budget | 固定并发与长度分布           | 按容量预检后确定    | 配置上限是否改变实际执行 Batch？  |
+| EXP-04 | 短 / 长 Prompt 比例               | 固定请求总数与 Scheduler     | 100/0、80/20、50/50 | 长 Prefill 是否干扰已有 Decode？  |
+| EXP-05 | 无共享 / 共享前缀                 | 固定总 Input/Output 与并发   | 两组                | Prefix Cache 节省了什么资源？     |
+
+这些数值只是第一轮起点。正式运行前先用容量模型确认不会立即 OOM，再决定最大并发和 Scheduler Budget。Length、Concurrency 与 Batch Budget 必须分开扫描，不能一次改变多个主变量后再尝试归因。
+
+### 7.2 EXP-00：基线与噪声
+
+**Prediction**
+
+在完成 Warm-up 后，相同负载的主要指标应落在相对稳定的范围；如果波动已经大到覆盖后续实验差异，应先修复环境或增加重复次数。
+
+**Procedure**
+
+1. 冻结服务配置并完成 Warm-up。
+2. 使用固定 Input / Output 与 Concurrency 1 重复运行。
+3. 保存客户端事件、服务端指标与后台负载。
+4. 计算 P50/P95/P99、变异范围和失败率。
+
+> [!IMPORTANT]
+> 实验完成后在这里加入基线表格、原始数据路径、噪声判断与可接受阈值。
+
+### 7.3 EXP-01：输入长度
+
+**Prediction**
+
+未命中 Prefix Cache 时，Input Token 增长会提高 TTFT 与初始 KV 占用；更长历史也可能使 TPOT 缓慢上升。
+
+**Control**
+
+- 固定 Output、Concurrency、采样参数与 Scheduler；
+- 从 Prompt 前部开始随机化，避免共享长前缀；
+- 记录 Tokenizer 后的真实 Input Token；
+- 正式组之间关闭 Prefix Cache，或重启服务隔离状态。
+
+> [!IMPORTANT]
+> 实验完成后加入 TTFT、TPOT、KV Usage 的分位数表和趋势图；必须同时报告实际 Token 数，而不是 Prompt 构造目标。
+
+### 7.4 EXP-02：客户端并发
+
+**Prediction**
+
+随着并发增加，Token Throughput 先提高再饱和；越过饱和点后，TTFT、TPOT 或 P99 继续恶化。
+
+**Control**
+
+- 使用相同的请求长度分布；
+- 固定 Scheduler Budget；
+- 每个并发档位使用相同请求总数和 Warm-up 规则；
+- 记录 waiting / running requests 与 KV Cache Usage。
+
+> [!IMPORTANT]
+> 实验完成后标出吞吐拐点，并说明它对应 Queue、KV Cache、设备利用率还是客户端瓶颈；证据不足时标记为 Inconclusive。
+
+### 7.5 EXP-03：Scheduler Batch Budget
+
+这里的 “batch size” 不使用单一模糊参数，而分别扫描：
+
+- 最大可同时调度的 Sequence 数；
+- 每轮允许调度的 Token Budget；
+- 服务端实际观测到的 Sequence Batch 与 Scheduled Token。
+
+**Prediction**
+
+提高上限只有在负载能够填满、KV 容量允许且 Backend 真正使用该配置时才会改变性能；配置值增长不保证实际 Batch 同步增长。
+
+> [!IMPORTANT]
+> 实验完成后同时报告“配置上限”和“实际执行值”。如果 Backend 无法暴露实际值，结论只能停在客户端与公开服务端指标层面。
+
+### 7.6 EXP-04：Mixed Workload
+
+用短 Prompt 请求持续 Decode，再在已知时间点注入长 Prompt。对齐长请求到达时间、服务端调度状态与其他请求的 ITL 时间序列。
+
+**Prediction**
+
+若长 Prefill 独占较大的单轮预算，已有 Decode 的 ITL 尾部可能出现尖峰；若 Chunked Prefill 或其他策略有效，尖峰可能下降或不可见。
+
+> [!IMPORTANT]
+> 只有时间线能够对应时，才把 ITL 尖峰归因于长 Prefill；否则记录相关性和替代解释。
+
+### 7.7 EXP-05：Prefix Reuse
+
+固定总 Input / Output 与并发，只改变请求之间是否共享足够长、能够覆盖完整 Cache Block 的前缀。
+
+**Prediction**
+
+Prefix Cache 命中可能减少重复 Prefill 与独占 Block，从而降低 TTFT；同时共享 Block 的驻留时间和复用条件也会影响物理状态。
+
+这个实验必须与 EXP-01 分开。阶段 1 已经出现过高度重复 Prompt 污染输入长度实验的情况，说明“字符串长度相同”不等于“运行时执行了相同工作”。
+
+## 8. 结果总览
+
+| 假设 | 状态         | 客户端证据 | 服务端证据 | 当前结论 |
+| ---- | ------------ | ---------- | ---------- | -------- |
+| H1   | Inconclusive | 待采集     | 待采集     | 尚未实验 |
+| H2   | Inconclusive | 待采集     | 待采集     | 尚未实验 |
+| H3   | Inconclusive | 待采集     | 待采集     | 尚未实验 |
+| H4   | Inconclusive | 待采集     | 待采集     | 尚未实验 |
+
+> [!IMPORTANT]
+> 这一节只在原始数据、聚合脚本和配置快照都已提交后填写。不要把学习文章中的机制推导复制成实验结果。
+
+## 9. 异常、失败与修正
+
+阶段 1 与 Toy Attention 已经留下两类需要主动防止的实验错误：
+
+<SlideCard title="以前的失败怎样约束这次实验？">
+
+## Prefix Cache 污染
+
+- 高度重复 Prompt 让长输入的大部分 Prefill 被复用
+- 表面上出现“输入越长反而越快”
+- 修正方式是从前部随机化，并把 Prefix Reuse 独立成实验
+
+## Runtime 执行策略变化
+
+- Toy Attention 未固定 BLAS 线程时，矩阵路径跨过不同线程阈值
+- 表面加速比混入线程调度成本
+- 修正方式是冻结运行环境，并把异常结果保留下来解释
+
+## 这次需要继续检查
+
+- Early EOS 导致实际 Output 不同
+- 客户端或网络先饱和
+- 温度、后台负载和长时间运行产生漂移
+- Scheduler 配置在 Metal Backend 上没有实际生效
+
+</SlideCard>
+
+正式实验中的异常按下面格式记录：
+
+```text
+observation:
+expected:
+first competing explanation:
+evidence collected:
+controlled change:
+new result:
+conclusion changed to:
+```
+
+## 10. 用源码解释实验，而不是替代实验
+
+源码阅读只固定一条纵向路径：
+
+```text
+request admitted
+  -> scheduler chooses token budget
+  -> KV cache finds or allocates blocks
+  -> model runner executes one engine step
+  -> sampled token updates request state
+  -> finished / cancelled request releases resources
+```
+
+需要产出：
+
+- 固定 vLLM Commit；
+- 一张 Request 状态机；
+- 一张 Scheduler → KV Cache → Model Runner 调用链；
+- 被调度 token、KV Slot 分配和完成/取消释放之间的不变量；
+- 当前 vLLM Metal 与主线 vLLM 在关键路径上的差异。
+
+源码能够解释某个版本“可能怎样运行”，但不能替代当前实验环境的运行时证据。若源码与论文描述不同，以固定版本的实际实现为准，并单独记录差异。
+
+## 11. 实验结论与证据边界
+
+<SlideCard title="阶段 2 的验收条件">
+
+## Reproducible
+
+- 相同环境重复运行能够复现主要趋势
+- 原始 CSV/JSONL、配置、日志和聚合脚本齐全
+
+## Explainable
+
+- 能解释并发增加后吞吐、TTFT 与 TPOT 为什么可能不同方向变化
+- 能把至少一个客户端现象对应到 Scheduler 与 KV Cache 状态
+
+## Falsifiable
+
+- 至少保留一个不符合原预测的结果
+- 用下一组受控实验区分替代解释
+
+## Bounded
+
+- 明确 Backend、Hardware、Model、Version 与 Workload 边界
+- 不把尚未测量的内部行为写成实验事实
+
+</SlideCard>
+
+满足这些条件以后，本阶段才算完成。最终结论不要求四条预测全部成立，但要求每个判断都能回到原始证据，并说明瓶颈在改变配置后转移到了哪里。
+
+## 12. 复现与实验产物
+
+阶段 2 最终应留下：
+
+```text
+phase2-vllm-benchmark/
+├── README.md
+├── environment.json
+├── server-command.txt
+├── benchmark.py
+├── workloads/
+├── raw/
+│   ├── client-events.jsonl
+│   └── server-metrics.jsonl
+├── processed/
+│   └── summary.csv
+├── plots/
+├── source-trace.md
+└── server.log
+```
+
+> [!IMPORTANT]
+> 完成 Harness 后，把真实目录、复现命令和在线 Lab 链接补到这里；若产物尚未存在，文章继续保持 `draft: true`。
+
+<Note title="这篇文章最终要回答的问题" class="title-underline">
+
+并发、Batch 与输入长度并不是独立决定性能的三个旋钮。它们先改变等待请求、实际调度批次与 KV Cache 状态，再共同作用于 Prefill、Decode 和用户可见时间。阶段 2 的目标不是找到一个最大的吞吐数字，而是找到**吞吐开始饱和的位置、尾延迟开始恶化的条件，以及能够解释这个转折的运行时证据**。
+
+</Note>
