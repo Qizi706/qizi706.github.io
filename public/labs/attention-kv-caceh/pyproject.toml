@@ -1,14 +1,14 @@
 [project]
 name = "attention-kv-caceh"
 version = "0.1.0"
-description = "phase2 lab"
+description = "Reproducible causal-attention, KV-cache, and batching lab"
 readme = "README.md"
 authors = [{ name = "Qizi706", email = "qzhou0706@gmail.com" }]
 requires-python = ">=3.14"
 dependencies = ["numpy>=2.5.2"]
 
 [project.scripts]
-attention-kv-caceh = "attention_kv_caceh:main"
+attention-kv-caceh = "attention_kv_caceh.benchmark:main"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]

@@ -1,0 +1,115 @@
+---
+import { readFile } from 'node:fs/promises';
+import nodePath from 'node:path';
+import {
+	encodePhase2ArtifactPath,
+	phase2LabArtifacts,
+	phase2LabBasePath,
+	type Phase2LabArtifact,
+} from '../../../../data/phase2-lab-artifacts';
+
+export function getStaticPaths() {
+	return phase2LabArtifacts.map((file) => ({
+		params: { path: file.path },
+		props: { file },
+	}));
+}
+
+interface Props {
+	file: Phase2LabArtifact;
+}
+
+const { file } = Astro.props;
+const sourcePath = nodePath.join(process.cwd(), 'public', 'labs', 'attention-kv-caceh', file.path);
+const content = await readFile(sourcePath, 'utf8');
+const rawPath = phase2LabBasePath + encodePhase2ArtifactPath(file.path);
+const downloadName = nodePath.basename(file.path);
+---
+
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/png" sizes="64x64" href="/favicon.ico?v=4" />
+		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+		<title>{file.path} — Phase 2 lab artifact</title>
+		<meta name="description" content={'UTF-8 viewer for ' + file.path} />
+		<style>
+			:root {
+				color-scheme: light dark;
+			}
+
+			body {
+				margin: 0;
+				color: #111827;
+				background: #fff;
+				font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+			}
+
+			header {
+				position: sticky;
+				top: 0;
+				display: flex;
+				padding: 0.75rem 1rem;
+				border-bottom: 1px solid #d1d5db;
+				background: rgb(255 255 255 / 94%);
+				align-items: center;
+				gap: 1rem;
+				backdrop-filter: blur(8px);
+			}
+
+			h1 {
+				min-width: 0;
+				flex: 1;
+				margin: 0;
+				overflow: hidden;
+				font-size: 1rem;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			nav {
+				display: flex;
+				flex: none;
+				gap: 0.75rem;
+			}
+
+			main {
+				max-width: none;
+				margin: 0;
+				padding: 1rem;
+				overflow-x: auto;
+			}
+
+			pre {
+				margin: 0;
+				font: inherit;
+				line-height: 1.5;
+				tab-size: 4;
+			}
+
+			@media (prefers-color-scheme: dark) {
+				body {
+					color: #e5e7eb;
+					background: #111827;
+				}
+
+				header {
+					border-color: #374151;
+					background: rgb(17 24 39 / 94%);
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<header>
+			<h1>{file.path}</h1>
+			<nav aria-label="Artifact actions">
+				<a href={rawPath}>Raw</a>
+				<a href={rawPath} download={downloadName}>Download</a>
+			</nav>
+		</header>
+		<main><pre><code>{content}</code></pre></main>
+	</body>
+</html>

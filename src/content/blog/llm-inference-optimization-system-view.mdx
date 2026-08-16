@@ -2,7 +2,7 @@
 title: 'LLM 推理优化的系统视角：从 KV Cache 到调度'
 description: '阶段 2 的 AI Infra 学习记录：从 Prefill、Decode 与 KV Cache 出发，理解计算、带宽、容量和调度如何共同决定 LLM Serving 的吞吐与延迟。'
 pubDate: '2026-08-13T20:00:00+08:00'
-updatedDate: '2026-08-16T20:00:00+08:00'
+updatedDate: '2026-08-17T20:00:00+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -66,7 +66,7 @@ mathjax: true
 
 阶段 2 不再把推理优化理解成一组可以同时打开的开关，而是追踪一条因果链：**工作负载怎样改变计算和状态，Scheduler 怎样安排这些工作，最终又怎样反映到吞吐与延迟。**
 
-本文只建立机制模型。真实 vLLM 环境中的假设、负载、原始数据与结论将单独记录在[《vLLM 推理性能实验：并发、batch size、输入长度对吞吐和延迟的影响》](/blog/vllm-inference-performance-experiment/)中。
+本文只建立机制模型。最小 Attention 实现、原始计时数据和实验失败记录见[《LLM 推理性能实验：KV Cache、预分配与 Batched Decode》](/blog/vllm-inference-performance-lab/)；真实 vLLM Serving 是阶段 2 后半段的主要任务，不能用当前 Toy Lab 的结果替代。
 
 </Note>
 
@@ -232,7 +232,7 @@ $$
 
 ### 3.3 用最小实现验证不变量
 
-为了不只停留在公式，我用 NumPy 实现了三条单头 Causal Attention 路径：
+为了不只停留在公式，我先用 NumPy 实现三条单 Sequence 的单头 Causal Attention 路径，再增加一个 `B=2` 的 Batched Decode 路径：
 
 <SlideCard title="Toy Attention 的三条路径">
 
@@ -253,13 +253,32 @@ $$
 
 </SlideCard>
 
-三条路径先通过逐 token 数值等价检查，再比较动态拼接与预分配的成本。实验还暴露了一个重要问题：未固定 BLAS 线程时，No Cache 路径的矩阵计算跨过了不同执行策略阈值，导致表面加速比被放大。固定线程后趋势仍然存在，但具体倍数发生了变化。
+<SlideCard title="两个 Sequence 怎样组成 Batch？">
+
+## Sequential Reference
+
+- 在 Python 中分别执行两个等长 Sequence
+- 两次调用共享同一套模型权重，但执行路径相互独立
+
+## Batched Decode
+
+- 输入 Shape 从 `[T, D_model]` 变为 `[B, T, D_model]`
+- 每轮同时取出 `[B, 1, D_model]`
+- 两个 Sequence 分别维护自己的 K/V，Attention 不跨越 Batch 维
+
+</SlideCard>
+
+三条 Cache 路径先通过逐 token 数值等价检查，Batched 路径再与两个独立 No-Cache 结果对照。测试刻意令 `d_k != d_v`，避免 K/V Shape 错误被相同维度掩盖；计时则固定 `d_model = d_k = d_v = 64`，比较动态拼接、预分配和两个 Sequence 的顺序/Batched 执行。
+
+固定 OpenBLAS 与 OMP 为单线程后，`B=2` 的 Batched 路径比顺序执行快约 1.35–1.69x，但加速随 Sequence Length 增长而收窄。它减少的是 Python/NumPy 调用和分配次数，没有消除两个 Sequence 的 Attention 工作；当 $O(T^2)$ 的计算与动态 Cache 复制逐渐占主导，相对收益自然下降。
+
+实验还暴露了一个重要问题：未固定 BLAS 线程时，No Cache 路径的矩阵计算跨过了不同执行策略阈值，导致表面加速比被放大。固定线程后趋势仍然存在，但具体倍数发生了变化。现在 Benchmark 会保留全部原始计时样本，不再只留下中位数。
 
 完整代码、环境与边界保存在 [`attention-kv-caceh` Lab](/labs/attention-kv-caceh/README.md)。这个 Microbenchmark 只证明 Cache 复用与分配策略的最小机制，不代表真实 GPU Serving 的固定收益。
 
 <Note title="机制验证不是 Serving Benchmark" class="title-underline">
 
-当前实现只有 CPU、NumPy、单 Head、Batch Size 1 和单层 Attention。它还不能回答 Multi-Head/GQA、GPU Kernel、Continuous Batching、PagedAttention 或真实 Scheduler 的性能问题。
+当前实现只有 CPU、NumPy、单 Head、等长 Sequence、`B∈{1,2}` 和单层 Attention。这里的 Batch 只是固定形状的 Batched NumPy 执行，不包含请求到达、不同长度、动态加入/退出或 Token Budget，因此还不能回答 Multi-Head/GQA、GPU Kernel、Continuous Batching、PagedAttention 或真实 Scheduler 的性能问题。
 
 </Note>
 
@@ -466,11 +485,103 @@ request rate / client concurrency
 
 <Note title="学习文章与实验文章的边界" class="title-underline">
 
-本文负责解释为什么这些预测值得检验；[阶段 2 实验文章](/blog/vllm-inference-performance-experiment/)负责记录实验是否真的支持它们。实验文章必须保留原始 CSV/JSON、启动配置、版本、日志、异常请求和复现命令，不能用理论预期替代尚未出现的数据。
+本文负责解释为什么这些预测值得检验；[阶段 2 实验文章](/blog/vllm-inference-performance-lab/)负责记录当前 Toy Attention 实验支持了什么、证据边界在哪里，以及迁移到真实 vLLM 前还缺什么。后续 Serving 实验仍必须保留原始 CSV/JSON、启动配置、版本、日志、异常请求和复现命令，不能用理论预期替代尚未出现的数据。
 
 </Note>
 
-## 8. 重新回答最初的问题
+## 8. 阶段 2 剩余学习路线
+
+### 8.1 当前已经跨过哪一道门？
+
+现在已经不只是“读过 KV Cache 和 Batch”：我实现了 No Cache、Dynamic Cache、Preallocated Cache 与固定形状的 Batched Decode，用数值 Oracle 约束正确性，保留了原始计时样本，还定位并修正了 BLAS 线程造成的异常结果。
+
+这意味着最小机制学习已经形成一次完整闭环：
+
+```text
+概念模型
+  -> 自己实现
+  -> 正确性验证
+  -> 受控测量
+  -> 异常诊断
+  -> 修正结论边界
+```
+
+当前真正的能力缺口，是把这套方法迁移到一个**会排队、会饱和、会消耗 KV 容量，并由 Scheduler 动态形成 Batch** 的系统。继续给 NumPy Toy 增加完整 Transformer、MLP 或采样器，新增代码很多，却不会直接回答这个缺口。
+
+### 8.2 为什么要按这个顺序推进？
+
+<SlideCard title="阶段 2 的知识依赖链">
+
+```text
+固定 B=2 的 Batched Decode
+  -> Batch Size 曲线：吞吐何时不再线性增长？
+  -> MHA/GQA：一个 Sequence 究竟携带多少 KV 状态？
+  -> Serving 可观测性：客户端指标能否和服务端状态对齐？
+  -> 受控变量实验：长度、并发、调度预算、混合负载、前缀复用
+  -> 固定版本源码追踪：观测到的拐点由哪条状态转换产生？
+  -> 综合：Toy 预测在哪些地方成立，在哪些地方失效？
+```
+
+</SlideCard>
+
+Batch Size 曲线先补齐“计算怎样随更多 Sequence 扩展”；MHA/GQA 再补齐“状态怎样随 Head 结构扩展”。有了这两个局部模型，进入 vLLM 后才知道应该观察什么。反过来，如果一开始只压并发，吞吐变化可能同时来自客户端排队、实际执行 Batch、KV 容量和 Backend 实现，无法归因。
+
+### 8.3 四道学习门
+
+| Gate    | 核心问题                                 | 必须留下的证据                                                 | 通过条件                                           |
+| ------- | ---------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------- |
+| M：机制 | Batch 和 KV Head 怎样改变计算与状态？    | `B=1/2/4/8` 原始样本；MHA/GQA 正确性测试与字节公式             | 能解释吞吐曲线，并让实际 `nbytes` 与公式一致       |
+| O：观测 | 当前 vLLM Metal 到底支持哪些参数与指标？ | 版本、模型 Revision、完整启动命令、Capability Matrix、稳态基线 | 同一工作负载可复跑，客户端时间线能与服务端时间对齐 |
+| E：实验 | 长度、并发和调度怎样共同形成瓶颈？       | 每请求 JSON、服务端 Metrics、配置快照、汇总表与异常记录        | 找到饱和拐点，并复现至少一次延迟代价或资源约束     |
+| R：因果 | 指标变化对应源码中的哪条状态转换？       | 固定 Commit 的调用链、请求状态机、关键不变量                   | 能用源码解释一次实测现象，并指出至少一个替代解释   |
+
+Gate 是依赖，不只是日历进度。前一道门没有通过时，应修复实验设计或降低结论强度，而不是继续叠加更多变量。
+
+### 8.4 四周推进节奏
+
+<SlideCard title="建议节奏：每周都有可验证产物">
+
+## Week 1：补完机制
+
+- 扫描 `B∈{1,2,4,8}`，区分总耗时、单 Sequence 延迟与 Positions/s
+- 实现 MHA/GQA，验证 Query Head 到 KV Head 的映射与 KV 字节数
+- 到此停止扩建 Toy Attention
+
+## Week 2：冻结真实系统
+
+- 重新记录 vLLM Core、Metal Plugin、模型 Revision、硬件与启动参数
+- 先检查 `bench serve`、`/metrics` 和 Scheduler 参数是否真实可用
+- 建立可重复的单并发稳态基线与原始数据目录
+
+## Week 3：制造饱和
+
+- 单独扫描 Input Length，再单独扫描 Client Concurrency
+- 在能够填满 Scheduler 的负载下扫描 `max_num_seqs` 与 Token Budget
+- 找到第一个“吞吐收益收窄、延迟仍继续恶化”的工作点
+
+## Week 4：解释干扰与复用
+
+- 用短 Decode + 长 Prefill 构造 Mixed Workload
+- 在能力允许时比较 Chunked Prefill 和 Prefix Cache
+- 固定实际运行版本追踪 Scheduler、KV Cache 与 Model Runner
+- 回写两篇文章，接受独立复跑或第二套聚合结果的反馈
+
+</SlideCard>
+
+### 8.5 阶段 2 的停止条件
+
+阶段 2 不是以“看完 vLLM 源码”或“跑出最高吞吐”为完成标准。它至少需要满足：
+
+1. Toy Lab 的 Batch 与 MHA/GQA 两项机制实验通过正确性门禁；
+2. 真实 Serving 环境和能力边界可以从产物中复现；
+3. Input Length、Client Concurrency、Scheduler Budget 至少各有一组受控实验；
+4. Mixed Workload 或 Prefix Reuse 至少复现一个系统级现象；
+5. 用固定版本源码解释一个实测现象，并记录 Toy 预测与真实系统之间至少一个不一致；
+6. 所有结论都能回到原始数据、配置和日志，而不是只剩图表或平均数。
+
+每一个未出现预期效果的实验也可以成为有效产出，但必须标记为 `Inconclusive` 或 `Refuted`，并说明缺失的是能力、观测还是机制证据。具体执行契约放在[阶段 2 实验文章](/blog/vllm-inference-performance-lab/)中。
+
+## 9. 重新回答最初的问题
 
 <SlideCard title="一个请求为什么会变慢？">
 
