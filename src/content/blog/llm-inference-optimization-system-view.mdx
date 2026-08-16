@@ -145,6 +145,77 @@ NVIDIA 原文使用 `batch_size × sequence_length` 表达总量，这适合等�
 
 这四种优化经常同时出现在“KV Cache 优化”或“推理加速”的讨论里，但它们并不等价。比如 PagedAttention 能让逻辑连续的 K/V 放在物理不连续的 Block 中，却不会让一个 token 的 K/V Tensor 变小；GQA 能直接减小每 token 的 K/V，却是模型架构属性，不能仅靠 Serving 配置把任意 MHA 模型无损切换过去。
 
+### 2.4 Toy Attention：从数值等价到缓存分配
+
+公式能够说明历史 K/V 可以复用，但还不足以证明实现正确，也不能回答缓存分配本身会引入多少额外成本。为此，我用 NumPy 实现了一个单头 Causal Attention，并比较三条自回归 Decode 路径：
+
+1. **No Cache**：每一步都对完整前缀重新计算 Q/K/V、Causal Mask 与 Attention，只保留最后一个位置的输出；
+2. **Concatenate Cache**：每一步只计算新 token 的 Q/K/V，但通过 `np.concatenate` 扩展历史 K/V；
+3. **Preallocated Cache**：预先分配完整 K/V Buffer，每一步原地写入新位置，只读取当前有效前缀。
+
+实验代码保存在 [`public/labs/attention-kv-caceh`](/labs/attention-kv-caceh/README.md)。本轮先回答两个可以被反证的问题：
+
+| 问题                                     | 事前预测                                    | 验收条件                                                        |
+| ---------------------------------------- | ------------------------------------------- | --------------------------------------------------------------- |
+| KV Cache 是否改变 Attention 的数值结果？ | Cache 与 No Cache 的逐 token 输出应数值等价 | 所有序列长度均通过 `np.allclose(..., atol=1e-8)`                |
+| 预分配是否优于反复拼接？                 | 避免重复分配和复制后，长序列下耗时应下降    | 固定输入、权重和计时方法，只替换 Cache 存储策略并比较中位数耗时 |
+
+#### 实验环境与控制变量
+
+| 项目             | 设置                                                |
+| ---------------- | --------------------------------------------------- |
+| CPU              | AMD Ryzen 7 9700X，8 Core / 16 Thread               |
+| Runtime          | CPython 3.14.7、NumPy 2.5.2、OpenBLAS 0.3.34        |
+| Tensor           | `float64`，单 Head，Batch Size = 1                  |
+| Dimension        | $d_{model}=d_q=d_k=d_v=64$                          |
+| Sequence Length  | 16 / 32 / 64 / 128 / 256                            |
+| Randomness       | `np.random.default_rng(42)`                         |
+| Timing           | Warm-up 3 次，正式运行 30 次，记录 Wall Time 中位数 |
+| BLAS Threads     | `OPENBLAS_NUM_THREADS=1`、`OMP_NUM_THREADS=1`       |
+| Correctness Gate | 每组计时前先验证三种实现输出数值等价                |
+
+固定 BLAS 线程后，复现命令为：
+
+```bash
+cd public/labs/attention-kv-caceh
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  uv run python src/attention_kv_caceh/test_toy_attention.py
+```
+
+#### 受控结果
+
+| $T$ | No Cache / ms | Concatenate Cache / ms | Preallocated Cache / ms | No Cache / Preallocated |
+| --: | ------------: | ---------------------: | ----------------------: | ----------------------: |
+|  16 |         0.231 |                  0.175 |                   0.148 |                   1.56x |
+|  32 |         0.546 |                  0.310 |                   0.283 |                   1.93x |
+|  64 |         1.733 |                  0.637 |                   0.576 |                   3.01x |
+| 128 |         7.330 |                  1.353 |                   1.172 |                   6.25x |
+| 256 |        50.525 |                  3.294 |                   2.648 |                  19.08x |
+
+三种实现首先在全部长度上通过了数值等价检查。随着 $T$ 增长，No Cache 的重复前缀计算增长明显快于增量 Decode；预分配版本也始终快于 `np.concatenate`，在 $T=256$ 时减少约 19.6% 的 Cache 路径耗时。
+
+当前配置下，K/V 都是形状为 $(T, 64)$ 的 `float64` Tensor，因此逻辑缓存为：
+
+$$
+S_{KV}=2 \times T \times 64 \times 8\ \text{bytes}=T\ \text{KiB}.
+$$
+
+序列从 16 增长到 256 时，逻辑 KV Cache 也从 16 KiB 线性增长到 256 KiB。这里统计的是最终有效 K/V 的逻辑大小；`np.concatenate` 运行过程中还会暂时同时持有新旧数组，因此峰值分配高于这个数字。
+
+#### 一次被控制变量推翻的结果
+
+第一轮未限制 BLAS 线程时，$T=256$ 的 No Cache 中位数达到 113.663 ms，对应 44.5x 的表面加速。NumPy 使用的 OpenBLAS 构建允许最多 64 个线程，而 No Cache 路径包含更大的 Matrix-Matrix Multiplication，更容易跨过线程调度阈值。固定为单线程后，同一项下降到 50.525 ms，而两种 Cache 路径变化较小。
+
+因此，44.5x 不能被解释为 KV Cache 的稳定收益；它混入了 BLAS 执行策略和线程调度成本。受控后的 19.08x 更适合作为当前机器上的实验结果，但同样不能外推为真实模型或 GPU Serving 的固定加速比。
+
+<Note title="实验结论与边界" class="title-underline">
+
+本实验支持三个结论：历史 K/V 可以在不改变数值结果的前提下复用；复用优势随自回归序列增长而扩大；预分配能够减少动态拼接带来的分配与复制成本。
+
+它还没有覆盖 Multi-Head / GQA、Batch、Layer 堆叠、MLP、GPU Kernel、显存带宽和真实 Scheduler。因此下一步不是继续放大 NumPy Microbenchmark 的倍数，而是把 Cache 扩展为 $[B,H_{KV},T,D_h]$，验证完整容量公式，再进入真实 Serving 的 Scheduler × KV Cache 实验。
+
+</Note>
+
 ## 3. 把原文中的技术放回正确层次
 
 ### 3.1 Model Architecture：改变必须计算或保存的内容
