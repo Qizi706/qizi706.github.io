@@ -1,0 +1,12 @@
+---
+interface Props {
+	href: string;
+	filename: string;
+}
+
+const { href, filename } = Astro.props;
+---
+
+<span class="entry">
+	<a href={href} download={filename}>[Download entire folder as {filename}]</a>
+</span>

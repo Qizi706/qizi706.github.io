@@ -395,11 +395,11 @@ Prompt 从 129 增加到 2272 token，约为 17.6 倍；Prefill 从 67.7 增至 
 实际安装脚本固定 vLLM Core 0.27.0 的 macOS arm64 Wheel，然后从 vLLM Metal 的 GitHub Latest Release 中寻找 Plugin Wheel：
 
 ```bash
-bash -o pipefail ./vllm-metal-install.sh 2>&1 |
-  tee vllm-metal-install.log
+bash -o pipefail scripts/install_vllm_metal.sh 2>&1 |
+  tee logs/vllm_metal_install.log
 ```
 
-脚本保存在[实验产物目录](/labs/llm-inference-request-lifecycle/)中。需要注意：Core Version 被固定，而 Metal Plugin 通过 latest release 解析，因此它记录了当时的安装过程，却不是完全 Hermetic 的构建。
+脚本保存在[实验产物目录](/labs/serving-baseline/)中。需要注意：Core Version 被固定，而 Metal Plugin 通过 latest release 解析，因此它记录了当时的安装过程，却不是完全 Hermetic 的构建。
 
 ### 问题二：vLLM Core 已安装，但 Metal 后端缺失
 
@@ -480,7 +480,7 @@ vllm serve mlx-community/Qwen3-4B-Instruct-2507-4bit \
   --host 127.0.0.1 \
   --port 8000 \
   --max-model-len 4096 \
-  2>&1 | tee vllm-server.log
+  2>&1 | tee logs/vllm_metal_server.log
 ```
 
 </CoreCard>
@@ -567,11 +567,11 @@ curl -sS http://127.0.0.1:8000/v1/chat/completions \
     "temperature": 0,
     "max_tokens": 128
   }' \
-  -o vllm-response.json
+  -o responses/vllm_chat_completion.json
 ```
 
 ```bash
-python -m json.tool vllm-response.json
+python -m json.tool responses/vllm_chat_completion.json
 ```
 
 </CoreCard>
@@ -649,16 +649,16 @@ ollama serve
 
 ```bash
 ollama pull qwen3:4b-instruct-2507-q4_K_M
-python3 benchmark_lengths.py
+python3 scripts/benchmark_ollama_input_length.py
 ```
 
-公开的 `benchmark_lengths.py` 是最后一次输入长度实验的现场快照：EXP-01 v2 处于启用状态，EXP-02 Block 保留为注释。若要重新运行输出长度实验，启用 `output_length` Block 并关闭输入 Block，避免不同实验共享上下文状态。
+公开的 `scripts/benchmark_ollama_input_length.py` 是最后一次输入长度实验的现场快照：EXP-01 v2 处于启用状态，EXP-02 Block 保留为注释。若要重新运行输出长度实验，启用 `output_length` Block 并关闭输入 Block，避免不同实验共享上下文状态。
 
 ### 复现 vLLM Metal 部署
 
 ```bash
-bash -o pipefail ./vllm-metal-install.sh 2>&1 |
-  tee vllm-metal-install.log
+bash -o pipefail scripts/install_vllm_metal.sh 2>&1 |
+  tee logs/vllm_metal_install.log
 ```
 
 安装完成后不要先相信 CLI Banner，先执行：
@@ -684,18 +684,22 @@ python -c 'import vllm_metal; print("metal plugin import ok")'
 
 ## 实验产物
 
-[Browse `/labs/llm-inference-request-lifecycle/`](/labs/llm-inference-request-lifecycle/) 可以在线查看或下载全部复现产物：
+[Browse `/labs/serving-baseline/`](/labs/serving-baseline/) 可以在线查看或下载全部复现产物：
 
 ```text
-phase1-lab/
+serving-baseline/
 ├── README.md
-├── benchmark_lengths.py
-├── input-length-results-v2.csv
-├── length-results-v1.csv
-├── vllm-metal-install.sh
-├── vllm-metal-install.log
-├── vllm-server.log
-└── vllm-response.json
+├── scripts/
+│   ├── benchmark_ollama_input_length.py
+│   └── install_vllm_metal.sh
+├── results/
+│   ├── ollama_length_scan_v1.csv
+│   └── ollama_input_length_scan_v2.csv
+├── logs/
+│   ├── vllm_metal_install.log
+│   └── vllm_metal_server.log
+└── responses/
+    └── vllm_chat_completion.json
 ```
 
 CSV 是逐次运行结果，日志保留安装与启动现场，JSON 是最终 Completion 响应。文章中的数字来自这些文件，当统计方式或系统解释发生变化时，可以重新从原始证据计算。

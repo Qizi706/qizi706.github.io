@@ -1,0 +1,72 @@
+---
+import LabArchiveDownload from '../../../components/LabArchiveDownload.astro';
+import {
+	encodeServingBaselineArtifactPath,
+	servingBaselineArtifacts as files,
+	servingBaselineBasePath as basePath,
+} from '../../../data/serving-baseline-artifacts';
+
+const filenameWidth = Math.max(...files.map(({ path }) => path.length)) + 8;
+const parentPath = '/blog/llm-inference-request-lifecycle-practice/';
+const archiveFilename = 'serving-baseline.tar.gz';
+const archivePath = `/labs/${archiveFilename}`;
+---
+
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/png" sizes="64x64" href="/favicon.ico?v=4" />
+		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+		<title>Index of /labs/serving-baseline/</title>
+		<meta name="description" content="Local LLM serving baseline artifacts" />
+		<style>
+			body {
+				margin: 8px;
+				color: #111;
+				background: #fff;
+				font-family: serif;
+			}
+
+			h1 {
+				font-size: 2rem;
+			}
+
+			.directory-listing {
+				max-width: 100%;
+				overflow-x: auto;
+				font-family: monospace;
+				line-height: 1.45;
+			}
+
+			.entry {
+				display: block;
+			}
+
+			footer {
+				font-size: 0.875rem;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>Index of /labs/serving-baseline/</h1>
+		<hr />
+		<pre
+			class="directory-listing"><span class="entry"><a href={parentPath}>../</a></span><LabArchiveDownload href={archivePath} filename={archiveFilename} />{files.map(
+				(file) => (
+					<span class="entry"><a href={`${basePath}view/${encodeServingBaselineArtifactPath(file.path)}/`}>{file.path}</a>{' '.repeat(
+						filenameWidth - file.path.length,
+					)}{file.modified}{file.size.toString().padStart(20)}</span>
+				),
+			)}</pre>
+		<hr />
+		<footer>
+			<p>
+				Serving baseline artifacts for <a href={parentPath}>本地 LLM 推理服务实验</a>.
+			</p>
+			<p>File names open a UTF-8 viewer with raw and download links.</p>
+			<p>The public installation log contains a sanitized home-directory path.</p>
+		</footer>
+	</body>
+</html>

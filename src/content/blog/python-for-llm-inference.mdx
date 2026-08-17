@@ -53,7 +53,7 @@ mathjax: false
 
 <Note title="本文的范围" class="title-underline">
 
-目标不是掌握 Python 的所有语言特性，而是能够独立维护当前 [`attention-kv-caceh` Lab](/labs/attention-kv-caceh/)，完成 `B=1/2/4/8` 扫描，读懂 vLLM 中常见的 Python 结构，并为后续流式 Serving Harness 做准备。
+目标不是掌握 Python 的所有语言特性，而是能够独立维护当前 [`kv-cache-batch` Lab](/labs/kv-cache-batch/)，完成 `B=1/2/4/8` 扫描，读懂 vLLM 中常见的 Python 结构，并为后续流式 Serving Harness 做准备。
 
 Web Framework、GUI、数据分析 Notebook、复杂装饰器、Descriptor、Metaclass、Multiprocessing 与 Python C Extension 暂不进入学习范围。
 
@@ -348,9 +348,9 @@ Python 默认不会在运行时验证这些注解。当前 `pyproject.toml` 中�
 当前项目结构可以读成：
 
 ```text
-attention-kv-caceh/
+kv-cache-batch/
 ├── pyproject.toml
-├── src/attention_kv_caceh/
+├── src/kv_cache_batch/
 │   ├── __init__.py
 │   ├── attention.py
 │   └── benchmark.py
@@ -358,14 +358,14 @@ attention-kv-caceh/
     └── test_attention.py
 ```
 
-- `attention_kv_caceh` 是 Package；
+- `kv_cache_batch` 是 Package；
 - `attention.py` 和 `benchmark.py` 是 Module；
-- `from attention_kv_caceh.attention import ...` 使用绝对导入；
+- `from kv_cache_batch.attention import ...` 使用绝对导入；
 - `pyproject.toml` 的 `[project.scripts]` 把命令行名称绑定到 `benchmark:main`。
 
 ```toml
 [project.scripts]
-attention-kv-caceh = "attention_kv_caceh.benchmark:main"
+kv-cache-batch = "kv_cache_batch.benchmark:main"
 ```
 
 下面的守卫表示“直接运行这个 Module 时调用 `main`，被 Import 时不调用”：
@@ -380,14 +380,16 @@ if __name__ == "__main__":
 <CoreCard title="当前实验项目的基本命令" class="title-underline">
 
 ```bash
-cd public/labs/attention-kv-caceh
+cd public/labs/kv-cache-batch
 uv sync
 
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   uv run python -m unittest discover -s tests -v
 
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  uv run attention-kv-caceh --csv results/benchmark.csv
+  uv run kv-cache-batch \
+  --experiment batch-length \
+  --csv results/batch-length-scan/raw.csv
 ```
 
 </CoreCard>
@@ -656,7 +658,9 @@ def summarize_samples(samples_ms: list[float]) -> dict[str, float]:
 
 ```bash
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  uv run attention-kv-caceh --csv results/batch-size-scan.csv
+  uv run kv-cache-batch \
+  --experiment batch-size \
+  --csv results/batch-size-scan/raw.csv
 ```
 
 不要在 `import numpy` 后才尝试修改 BLAS 线程环境变量。底层 Runtime 可能已经完成初始化，实验未必真的采用新配置。
@@ -831,7 +835,86 @@ finish_ns       stream finishes or fails
 
 **Acceptance：** 能证明 Semaphore 限制的是客户端同时执行请求数，而不是 vLLM 每轮 Sequence Batch。
 
-## 10. 什么时候算“具备当前需要的 Python 基础”？
+## 10. 按今天的进度，下一次学习怎样安排？
+
+今天已经完成的不是“看过 Batch 定义”，而是下面这条证据链：
+
+```text
+两个独立 Sequence
+  -> 组织成 [B, T, D]
+  -> 与逐 Sequence Oracle 对照
+  -> 测量 Sequential 与 Batched Wall Time
+  -> 观察到 1.35x～1.69x 的受限收益
+  -> 能解释 Batch 摊薄调用开销，但不消除 Attention 工作
+```
+
+所以下一次学习只推进一个问题：**固定 `T=128` 时，Batch Size 从 1 增加到 8，吞吐和完成时间分别怎样变化？**
+
+### 10.1 20 分钟：Python / NumPy 热身
+
+不要继续阅读整章教程。直接写六个小实验，先预测再运行：
+
+1. `b = a` 修改是否传播；
+2. `a.copy()` 修改是否传播；
+3. `x[:, 0:1, :]` 是否与 `x` 共享内存；
+4. `x[[0, 1]]` 是否与 `x` 共享内存；
+5. `swapaxes` 后 Shape 和 Stride 如何变化；
+6. `concatenate` 是否重新分配数据。
+
+**产出：** 在个人实验记录里保留一张 `prediction / actual / explanation` 表。六项中如果有预测错误，优先解释错误，不需要追求一次全对。
+
+### 10.2 60 分钟：把固定 `B=2` 改造成 Batch Size 扫描
+
+只修改 `benchmark.py` 的实验控制层，不改 Attention 算法：
+
+```python
+BATCH_SIZES = (1, 2, 4, 8)
+SEQUENCE_LENGTH = 128
+```
+
+对每个 `B`：
+
+1. 构造一次 `[B, T, D_model]` 输入；
+2. 用逐 Sequence 路径生成 Oracle；
+3. 检查输出和 K/V Cache Shape；
+4. Warm-up 3 次，正式计时 30 次；
+5. 保存全部原始样本，不只打印中位数。
+
+先写下预测：Positions/s 会先提高，但 Batch Wall Time 也可能增加；如果 `B=8` 仍未出现收益收窄，就把拐点结论写成 `Not reached`。
+
+### 10.3 35 分钟：把一个耗时拆成三个指标
+
+每个 `B` 至少计算：
+
+```text
+batch_wall_ms       = batched execution wall time
+per_sequence_ms     = batch_wall_ms / B
+positions_per_s     = B * T / (batch_wall_ms / 1000)
+```
+
+同时报告 P50 和 P95。回答三个不同问题：
+
+- Batch Wall Time 是否随 `B` 增长？
+- 每 Sequence 的摊销成本是否下降？
+- 总 Positions/s 是否仍近似线性增长？
+
+不要把 `batch_wall_ms / B` 写成真实在线请求延迟；当前等长 Sequence 同时进入和同时结束，还没有 Queue、Arrival 或 Continuous Batching。
+
+### 10.4 35 分钟：更新阶段 2 证据
+
+把命令、环境、原始 CSV、汇总表和一张曲线回写到[阶段 2 实验文章](/blog/vllm-inference-performance-lab/)。结论必须分别写：
+
+- **Observed：** 数据实际显示了什么；
+- **Explanation：** Python/NumPy 固定开销、数组分配和矩阵工作怎样共同影响曲线；
+- **Boundary：** CPU Toy Lab 不能证明哪些 vLLM/GPU 行为。
+
+<CoreCard title="本次停止条件" class="title-underline">
+
+所有 `B=1/2/4/8` 通过 Oracle 和 Shape 检查；CSV 中每条路径、每个 B 都有 30 条样本；能够用不同句子解释 Batch Wall Time、每 Sequence 摊销成本和总吞吐。满足后就停止继续打磨 NumPy Benchmark，进入 MHA/GQA 的 KV Shape 与容量实验。
+
+</CoreCard>
+
+## 11. 什么时候算“具备当前需要的 Python 基础”？
 
 不需要背下所有 API。能够独立完成下面的检查，就可以继续阶段 2：
 
@@ -848,7 +931,7 @@ finish_ns       stream finishes or fails
 
 <Note title="真正的复健方式" class="title-underline">
 
-不要先花一周看完 Python 教程，再回来做实验。正确顺序是：读完一小节，立即在 `attention-kv-caceh` 中找到对应代码，先预测行为，再修改、测试和解释。完成 P1 后，Python 基础已经从“重新看过”变成了当前 AI Infra 主线中的可审查能力。
+不要先花一周看完 Python 教程，再回来做实验。正确顺序是：读完一小节，立即在 `kv-cache-batch` 中找到对应代码，先预测行为，再修改、测试和解释。完成 P1 后，Python 基础已经从“重新看过”变成了当前 AI Infra 主线中的可审查能力。
 
 </Note>
 

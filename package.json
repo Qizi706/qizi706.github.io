@@ -7,6 +7,8 @@
 	},
 	"scripts": {
 		"dev": "astro dev",
+		"labs:archive": "node scripts/build-lab-archives.mjs",
+		"prebuild": "npm run labs:archive",
 		"build": "astro build",
 		"preview": "astro preview",
 		"astro": "astro",

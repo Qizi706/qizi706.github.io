@@ -274,7 +274,7 @@ $$
 
 实验还暴露了一个重要问题：未固定 BLAS 线程时，No Cache 路径的矩阵计算跨过了不同执行策略阈值，导致表面加速比被放大。固定线程后趋势仍然存在，但具体倍数发生了变化。现在 Benchmark 会保留全部原始计时样本，不再只留下中位数。
 
-完整代码、环境与边界保存在 [`attention-kv-caceh` Lab](/labs/attention-kv-caceh/README.md)。这个 Microbenchmark 只证明 Cache 复用与分配策略的最小机制，不代表真实 GPU Serving 的固定收益。
+完整代码、环境与边界保存在 [`kv-cache-batch` Lab](/labs/kv-cache-batch/)。这个 Microbenchmark 只证明 Cache 复用与分配策略的最小机制，不代表真实 GPU Serving 的固定收益。
 
 <Note title="机制验证不是 Serving Benchmark" class="title-underline">
 
