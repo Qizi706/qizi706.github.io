@@ -105,47 +105,78 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 
 	<section class="tomorrow-section" aria-labelledby="tomorrow-heading">
 		<h2 id="tomorrow-heading">明日学习</h2>
+		<LearningStage period="2026.08.18" title="M1 · Batch Size 曲线与吞吐拐点" status="done">
+			<p class="tomorrow-objective">
+				<strong>完成依据：</strong><code>{'B∈{1,2,4,8}'}</code> 全部通过独立 Oracle 与 Shape 检查；240
+				条原始样本可重建 P50/P95、Positions/s、两张曲线和 <code>Knee: B=8</code>。
+			</p>
+		</LearningStage>
+
 		<LearningStage
-			period="2026.08.18 · 150 min"
-			title="M1 · Batch Size 曲线与吞吐拐点"
+			period="2026.08.19 · 120 min"
+			title="P0 · NumPy View/Copy 与轴语义闭环"
 			status="active"
 			open
 		>
 			<p class="tomorrow-objective">
-				<strong>目标：</strong>固定 <code>T=128</code>，扫描 <code>{'B∈{1,2,4,8}'}</code
-				>，判断总吞吐是否继续增长、单 Sequence 成本怎样变化，以及当前 CPU/NumPy
-				路径是否已经出现收益收窄。
+				<strong>目标：</strong>在进入 MHA/GQA 前，不看运行结果也能预测 Binding、基础切片、Advanced
+				Indexing、<code>swapaxes</code> 和 <code>concatenate</code> 的 Shape、内存共享与分配行为，并把它们映射回当前
+				Attention/KV Cache 实现。
 			</p>
 
 			<dl class="tomorrow-contract" aria-label="明日学习契约">
 				<div>
 					<dt>question</dt>
-					<dd>Batch 增大时，吞吐与单请求完成时间为什么可能同时上升？</dd>
+					<dd>
+						哪些 NumPy 操作只创建 View，哪些会复制或分配新 Buffer，轴变换又怎样影响 Attention
+						Shape？
+					</dd>
 				</div>
 				<div>
 					<dt>prediction</dt>
-					<dd>Positions/s 先提高但不会线性增长；Wall Time 随 B 增大。</dd>
+					<dd>
+						基础切片和 <code>swapaxes</code> 通常共享内存；Advanced Indexing 与 <code
+							>concatenate</code
+						> 产生新 Buffer。
+					</dd>
 				</div>
 				<div>
 					<dt>artifact</dt>
-					<dd>正确性测试、原始 CSV、P50/P95 汇总表和一段结果解释。</dd>
+					<dd>
+						<code>docs/NUMPY_SEMANTICS_NOTES.md</code>：事前预测、实际输出、差异解释和 Lab 映射。
+					</dd>
 				</div>
 				<div>
 					<dt>gate</dt>
-					<dd>所有 B 通过 Oracle；能区分总吞吐、Batch Wall Time 与每 Sequence 成本。</dd>
+					<dd>
+						不看代码也能解释 View/Copy/Stride/Allocation，并指出哪些操作会污染输入或增加 Benchmark
+						成本。
+					</dd>
 				</div>
 			</dl>
 
 			<ol class="tomorrow-steps">
-				<li><b>20 min</b>：写下预测，确认当前测试通过，冻结维度、dtype、Seed 和 BLAS 线程。</li>
-				<li><b>50 min</b>：让 Benchmark 支持 B 扫描，为每个 Sequence 对照独立 Oracle。</li>
-				<li><b>40 min</b>：每个 B 做 3 次 Warm-up、30 次计时，并随机化 B 的运行顺序。</li>
-				<li><b>40 min</b>：汇总 Wall Time、Wall Time/B、Positions/s、P50/P95，回写实验文章。</li>
+				<li>
+					<b>20 min</b>：逐段阅读 <code>examples/numpy_array_semantics.py</code>，先写
+					Shape、共享关系和修改传播预测。
+				</li>
+				<li><b>25 min</b>：运行示例，保存完整输出，逐项标记 Supported 或 Refuted。</li>
+				<li>
+					<b>35 min</b>：分别修改 Slice、Advanced Indexing 和 Swapped View，使用 <code
+						>np.shares_memory</code
+					> 与 Stride 验证原因。
+				</li>
+				<li>
+					<b>25 min</b>：回到 <code>attention.py</code>，解释 <code>x[:, t:t+1, :]</code>、<code
+						>swapaxes</code
+					> 与动态 Cache 拼接的成本。
+				</li>
+				<li><b>15 min</b>：关闭代码完成口述验收，记录至少一个预测错误及修正后的规则。</li>
 			</ol>
 
 			<p class="tomorrow-decision">
-				<strong>下一步判断：</strong>若曲线与正确性门禁通过，进入 M2 MHA/GQA；若没有出现拐点，记录
-				<code>Not reached</code>，不要继续盲目增大 B。若 Oracle 失败，停止计时并先修复状态隔离。
+				<strong>下一步判断：</strong>若能脱离代码解释五类操作及其在 Lab 中的作用，P0 标记完成并进入
+				M2-A Shape 契约；否则只补做答错的操作，不扩展新的 Python 教程。
 			</p>
 		</LearningStage>
 	</section>

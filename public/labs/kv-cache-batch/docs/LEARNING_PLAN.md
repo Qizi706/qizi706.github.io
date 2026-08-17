@@ -15,12 +15,13 @@
 - [x] 保存固定 `B=2` 的 300 条 Batch Length Scan 原始计时样本。
 - [x] 能解释 Batch 摊薄 Python/NumPy 调用开销，但不消除 Attention 工作。
 - [x] M0 结果已经回写阶段 2 实验文章。
+- [x] `B=1/2/4/8` 全部通过独立 Oracle、Shape 与状态隔离检查。
+- [x] M1 保存 240 条原始样本，并从 Raw CSV 生成汇总、两张曲线和 Knee 分析。
+- [x] M1 结果与证据边界已经回写实验文章。
 
 ### 当前缺口
 
-- [ ] `benchmark.py` 尚未扫描 `B=1/2/4/8`。
-- [ ] 测试尚未覆盖多个 Batch Size。
-- [ ] `examples/numpy_array_semantics.py` 只完成名称绑定、浅复制与基础切片。
+- [ ] `examples/numpy_array_semantics.py` 已覆盖六类操作，但尚未保存事前预测、实际输出、差异解释和口述验收。
 - [ ] Cache Strategy 当前只保留汇总结果；若需要逐样本复现，必须重新生成独立的 `results/cache-strategy/raw.csv`，不能与其他实验共用文件。
 - [ ] 尚未实现 MHA/GQA 与 KV 容量对照。
 - [ ] 尚未重新冻结真实 vLLM 环境。
@@ -29,12 +30,12 @@
 ### 当前唯一主任务
 
 ```text
-完成 Python/NumPy 语义热身
-  -> 固定 T=128 扫描 B=1/2/4/8
-  -> 解释吞吐、Batch Wall Time 与每 Sequence 摊销成本
+完成 P0 NumPy 语义记录与口述验收
+  -> 进入 M2 Shape 契约
+  -> 实现 MHA/GQA Head 映射与 KV 容量对照
 ```
 
-在 M1 通过验收前，不进入 MHA/GQA，不开始真实 Serving 实验。
+P0 通过验收前不进入 M2；M2 通过验收前不开始真实 Serving 实验。
 
 ## 1. 阶段 2 的掌握标准
 
@@ -96,31 +97,33 @@ question
 
 ## 3. 总路线
 
-| ID  | 任务                      | 当前状态    | 直接产物                           |
-| --- | ------------------------- | ----------- | ---------------------------------- |
-| M0  | Cache、预分配、固定 `B=2` | Completed   | 测试、300 条长度扫描样本、实验文章 |
-| P0  | Python/NumPy 语义         | In progress | 六个可预测的小实验                 |
-| M1  | Batch Size 曲线           | Completed   | `B=1/2/4/8` 原始数据与曲线         |
-| M2  | MHA/GQA 与 KV 容量        | Next        | 正确性测试与容量表                 |
-| S0  | vLLM 环境与可观测性       | Pending     | 环境快照与 Capability Matrix       |
-| S1  | 单并发稳态基线            | Pending     | 三轮详细 Serving 结果              |
-| S2  | Input Length              | Pending     | TTFT/TPOT/E2E/KV 曲线              |
-| S3  | Client Concurrency        | Pending     | 吞吐饱和点与尾延迟                 |
-| S4  | Scheduler Budget          | Pending     | 配置上限与实际调度对照             |
-| S5  | Mixed Prefill/Decode      | Pending     | Long Prefill 与 ITL 时间线         |
-| S6  | Prefix Reuse              | Pending     | Prefix Hit 与 TTFT 对照            |
-| R0  | 固定版本源码追踪          | Pending     | 状态机、调用链与验证性复跑         |
-| F0  | 综合、复现与反馈          | Pending     | 复现包与两篇文章终稿               |
+| ID  | 任务                      | 当前状态      | 直接产物                           |
+| --- | ------------------------- | ------------- | ---------------------------------- |
+| M0  | Cache、预分配、固定 `B=2` | Completed     | 测试、300 条长度扫描样本、实验文章 |
+| P0  | Python/NumPy 语义         | In progress   | 六个可预测的小实验                 |
+| M1  | Batch Size 曲线           | Completed     | `B=1/2/4/8` 原始数据与曲线         |
+| M2  | MHA/GQA 与 KV 容量        | Next after P0 | 正确性测试与容量表                 |
+| S0  | vLLM 环境与可观测性       | Pending       | 环境快照与 Capability Matrix       |
+| S1  | 单并发稳态基线            | Pending       | 三轮详细 Serving 结果              |
+| S2  | Input Length              | Pending       | TTFT/TPOT/E2E/KV 曲线              |
+| S3  | Client Concurrency        | Pending       | 吞吐饱和点与尾延迟                 |
+| S4  | Scheduler Budget          | Pending       | 配置上限与实际调度对照             |
+| S5  | Mixed Prefill/Decode      | Pending       | Long Prefill 与 ITL 时间线         |
+| S6  | Prefix Reuse              | Pending       | Prefix Hit 与 TTFT 对照            |
+| R0  | 固定版本源码追踪          | Pending       | 状态机、调用链与验证性复跑         |
+| F0  | 综合、复现与反馈          | Pending       | 复现包与两篇文章终稿               |
 
 ---
 
 # Gate P0：Python/NumPy 语义热身
 
-预计时间：30～45 分钟。
+预计时间：120 分钟。
 
 目标不是学完 Python，而是能在运行前预测当前 Lab 中的对象共享、View/Copy、Shape、Stride 和分配行为。
 
 文件：`examples/numpy_array_semantics.py`
+
+明日记录产物：`docs/NUMPY_SEMANTICS_NOTES.md`。只在写下事前预测后创建内容，不提前生成空文件充当进度。
 
 ## P0.1 已完成部分
 
@@ -196,11 +199,13 @@ uv run python examples/numpy_array_semantics.py
 - [ ] 能脱离代码解释名称绑定、浅复制、View、Copy、Stride 与分配。
 - [ ] 能指出哪些操作会污染原数组，哪些操作会给 Benchmark 增加复制成本。
 
-通过后立即进入 M1，不继续阅读完整 Python 教程。
+通过后立即进入 M2，不继续阅读完整 Python 教程。
 
 ---
 
 # Gate M1：Batch Size 曲线
+
+状态：**Completed（2026-08-18）**。240 条原始样本、正确性测试、汇总公式测试、两张曲线与 Knee 分析均已通过验收。
 
 核心问题：固定 `T=128` 时，Batch Size 从 1 增加到 8，会怎样改变 Batch Wall Time、每 Sequence 摊销成本与总吞吐？
 
@@ -219,8 +224,8 @@ H3：Batch Wall Time / B 会下降，因为固定开销被摊薄。
 H4：B=8 以内可能没有明确拐点；若没有，只能写 Not reached。
 ```
 
-- [ ] 每条预测都写明可能推翻它的结果。
-- [ ] 不先运行 Benchmark 偷看趋势。
+- [x] 每条预测都写明可能推翻它的结果。
+- [x] 不先运行 Benchmark 偷看趋势。
 
 ### A2. 确认 M0 基线
 
@@ -229,8 +234,8 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   uv run python -m unittest discover -s tests -v
 ```
 
-- [ ] 现有三个基线测试全部通过。
-- [ ] 如果失败，先修复目录重命名或 Import，不进入 M1。
+- [x] 现有基线测试全部通过；当前测试总数为 6。
+- [x] 目录重命名和 Import 已通过测试与 Astro 构建验证。
 
 ### A3. 增加多 Batch Size 测试
 
@@ -243,13 +248,13 @@ def test_batched_path_matches_oracle_for_batch_size_scan(self) -> None:
 
 实现顺序：
 
-1. [ ] 构造最大输入 `[8, T, D_model]`。
-2. [ ] 依次取 `x[:1]`、`x[:2]`、`x[:4]`、`x[:8]`。
-3. [ ] 每个 B 使用 `decode_without_cache` 逐 Sequence 生成 Oracle。
-4. [ ] 调用 `batched_cached_attention`。
-5. [ ] 使用 `subTest(batch_size=B)` 标记当前 Case。
-6. [ ] 使用 `assert_allclose` 检查数值。
-7. [ ] 检查以下 Shape：
+1. [x] 构造最大输入 `[8, T, D_model]`。
+2. [x] 依次取 `x[:1]`、`x[:2]`、`x[:4]`、`x[:8]`。
+3. [x] 每个 B 使用 `decode_without_cache` 逐 Sequence 生成 Oracle。
+4. [x] 调用 `batched_cached_attention`。
+5. [x] 使用 `subTest(batch_size=B)` 标记当前 Case。
+6. [x] 使用 `assert_allclose` 检查数值。
+7. [x] 检查以下 Shape：
 
 ```text
 output:  [B, T, D_v]
@@ -259,10 +264,10 @@ V cache: [B, T, D_v]
 
 ### M1-A Acceptance
 
-- [ ] `B=1/2/4/8` 全部与独立 Oracle 等价。
-- [ ] 每个 B 的 Output/K/V Shape 正确。
-- [ ] 能解释为什么只检查 Shape 无法证明 Batch 间没有状态泄漏。
-- [ ] 任何 Oracle 失败时停止计时并先修复。
+- [x] `B=1/2/4/8` 全部与独立 Oracle 等价。
+- [x] 每个 B 的 Output/K/V Shape 正确。
+- [x] 能解释为什么只检查 Shape 无法证明 Batch 间没有状态泄漏。
+- [x] 任何 Oracle 失败时停止计时并先修复。
 
 ## M1-B：扩展 Benchmark
 

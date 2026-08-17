@@ -8,8 +8,8 @@ export const kvCacheBatchArtifacts = [
 	},
 	{
 		path: 'docs/LEARNING_PLAN.md',
-		modified: '18-Aug-2026 02:34',
-		size: 29461,
+		modified: '18-Aug-2026 02:57',
+		size: 29980,
 	},
 	{
 		path: 'examples/numpy_array_semantics.py',
