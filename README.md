@@ -337,7 +337,31 @@ npm run astro -- dev stop
 
 构建后的静态网站位于 `dist/`。
 
-## 发布到 GitHub Pages
+## 发布到 EdgeOne Makers
+
+生产站点通过 `.github/workflows/deploy-edgeone.yml` 发布到 EdgeOne Makers 的
+`qizi706-blog` 项目。工作流监听 `astro` 分支，构建命令为 `npm run build`，上传目录为
+`dist/`。
+
+首次启用前需要完成两项控制台配置：
+
+1. 在 GitHub 仓库的 `Settings → Secrets and variables → Actions` 中添加
+   `EDGEONE_CHINA_API_TOKEN`；Token 从 EdgeOne Makers 中国站控制台生成，不要写入仓库文件。
+2. 在 EdgeOne Makers 项目中绑定 `zqwiki.cn`，确认 EdgeOne 部署可访问后，再按控制台给出的
+   CNAME 值切换 DNS。
+
+完成配置后，提交并推送 `astro` 分支即可自动发布：
+
+```sh
+git switch astro
+git add .
+git commit -m "[ASTRO]add: article title"
+git push origin astro
+```
+
+也可以在 GitHub Actions 的 `Deploy to EdgeOne Makers` 页面手动触发部署。
+
+## GitHub Pages 回退部署
 
 网站通过仓库根目录的 `.github/workflows/deploy.yml` 发布。工作流监听
 `astro` 分支，因此完成检查后提交并推送即可触发部署：

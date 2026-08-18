@@ -23,3 +23,7 @@ nvim.log
 
 # jetbrains setting folder
 .idea/
+
+# Tencent Cloud EdgeOne
+.edgeone/*
+.tef_dist/*
