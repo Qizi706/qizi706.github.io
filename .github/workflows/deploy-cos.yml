@@ -1,50 +1,50 @@
-name: Deploy to Tencent Cloud COS
+name: Remove Tencent Cloud COS bucket
 
 on:
   push:
     branches:
       - astro
-  workflow_dispatch:
+    paths:
+      - .github/workflows/deploy-cos.yml
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-cos-${{ github.ref }}
-  cancel-in-progress: true
+  group: remove-cos-bucket
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  remove:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      EXPECTED_BUCKET: zqwiki-1317207995
+      EXPECTED_REGION: ap-shanghai
+      COS_BUCKET: ${{ vars.COS_BUCKET }}
+      COS_REGION: ${{ vars.COS_REGION }}
+      TENCENT_CLOUD_SECRET_ID: ${{ secrets.TENCENT_CLOUD_SECRET_ID }}
+      TENCENT_CLOUD_SECRET_KEY: ${{ secrets.TENCENT_CLOUD_SECRET_KEY }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Validate COS settings
-        env:
-          COS_BUCKET: ${{ vars.COS_BUCKET }}
-          COS_REGION: ${{ vars.COS_REGION }}
-          TENCENT_CLOUD_SECRET_ID: ${{ secrets.TENCENT_CLOUD_SECRET_ID }}
-          TENCENT_CLOUD_SECRET_KEY: ${{ secrets.TENCENT_CLOUD_SECRET_KEY }}
+      - name: Validate the exact deletion target
         run: |
           set -euo pipefail
-          test -n "${COS_BUCKET}" || { echo "::error::Missing repository variable COS_BUCKET"; exit 1; }
-          test -n "${COS_REGION}" || { echo "::error::Missing repository variable COS_REGION"; exit 1; }
-          test -n "${TENCENT_CLOUD_SECRET_ID}" || { echo "::error::Missing repository secret TENCENT_CLOUD_SECRET_ID"; exit 1; }
-          test -n "${TENCENT_CLOUD_SECRET_KEY}" || { echo "::error::Missing repository secret TENCENT_CLOUD_SECRET_KEY"; exit 1; }
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build Astro site
-        run: npm run build
+          test "${COS_BUCKET}" = "${EXPECTED_BUCKET}" || {
+            echo "::error::Refusing to delete unexpected bucket: ${COS_BUCKET}"
+            exit 1
+          }
+          test "${COS_REGION}" = "${EXPECTED_REGION}" || {
+            echo "::error::Refusing to delete unexpected region: ${COS_REGION}"
+            exit 1
+          }
+          test -n "${TENCENT_CLOUD_SECRET_ID}" || {
+            echo "::error::Missing repository secret TENCENT_CLOUD_SECRET_ID"
+            exit 1
+          }
+          test -n "${TENCENT_CLOUD_SECRET_KEY}" || {
+            echo "::error::Missing repository secret TENCENT_CLOUD_SECRET_KEY"
+            exit 1
+          }
 
       - name: Install COSCLI
         env:
@@ -58,30 +58,53 @@ jobs:
             "https://github.com/tencentyun/coscli/releases/download/${COSCLI_VERSION}/coscli-${COSCLI_VERSION}-linux-amd64"
           echo "${COSCLI_SHA256}  ${coscli_path}" | sha256sum --check -
           chmod +x "${coscli_path}"
-          "${coscli_path}" --version
 
-      - name: Sync site to COS
-        env:
-          COS_BUCKET: ${{ vars.COS_BUCKET }}
-          COS_REGION: ${{ vars.COS_REGION }}
-          COS_SYNC_DELETE: ${{ vars.COS_SYNC_DELETE }}
-          TENCENT_CLOUD_SECRET_ID: ${{ secrets.TENCENT_CLOUD_SECRET_ID }}
-          TENCENT_CLOUD_SECRET_KEY: ${{ secrets.TENCENT_CLOUD_SECRET_KEY }}
+      - name: Permanently empty and delete the bucket
         run: |
           set -euo pipefail
 
-          delete_args=()
-          if [[ "${COS_SYNC_DELETE:-false}" == "true" ]]; then
-            delete_args+=(--delete)
-          fi
+          coscli="${RUNNER_TEMP}/coscli"
+          endpoint="cos.${EXPECTED_REGION}.myqcloud.com"
+          target="cos://${EXPECTED_BUCKET}"
+          auth_args=(
+            --endpoint "${endpoint}"
+            --secret-id "${TENCENT_CLOUD_SECRET_ID}"
+            --secret-key "${TENCENT_CLOUD_SECRET_KEY}"
+            --init-skip
+            --disable-log
+            --process-log=false
+          )
 
-          "${RUNNER_TEMP}/coscli" sync dist/ "cos://${COS_BUCKET}/" \
+          # Remove every object version and delete marker. If versioning was
+          # never enabled, COSCLI rejects --all-versions and the fallback
+          # removes the ordinary objects instead.
+          if ! "${coscli}" rm "${target}" \
             --recursive \
             --force \
-            "${delete_args[@]}" \
-            --endpoint "cos.${COS_REGION}.myqcloud.com" \
-            --secret-id "${TENCENT_CLOUD_SECRET_ID}" \
-            --secret-key "${TENCENT_CLOUD_SECRET_KEY}" \
-            --init-skip \
-            --disable-log \
-            --process-log=false
+            --all-versions \
+            "${auth_args[@]}"; then
+            "${coscli}" rm "${target}" \
+              --recursive \
+              --force \
+              "${auth_args[@]}"
+          fi
+
+          # Multipart fragments also prevent bucket deletion. A missing
+          # fragment-list permission is allowed to fall through so rb can
+          # still succeed when the bucket has no fragments.
+          "${coscli}" abort "${target}" "${auth_args[@]}" || true
+
+          "${coscli}" rb "${target}" \
+            --force \
+            "${auth_args[@]}"
+
+      - name: Verify the bucket no longer exists
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --max-time 20 \
+            "https://${EXPECTED_BUCKET}.cos-website.${EXPECTED_REGION}.myqcloud.com/")"
+          test "${status}" = "404" || {
+            echo "::error::Expected the deleted COS endpoint to return 404, got ${status}"
+            exit 1
+          }
