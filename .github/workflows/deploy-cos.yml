@@ -72,7 +72,6 @@ jobs:
             --secret-key "${TENCENT_CLOUD_SECRET_KEY}"
             --init-skip
             --disable-log
-            --process-log=false
           )
 
           # Remove every object version and delete marker. If versioning was
