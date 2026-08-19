@@ -1,0 +1,1085 @@
+---
+title: '从空文件到完整程序：如何独立完成一个编程任务'
+description: '独立完成任务的关键不是背下模板，而是把需求转化为验收条件、数据模型、程序主干、实现顺序和反馈闭环，并在没有现成脚手架时写出可运行、可测试、可解释的完整程序。'
+pubDate: '2026-08-19T23:20:00+08:00'
+updatedDate: '2026-08-20T00:48:10+08:00'
+categories:
+  - '随笔'
+tags:
+  - '软件工程'
+  - '程序设计'
+  - '测试'
+  - '代码设计'
+  - '学习方法'
+  - 'AI 协作'
+draft: false
+mathjax: false
+---
+
+## 1. (Why) 为什么面对空文件，脑子里的知识会突然散开？
+
+读代码时，一切似乎都有理由：类型放在前面，主流程串起几个函数，错误在边界处理，测试又恰好覆盖关键分支。轮到自己面对一个空文件，秩序却消失了。
+
+<SlideCard title="空文件没有给出任何下一步">
+
+## 你同时需要决定
+
+- 任务究竟做到哪里才算完成？
+- 输入、输出和错误分别长什么样？
+- 应该先写 `main`，还是先写核心算法？
+- 数据应该用 Tuple、Dictionary 还是 Class？
+- 哪些逻辑放在一起，哪些逻辑应该拆开？
+- 第一条测试验证什么？
+- 什么时候继续实现，什么时候先重构？
+
+## 真正的困难
+
+```text
+不是不会写某一行代码
+而是无法为几十个互相依赖的决定排序
+```
+
+</SlideCard>
+
+AI 生成的程序看起来有序，并不是因为它先记住了一棵漂亮的目录树。更接近事实的解释是：它在输出代码之前，已经隐式完成了问题解释、数据流推演、依赖排序、边界选择和错误假设。
+
+因此，想获得同样的能力，目标不应该是背下一份脚手架。真正需要练习的是：
+
+> 面对一个没有预制结构的任务，独立建立这些决定之间的顺序，并把它们推进到可交付状态。
+
+<Note title="本文不训练什么" class="title-underline">
+
+本文不以“创建目录、接口和 TODO”作为完成标准，也不要求一开始就写出具备集群部署、故障转移和全套监控的生产系统。我们训练的是一个更基础、也更可迁移的能力：从空文件完成一个边界清楚的编程任务。
+
+</Note>
+
+## 2. (What) 什么叫“独立完成一个完整任务”？
+
+“独立”不等于闭卷考试，“完整”也不等于功能无限多。
+
+<SlideCard title="独立不等于拒绝外部工具">
+
+## 仍然可以
+
+- 阅读题目、协议和官方文档
+- 搜索陌生 API 的准确用法
+- 阅读仓库中的相邻代码
+- 使用 Debugger、Profiler 和测试框架
+- 请求 Code Review 或让 AI 提供反例
+
+## 不能外包
+
+- 任务边界
+- 数据与状态模型
+- 主要调用链
+- 正确性不变量
+- 失败行为
+- 验收证据
+- 最终设计取舍
+
+> 关闭搜索和对话以后，你仍然知道程序为什么这样组织，下一步该验证什么。
+
+</SlideCard>
+
+<SlideCard title="完整是一个闭环">
+
+```text
+需求能够复述
+  -> 输入能够进入
+  -> 核心行为正确
+  -> 输出能够使用
+  -> 非法情况有定义
+  -> 测试能够推翻错误实现
+  -> 运行方式可以复现
+  -> 限制能够解释
+```
+
+## 完整任务的六项证据
+
+1. **Behavior**：程序完成题目要求的行为。
+2. **Structure**：代码的职责与依赖可以解释。
+3. **Correctness**：正常、边界和失败路径都有证据。
+4. **Feedback**：一条命令可以获得有意义的结果。
+5. **Delivery**：另一个人可以运行和使用。
+6. **Reflection**：能指出限制、取舍和下一次改进。
+
+</SlideCard>
+
+一个只有 150 行的 CLI，只要在声明的边界内形成这六项闭环，就是完整任务。一个拥有几十个文件、却只能运行 Happy Path 的项目，仍然只是没有收尾的 Demo。
+
+## 3. (Model) 有序程序来自五张图，而不是固定目录
+
+面对空文件，不要先问“应该创建几个 Class”。先把任务压缩成五张可以手写的图。它们不是需要提交的脚手架，而是用来决定下一行代码的思考工具。
+
+### 3.1 验收图：什么现象说明任务完成？
+
+先写三个具体样例：
+
+| 类型     | 问题                                 | 作用         |
+| -------- | ------------------------------------ | ------------ |
+| Normal   | 一个合法输入应该产生什么结果？       | 固定主路径   |
+| Boundary | 最小、最大、空值或临界状态怎样处理？ | 固定边界     |
+| Failure  | 一个非法输入应该怎样失败？           | 固定错误契约 |
+
+抽象的“正确处理 CSV”无法指导实现，具体样例可以：
+
+```text
+Normal:
+同一 Concurrency 下有 2 个成功请求和 1 个失败请求，
+输出 total=3、succeeded=2、failed=1，并计算成功请求的 P50/P95。
+
+Boundary:
+某组没有成功请求，P50/P95 输出为空，而不是伪造为 0 ms。
+
+Failure:
+第 7 行的 concurrency=0，程序返回非零状态并报告 line 7。
+```
+
+<Note title="先写可观察行为" class="title-underline">
+
+如果还无法写出一个正常样例、一个边界样例和一个失败样例，问题尚未被理解。此时创建目录只会把模糊需求分散到更多文件中。
+
+</Note>
+
+### 3.2 数据图：程序里真正存在什么？
+
+从样例里圈出名词，再删除只属于展示格式的词：
+
+```text
+RequestRecord
+  - request_id
+  - concurrency
+  - e2e_ms
+  - status
+
+Summary
+  - concurrency
+  - total
+  - succeeded
+  - failed
+  - p50_ms
+  - p95_ms
+```
+
+数据模型不是为了“显得面向对象”，而是为了回答：哪些字段必须一起保持一致？哪些值代表缺失，哪些值真的等于零？
+
+### 3.3 控制流图：一次输入怎样穿过程序？
+
+先用动词画路径，不要先画目录：
+
+```text
+CLI Arguments
+  -> open file
+  -> parse row
+  -> validate record
+  -> group records
+  -> calculate summary
+  -> render report
+  -> choose exit status
+```
+
+每个箭头都意味着一个可以测试的转换；每个方框都可能在实现稳定以后成为函数。这样得到的结构来自数据流，而不是来自对“标准项目长什么样”的想象。
+
+### 3.4 失败图：每一步怎样失败？
+
+| Step      | Failure                        | Program behavior                             |
+| --------- | ------------------------------ | -------------------------------------------- |
+| open      | 文件不存在或不可读             | 报告路径，返回 2                             |
+| parse     | 缺少字段或类型错误             | 报告行号与字段                               |
+| validate  | 并发度不为正、延迟非有限或为负 | 拒绝该输入，不产生部分报告                   |
+| summarize | 某组没有成功请求               | Percentile 留空                              |
+| render    | 输出流不可写                   | `render_report` 向上传播；`run` 报错并返回 2 |
+
+失败图决定错误应该在哪一层被发现。没有这张图，错误处理往往会散落成大量 `try/except`，既重复又掩盖真正的失败位置。
+
+### 3.5 证据图：怎样证明不是“碰巧跑通”？
+
+```text
+parse_record  <- 具体行号的非法输入测试
+percentile    <- 可手算的小数组
+summarize     <- 成功/失败混合记录
+run           <- 临时文件端到端测试
+CLI           <- 一条真实运行命令
+```
+
+这五张图共同完成一件事：把“写一个程序”变成一组有顺序的、可以被验证的决定。
+
+## 4. (Case Study) 从空文件写完一个 Serving 结果汇总程序
+
+下面选择一个贴近 AI Infra 的真实小任务：编写 `serving_report.py`，读取逐请求原始 CSV，按照 Client Concurrency 汇总成功数、失败数、P50 和 P95。
+
+它不是生产级 Serving 系统，但它是一个完整程序：包含数据模型、解析、校验、计算、输出、错误状态和测试。更重要的是，所有结构都可以从上一节的五张图推导出来。
+
+### 4.1 先冻结输入和输出
+
+输入文件：
+
+```csv
+request_id,concurrency,e2e_ms,status
+r1,1,105.2,ok
+r2,2,181.0,ok
+r3,2,205.0,ok
+r4,2,193.4,error
+```
+
+预期输出：
+
+```csv
+concurrency,total,succeeded,failed,p50_ms,p95_ms
+1,1,1,0,105.200,105.200
+2,3,2,1,193.000,203.800
+```
+
+本文固定使用线性插值定义 Percentile；不同统计工具的默认算法可能不同，因此算法本身也是任务契约的一部分。
+
+现在才能准确提出函数职责：
+
+```text
+RequestRecord  保存一条已验证请求
+Summary        保存一组汇总结果
+parse_record   把不可信文本变成 RequestRecord
+load_records   负责文件与行号
+percentile     只处理数值语义
+summarize      只处理分组和统计
+render_report  只处理输出格式
+run            连接边界并决定 Exit Status
+```
+
+### 4.2 空文件上的真实生长顺序
+
+最终程序不应该突然从脑中整块出现。更现实的生长过程是：
+
+```text
+1. 用四个可手算数值固定 Percentile
+2. 用三条内存记录固定 Summary 语义
+3. 定义 RequestRecord 与 Summary，消除松散 Dictionary
+4. 实现单行解析，让不可信文本进入数据模型
+5. 加入文件读取，并把 CSV 行号传给解析器
+6. 加入报告输出，让第一条真实输入端到端贯穿
+7. 加入 CLI、错误信息和 Exit Status
+8. 用 Boundary 与 Failure 测试补齐任务契约
+9. 最后按照阅读依赖整理函数顺序和命名
+```
+
+这里没有哪一步以“先创建空函数”为成果。每一步都必须多完成一条可以运行、可以失败、可以验证的行为。最终代码是这些行为稳定以后整理出的阅读版本。
+
+### 4.3 完整实现：没有 TODO，也没有预制空壳
+
+<CodeCard title="完整程序" path="serving_report.py">
+
+```python
+from __future__ import annotations
+
+import argparse
+import csv
+import math
+import sys
+from collections import defaultdict
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Mapping, Sequence, TextIO
+
+
+REQUIRED_FIELDS = {
+    "request_id",
+    "concurrency",
+    "e2e_ms",
+    "status",
+}
+VALID_STATUSES = {"ok", "error"}
+
+
+class InputError(ValueError):
+    """An input violates the report contract."""
+
+
+@dataclass(frozen=True)
+class RequestRecord:
+    request_id: str
+    concurrency: int
+    e2e_ms: float
+    status: str
+
+
+@dataclass(frozen=True)
+class Summary:
+    concurrency: int
+    total: int
+    succeeded: int
+    failed: int
+    p50_ms: float | None
+    p95_ms: float | None
+
+
+def _cell(row: Mapping[str, str | None], field: str) -> str:
+    value = row.get(field)
+    return "" if value is None else value.strip()
+
+
+def parse_record(
+    row: Mapping[str, str | None],
+    line_number: int,
+) -> RequestRecord:
+    request_id = _cell(row, "request_id")
+    if not request_id:
+        raise InputError(f"line {line_number}: request_id is empty")
+
+    concurrency_text = _cell(row, "concurrency")
+    try:
+        concurrency = int(concurrency_text)
+    except ValueError as error:
+        raise InputError(
+            f"line {line_number}: invalid concurrency {concurrency_text!r}"
+        ) from error
+    if concurrency <= 0:
+        raise InputError(
+            f"line {line_number}: concurrency must be positive"
+        )
+
+    latency_text = _cell(row, "e2e_ms")
+    try:
+        e2e_ms = float(latency_text)
+    except ValueError as error:
+        raise InputError(
+            f"line {line_number}: invalid e2e_ms {latency_text!r}"
+        ) from error
+    if not math.isfinite(e2e_ms) or e2e_ms < 0:
+        raise InputError(
+            f"line {line_number}: e2e_ms must be finite and non-negative"
+        )
+
+    status = _cell(row, "status")
+    if status not in VALID_STATUSES:
+        raise InputError(
+            f"line {line_number}: status must be one of "
+            f"{sorted(VALID_STATUSES)}, got {status!r}"
+        )
+
+    return RequestRecord(
+        request_id=request_id,
+        concurrency=concurrency,
+        e2e_ms=e2e_ms,
+        status=status,
+    )
+
+
+def load_records(path: Path) -> list[RequestRecord]:
+    with path.open("r", encoding="utf-8", newline="") as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames is None:
+            raise InputError("input has no CSV header")
+
+        missing = REQUIRED_FIELDS - set(reader.fieldnames)
+        if missing:
+            names = ", ".join(sorted(missing))
+            raise InputError(f"input is missing required fields: {names}")
+
+        records = [
+            parse_record(row, line_number)
+            for line_number, row in enumerate(reader, start=2)
+        ]
+
+    if not records:
+        raise InputError("input contains no data rows")
+    return records
+
+
+def percentile(values: Sequence[float], quantile: float) -> float:
+    if not values:
+        raise ValueError("percentile requires at least one value")
+    if not 0.0 <= quantile <= 1.0:
+        raise ValueError("quantile must be between 0 and 1")
+
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * quantile
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    fraction = position - lower
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
+
+
+def summarize(records: Sequence[RequestRecord]) -> list[Summary]:
+    groups: dict[int, list[RequestRecord]] = defaultdict(list)
+    for record in records:
+        groups[record.concurrency].append(record)
+
+    summaries: list[Summary] = []
+    for concurrency, group in sorted(groups.items()):
+        successful_latencies = [
+            record.e2e_ms for record in group if record.status == "ok"
+        ]
+        succeeded = len(successful_latencies)
+        summaries.append(
+            Summary(
+                concurrency=concurrency,
+                total=len(group),
+                succeeded=succeeded,
+                failed=len(group) - succeeded,
+                p50_ms=(
+                    percentile(successful_latencies, 0.50)
+                    if successful_latencies
+                    else None
+                ),
+                p95_ms=(
+                    percentile(successful_latencies, 0.95)
+                    if successful_latencies
+                    else None
+                ),
+            )
+        )
+    return summaries
+
+
+def _format_metric(value: float | None) -> str:
+    return "" if value is None else f"{value:.3f}"
+
+
+def render_report(summaries: Sequence[Summary], output: TextIO) -> None:
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow(
+        [
+            "concurrency",
+            "total",
+            "succeeded",
+            "failed",
+            "p50_ms",
+            "p95_ms",
+        ]
+    )
+    for summary in summaries:
+        writer.writerow(
+            [
+                summary.concurrency,
+                summary.total,
+                summary.succeeded,
+                summary.failed,
+                _format_metric(summary.p50_ms),
+                _format_metric(summary.p95_ms),
+            ]
+        )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Summarize per-request serving results by concurrency."
+    )
+    parser.add_argument("input", type=Path, help="path to the raw CSV")
+    return parser
+
+
+def run(
+    argv: Sequence[str] | None = None,
+    *,
+    stdout: TextIO | None = None,
+    stderr: TextIO | None = None,
+) -> int:
+    output = sys.stdout if stdout is None else stdout
+    errors = sys.stderr if stderr is None else stderr
+    args = build_parser().parse_args(argv)
+
+    try:
+        records = load_records(args.input)
+        render_report(summarize(records), output)
+    except (OSError, InputError) as error:
+        print(f"error: {error}", file=errors)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(run())
+```
+
+</CodeCard>
+
+### 4.4 为什么这份代码是有序的？
+
+它没有使用复杂的设计模式，秩序来自四个方向：
+
+<SlideCard title="依赖始终朝向更稳定的语义">
+
+```text
+CLI / File / stdout
+        |
+        v
+parse_record / render_report
+        |
+        v
+RequestRecord / Summary / percentile / summarize
+```
+
+- 中心层不知道文件路径和终端。
+- I/O 边界把不可信文本转换成已验证数据。
+- 纯计算函数不负责打印错误。
+- `run` 只负责编排和 Exit Status。
+
+因此，测试可以直接挑战核心语义，而不必每次启动整个 CLI。
+
+</SlideCard>
+
+文件中的书写顺序也不是实现顺序。真正实现时，可以先完成 `percentile` 和 `summarize`，再接入 CSV，最后补 `run`；阅读时则按照“常量与类型 → 转换 → 核心逻辑 → 输出 → 入口”排列。写代码和呈现代码是两个不同问题。
+
+### 4.5 完整测试：证明结构，而不是重复结构
+
+<CodeCard title="可运行测试" path="test_serving_report.py">
+
+```python
+import io
+import tempfile
+import unittest
+from pathlib import Path
+
+from serving_report import (
+    RequestRecord,
+    percentile,
+    render_report,
+    run,
+    summarize,
+)
+
+
+class TestServingReport(unittest.TestCase):
+    def test_percentile_uses_linear_interpolation(self) -> None:
+        values = [10.0, 20.0, 30.0, 40.0]
+
+        self.assertEqual(percentile(values, 0.50), 25.0)
+        self.assertEqual(percentile(values, 0.95), 38.5)
+
+    def test_summarize_separates_success_and_failure(self) -> None:
+        records = [
+            RequestRecord("r1", 2, 100.0, "ok"),
+            RequestRecord("r2", 2, 200.0, "ok"),
+            RequestRecord("r3", 2, 150.0, "error"),
+        ]
+
+        [summary] = summarize(records)
+
+        self.assertEqual(summary.total, 3)
+        self.assertEqual(summary.succeeded, 2)
+        self.assertEqual(summary.failed, 1)
+        self.assertEqual(summary.p50_ms, 150.0)
+        self.assertEqual(summary.p95_ms, 195.0)
+
+    def test_summarize_leaves_percentiles_empty_without_successes(self) -> None:
+        records = [
+            RequestRecord("r1", 4, 100.0, "error"),
+            RequestRecord("r2", 4, 120.0, "error"),
+        ]
+
+        [summary] = summarize(records)
+        output = io.StringIO()
+        render_report([summary], output)
+
+        self.assertIsNone(summary.p50_ms)
+        self.assertIsNone(summary.p95_ms)
+        self.assertEqual(
+            output.getvalue(),
+            "concurrency,total,succeeded,failed,p50_ms,p95_ms\n"
+            "4,2,0,2,,\n",
+        )
+
+    def test_run_renders_expected_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "raw.csv"
+            path.write_text(
+                "request_id,concurrency,e2e_ms,status\n"
+                "r1,1,105.2,ok\n"
+                "r2,2,181.0,ok\n"
+                "r3,2,205.0,ok\n"
+                "r4,2,193.4,error\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            exit_status = run(
+                [str(path)],
+                stdout=stdout,
+                stderr=stderr,
+            )
+
+        self.assertEqual(exit_status, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(
+            stdout.getvalue(),
+            "concurrency,total,succeeded,failed,p50_ms,p95_ms\n"
+            "1,1,1,0,105.200,105.200\n"
+            "2,3,2,1,193.000,203.800\n",
+        )
+
+    def test_run_reports_the_invalid_line(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "raw.csv"
+            path.write_text(
+                "request_id,concurrency,e2e_ms,status\n"
+                "r1,0,100.0,ok\n",
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            exit_status = run(
+                [str(path)],
+                stdout=stdout,
+                stderr=stderr,
+            )
+
+        self.assertEqual(exit_status, 2)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("line 2", stderr.getvalue())
+        self.assertIn("concurrency must be positive", stderr.getvalue())
+
+    def test_run_rejects_non_finite_latency(self) -> None:
+        for value in ("nan", "inf", "-inf"):
+            with self.subTest(value=value):
+                with tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory) / "raw.csv"
+                    path.write_text(
+                        "request_id,concurrency,e2e_ms,status\n"
+                        f"r1,1,{value},ok\n",
+                        encoding="utf-8",
+                    )
+                    stderr = io.StringIO()
+
+                    exit_status = run(
+                        [str(path)],
+                        stdout=io.StringIO(),
+                        stderr=stderr,
+                    )
+
+                self.assertEqual(exit_status, 2)
+                self.assertIn(
+                    "e2e_ms must be finite and non-negative",
+                    stderr.getvalue(),
+                )
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+</CodeCard>
+
+运行方式也是交付物的一部分：
+
+```bash
+python -m unittest -v test_serving_report.py
+python serving_report.py raw.csv > summary.csv
+```
+
+这些测试没有照抄程序的控制流。Percentile 使用可手算数组；Summary 分别挑战成功/失败混合和“没有成功请求”的边界；端到端测试从真实临时文件进入，验证成功报告、非法行号、非有限数、Exit Status、标准输出和错误输出。
+
+## 5. (How) 从空文件开始时，正确的实现顺序是什么？
+
+最终代码按阅读顺序排列，实现过程却应该按不确定性排列。
+
+### 5.1 第一步：先写完成定义，不写目录
+
+在临时纸面、Issue 或文件顶部写：
+
+```text
+Input:
+Output:
+Non-goals:
+Normal example:
+Boundary example:
+Failure example:
+Done when:
+```
+
+这不是脚手架。它不会替你留下类、函数和 TODO；它只让“完成”变得可观察，避免写到一半才发现双方理解的不是同一个任务。
+
+### 5.2 第二步：让一个真实输入尽早穿过程序
+
+第一轮不要同时处理所有格式、所有错误和所有优化。选择一个最小但真实的输入，完成：
+
+```text
+read -> parse -> compute -> output
+```
+
+这里的重点是“完整穿过”，而不是“每层都先写一点”。只有端到端路径存在以后，下一次失败才有位置：它发生在输入、模型、计算还是输出？
+
+### 5.3 第三步：先完成纯核心，再扩大 I/O
+
+纯函数最容易得到快速反馈。上面的任务中，应优先验证：
+
+```text
+percentile
+  -> summarize
+  -> parse_record
+  -> load_records
+  -> render_report
+  -> run
+```
+
+这不是固定公式。原则是：先解决依赖少、语义最关键、最容易用独立 Oracle 验证的部分。
+
+### 5.4 第四步：用失败迫使契约变清楚
+
+主路径通过以后，不要立刻重构。先主动加入一个最危险的失败：
+
+- 输入缺字段；
+- 两个 Task 同时更新状态；
+- Dependency Timeout；
+- 文件写到一半失败；
+- 资源达到容量上限。
+
+失败会暴露原本没有被看见的责任边界。例如“第几行出错”迫使 `load_records` 负责行号，而 `parse_record` 只负责字段语义。
+
+### 5.5 第五步：测试全绿以后才整理呈现结构
+
+此时再进行：
+
+- 重命名含糊的变量；
+- 合并重复校验；
+- 提取稳定的纯函数；
+- 调整文件内阅读顺序；
+- 删除没有证据支持的抽象；
+- 补充运行命令和限制说明。
+
+“有序”不是第一次输入时就完美，而是通过反馈不断消除含糊和偶然性。
+
+<Note title="一个可靠的编码循环" class="title-underline">
+
+```text
+写一个可观察行为
+  -> 写最少实现
+  -> 运行
+  -> 解释失败
+  -> 修正第一个错误假设
+  -> 增加下一个行为
+  -> 最后整理结构
+```
+
+</Note>
+
+## 6. (Scale) 什么时候从一个文件拆成多模块程序？
+
+从空文件开始，不代表永远留在一个文件。关键是让拆分来自已经出现的变化方向。
+
+<SlideCard title="不要按想象拆分">
+
+## 过早出现的目录
+
+```text
+interfaces/
+services/
+repositories/
+strategies/
+factories/
+```
+
+如果它们都只有一个实现，目录只是把控制流藏得更深。
+
+## 有证据的拆分理由
+
+- 解析器将支持 CSV 与 JSONL 两种输入
+- 汇总逻辑被 CLI 与 Web API 共同调用
+- vLLM 与 Ollama Adapter 有不同失败行为
+- Telemetry 需要独立测试和替换
+- 一个文件已经包含多种互不相关的修改原因
+
+</SlideCard>
+
+当这些需求真的出现时，上面的单文件程序可以自然长成：
+
+```text
+src/serving_report/
+├── model.py       # RequestRecord / Summary / invariant
+├── parsing.py     # CSV / JSONL -> validated records
+├── statistics.py  # percentile / summarize
+├── reporting.py   # CSV / Markdown output
+└── cli.py         # arguments / orchestration / exit status
+
+tests/
+├── test_parsing.py
+├── test_statistics.py
+└── test_cli.py
+```
+
+这里每个文件都对应一个已经存在的变化轴。目录树只是决策的结果，不是决策的来源。
+
+### 6.1 可选进阶：从完整程序继续走向完整系统
+
+更大的系统任务会增加状态、并发、依赖和运行约束，但基本方法不变：
+
+```text
+一个 CLI
+  -> 一个可复用 Module
+  -> 一条端到端 Request Path
+  -> 一个有状态、会失败、可观测的 Service
+```
+
+每扩大一级，都必须继续保留前一级的闭环，而不是用新目录替代旧证据。
+
+| 层次       | 新增问题               | 验收证据              |
+| ---------- | ---------------------- | --------------------- |
+| 完整函数   | 输入、输出、不变量     | 单元测试              |
+| 完整程序   | I/O、错误、退出状态    | 端到端运行            |
+| 完整模块   | 公共接口、替换与复用   | 集成测试              |
+| 完整服务   | 并发、超时、取消、容量 | 故障与负载测试        |
+| 可维护系统 | 配置、观测、部署、演进 | Runbook 与外部 Review |
+
+这张表只是掌握完整任务之后的延伸方向，不参与本文的最终验收。它解释了为什么不能直接从“会写一个函数”跳到“设计生产系统”：中间需要重复完成多个范围逐渐扩大的任务。
+
+## 7. (Debug) 卡住时，先判断自己卡在哪一层
+
+“我不会写”通常混合了六类完全不同的问题。
+
+<SlideCard title="1. 需求层">
+
+## 症状
+
+- 不知道什么情况算完成
+- 每写一个函数就想增加新功能
+
+## 动作
+
+- 重写 Normal、Boundary、Failure 三个样例
+- 请求对方确认可观察行为，而不是请求代码
+
+</SlideCard>
+
+<SlideCard title="2. 数据层">
+
+## 症状
+
+- Dictionary 在函数之间不断增加临时 Key
+- `None`、0、空字符串的含义混在一起
+
+## 动作
+
+- 列出每个状态必须共同成立的字段
+- 为缺失、失败和真实零值选择不同表示
+
+</SlideCard>
+
+<SlideCard title="3. 控制流层">
+
+## 症状
+
+- 不知道先调用谁
+- 同一份错误被多个函数处理
+
+## 动作
+
+- 重新画一条输入到输出的箭头
+- 为每个转换指定唯一负责人
+
+</SlideCard>
+
+<SlideCard title="4. 知识层">
+
+## 症状
+
+- 已经知道要做什么，只是不知道某个 API
+
+## 动作
+
+- 查官方文档或写十行最小实验
+- 只解决这个 API，不重新设计整个程序
+
+</SlideCard>
+
+<SlideCard title="5. 实现层">
+
+## 症状
+
+- 契约明确，但实际输出不符合预测
+
+## 动作
+
+- 缩小到第一个错误中间状态
+- 保存输入、实际值与期望值
+- 修正第一个不成立的假设
+
+</SlideCard>
+
+<SlideCard title="6. 证据层">
+
+## 症状
+
+- 程序能跑，但不知道是否真的正确
+
+## 动作
+
+- 寻找手算样例、朴素实现或协议定义
+- 让 Expected Value 走一条独立于实现的路径
+
+</SlideCard>
+
+只有先识别层次，求助才不会变成“请把整个任务重写一遍”。
+
+## 8. (AI) 怎样让 AI 帮助交付，而不替代能力？
+
+AI 最适合扩大搜索和反馈，不适合替你拥有任务。
+
+### 8.1 写代码之前：只审查你的五张图
+
+```text
+这是我的三个验收样例、数据模型、控制流、失败图和测试图。
+请指出歧义、遗漏和无法验证的地方，不要生成实现。
+```
+
+如果此时直接请求完整代码，你得到的是一次交付，不是一次训练。
+
+### 8.2 实现过程中：只请求最小缺失信息
+
+```text
+我预期这里得到 X，实际得到 Y。
+这是输入、最小复现和当前推导。
+请指出第一个不成立的假设，不要重写整个模块。
+```
+
+这种问法保留了控制流和调试所有权，同时利用 AI 快速缩小搜索空间。
+
+### 8.3 完成以后：让 AI 扮演破坏者和 Reviewer
+
+```text
+这是已经通过当前测试的实现。
+请寻找能够破坏其不变量的输入、并发交错或失败路径；
+再检查函数职责、依赖方向和重复逻辑。
+```
+
+Review 之后必须由自己决定接受、拒绝或修改建议，并记录理由。
+
+### 8.4 逐步撤掉支撑
+
+| Round | 你负责             | AI 允许做什么        | Gate                 |
+| ----- | ------------------ | -------------------- | -------------------- |
+| 1     | 五张图与主流程     | 指出遗漏、解释 API   | 完成第一个任务       |
+| 2     | 设计与全部实现     | 只指出第一个错误假设 | 从空文件完成相邻任务 |
+| 3     | 设计、实现、调试   | 完成后才做 Review    | 无模板完成新任务     |
+| 4     | 在新约束下重新建模 | 只提供外部反馈       | 能力迁移             |
+
+<Note title="什么时候可以让 AI 直接生成？" class="title-underline">
+
+当目标是工程交付，并且你已经能独立定义契约、审查结构、验证结果和承担后续维护时，可以授权 AI 批量生成机械代码。训练核心能力时，则应把第一次建模、第一次实现和第一次诊断留给自己。
+
+</Note>
+
+## 9. (Practice) 怎样把这种方法练成稳定能力？
+
+不要连续写十个半成品。先连续完成两个范围逐渐扩大的闭环，再决定是否进入系统级任务。
+
+### Task A：单文件完整程序
+
+选择一个 100～250 行的任务：
+
+- CSV/JSONL 汇总器；
+- 日志过滤与错误统计 CLI；
+- 配置校验器；
+- 文件同步的 Dry-run 规划器。
+
+**限制：** 不复制模板；允许查单个 API。
+
+**Artifact：** 完整实现、测试、运行命令和一页限制说明。
+
+**Acceptance：** Normal、Boundary、Failure 三条路径都通过。
+
+### Task B：多模块完整任务
+
+在 Task A 上增加一个真实变化轴：
+
+- 第二种输入格式；
+- 第二种输出格式；
+- 可替换 Backend；
+- 持久化；
+- 并发执行。
+
+**限制：** 只有当变化原因出现以后才拆文件。
+
+**Artifact：** 模块边界说明、集成测试和一次重构 Diff。
+
+**Acceptance：** 能解释每个文件为什么独立变化。
+
+### Optional Task C：一条完整系统路径
+
+这不是获得本文核心能力的必修 Gate。只有在能够稳定完成 Task A、Task B，并且目标方向确实需要在线系统时，再实现一个会遇到真实失败的端到端任务，例如：
+
+```text
+HTTP Request
+  -> validate
+  -> bounded queue
+  -> backend call
+  -> timeout / cancellation
+  -> response
+  -> request trace
+```
+
+**Artifact：** 可运行 Service、故障注入、逐请求记录和 Runbook。
+
+**Acceptance：** 能制造一次过载和一次依赖失败，仅凭证据定位并恢复。
+
+### 每个任务都使用同一张学习卡
+
+```text
+Question:     这个任务真正需要回答什么？
+Prediction:   哪个设计或结果可能是错的？
+Action:       这次实现哪条完整行为？
+Artifact:     代码、测试和运行证据在哪里？
+Acceptance:   哪些可观察条件证明完成？
+Feedback:     测试、Review 或对照实现是什么？
+Reflection:   哪个判断失败，下次怎样更早发现？
+Transfer:     改变哪个约束来验证不是记忆？
+```
+
+## 10. (Gate) 怎样判断能力真的属于自己？
+
+<SlideCard title="从完成一次到稳定迁移">
+
+## Level 0 · 跟随
+
+- 能照着教程或生成结果把程序运行起来
+
+## Level 1 · 解释
+
+- 能解释现有程序的数据流和每个函数的职责
+
+## Level 2 · 完成
+
+- 没有现成结构时，能从空文件完成一个有边界的任务
+
+## Level 3 · 诊断
+
+- 能判断失败位于需求、数据、控制流、知识、实现还是证据层
+
+## Level 4 · 扩展
+
+- 新约束出现后，能重新划分职责而不破坏原有行为
+
+## Level 5 · 迁移
+
+- 换语言、仓库或问题类型，仍能重新建立五张图并完成交付
+
+</SlideCard>
+
+### 最终验收清单
+
+<SlideCard title="Task Ownership Review">
+
+- [ ] 不看模板也能写出 Normal、Boundary、Failure 三个样例
+- [ ] 能从样例中提取数据模型和不变量
+- [ ] 能画出一条输入到输出的完整控制流
+- [ ] 能让第一个真实输入尽早穿过程序
+- [ ] 核心逻辑与 I/O 边界可以分别测试
+- [ ] 错误在拥有足够上下文的边界被处理
+- [ ] Expected Value 没有复制被测实现
+- [ ] 每个函数和文件都有可解释的变化原因
+- [ ] 一条命令可以运行测试，一条命令可以运行程序
+- [ ] 能说明限制、Non-goals 和下一步，而不是隐藏缺口
+- [ ] 关闭原实现后，能从需求重新完成一个相邻任务
+
+</SlideCard>
+
+<Note title="真正需要重复的不是模板" class="title-underline">
+
+从空文件独立完成任务的能力，不来自记住“先建哪些目录”，而来自重复同一个推理循环：用验收样例定义完成，用数据和控制流建立秩序，用失败暴露边界，用独立证据挑战实现，再通过迁移确认这不是一次记忆。
+
+</Note>
+
+<Note title="与当前 AI Infra 路线的衔接" class="title-underline">
+
+已经存在脚手架的 M2 可以继续用于完成 MHA/GQA 与 KV 容量任务，但它不再适合作为“从空文件”的能力证据。完成 M2 后，应关闭原实现，只保留行为要求，独立完成一个新的 Serving 结果处理任务；随后在 S0-S3 中把同一方法扩大到真实 Backend、并发请求、逐请求记录和端到端实验路径。
+
+</Note>
