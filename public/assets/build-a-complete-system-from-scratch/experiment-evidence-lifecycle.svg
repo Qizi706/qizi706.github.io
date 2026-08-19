@@ -1,0 +1,484 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 1760" role="img" aria-labelledby="figure-title figure-desc">
+  <title id="figure-title">从实验契约到可验证结论：Ownership、Evidence 与 Lifecycle</title>
+  <desc id="figure-desc">图分为四部分。第一部分区分我们控制的实验与证据基础设施和 vLLM 控制的运行时状态，并规定所有观测必须经过冻结原始证据、验证和聚合才能形成结论。第二部分分别展示 Experiment Run 和 Request Event 的生命周期。第三部分区分客户端并发槽位、vLLM Waiting 和单次调度产生的 Server Batch。第四部分说明 Run Status 与 Conclusion Status 是相互独立的维度。</desc>
+
+  <defs>
+    <filter id="node-shadow" x="-15%" y="-20%" width="130%" height="145%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#344054" flood-opacity="0.10"/>
+    </filter>
+
+    <marker id="arrow-control" viewBox="0 0 10 10" markerWidth="9" markerHeight="9" refX="8.4" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1.5 1.5L8.4 5 1.5 8.5" fill="none" stroke="#526d91" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-neutral" viewBox="0 0 10 10" markerWidth="9" markerHeight="9" refX="8.4" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1.5 1.5L8.4 5 1.5 8.5" fill="none" stroke="#667085" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-observation" viewBox="0 0 10 10" markerWidth="9" markerHeight="9" refX="8.4" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1.5 1.5L8.4 5 1.5 8.5" fill="none" stroke="#9a7b35" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-error" viewBox="0 0 10 10" markerWidth="9" markerHeight="9" refX="8.4" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1.5 1.5L8.4 5 1.5 8.5" fill="none" stroke="#a85f55" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arrow-feedback" viewBox="0 0 10 10" markerWidth="8" markerHeight="8" refX="8.2" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1.6 1.7L8.2 5 1.6 8.3" fill="none" stroke="#858ba0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+
+    <style>
+      text {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+        fill: #263244;
+      }
+
+      .figure-title { font-size: 30px; font-weight: 720; letter-spacing: -0.02em; }
+      .figure-subtitle { font-size: 14px; font-weight: 500; fill: #667085; }
+      .panel-kicker { font-size: 12px; font-weight: 750; letter-spacing: 0.09em; fill: #667085; }
+      .panel-title { font-size: 21px; font-weight: 720; }
+      .container-title { font-size: 15px; font-weight: 750; letter-spacing: 0.035em; }
+      .container-subtitle { font-size: 12px; font-weight: 500; fill: #667085; }
+      .node-title { font-size: 16px; font-weight: 720; }
+      .node-body { font-size: 13px; font-weight: 500; fill: #596579; }
+      .node-body-strong { font-size: 13px; font-weight: 650; fill: #344054; }
+      .annotation { font-size: 12px; font-weight: 560; fill: #667085; }
+      .annotation-strong { font-size: 12px; font-weight: 700; fill: #475467; }
+      .state-label { font-size: 13px; font-weight: 750; letter-spacing: 0.02em; }
+      .chip-text { font-size: 11px; font-weight: 680; letter-spacing: 0.015em; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+
+      .panel { fill: none; stroke: #cfd5de; stroke-width: 1.6; }
+      .subpanel { fill: #ffffff; fill-opacity: 0.34; stroke: #d9dee6; stroke-width: 1.3; }
+      .container-owned { fill: #f5f8fb; fill-opacity: 0.78; stroke: #8da3bd; stroke-width: 1.8; }
+      .container-external { fill: #f8f7f3; fill-opacity: 0.80; stroke: #9b978b; stroke-width: 1.8; stroke-dasharray: 8 6; }
+
+      .node { fill: #ffffff; stroke: #cbd3dd; stroke-width: 1.4; filter: url(#node-shadow); }
+      .node-owned { fill: #fbfdff; stroke: #829bb8; }
+      .node-external { fill: #fffefa; stroke: #9c9788; }
+      .node-evidence { fill: #fffdf6; stroke: #b39a5b; stroke-width: 1.7; }
+      .node-terminal { fill: #fcf6f4; stroke: #b8756c; }
+      .node-success { fill: #f4faf6; stroke: #6f9a7e; }
+      .node-weak { fill: #fafbfc; stroke: #cbd2da; stroke-dasharray: 5 5; }
+
+      .chip { fill: #f2f4f7; stroke: #d5dae1; stroke-width: 1; }
+      .chip-owned { fill: #edf3f8; stroke: #c6d3e0; }
+      .chip-external { fill: #f3f1eb; stroke: #d6d1c4; }
+      .chip-evidence { fill: #f8f1dc; stroke: #dccb9f; }
+      .chip-error { fill: #f8ece9; stroke: #dfbbb5; }
+      .chip-success { fill: #eaf5ed; stroke: #bfd7c6; }
+
+      .connector { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .connector-control { stroke: #526d91; stroke-width: 2.2; marker-end: url(#arrow-control); }
+      .connector-state { stroke: #667085; stroke-width: 2; marker-end: url(#arrow-neutral); }
+      .connector-observation { stroke: #9a7b35; stroke-width: 2.2; stroke-dasharray: 8 6; marker-end: url(#arrow-observation); }
+      .connector-error { stroke: #a85f55; stroke-width: 2; marker-end: url(#arrow-error); }
+      .connector-feedback { stroke: #858ba0; stroke-width: 1.6; stroke-dasharray: 5 6; marker-end: url(#arrow-feedback); }
+      .trace-rail { fill: none; stroke: #9aa6b5; stroke-width: 1.3; stroke-dasharray: 3 5; }
+      .boundary { stroke: #7e8795; stroke-width: 1.5; stroke-dasharray: 6 7; }
+      .divider { stroke: #d8dde5; stroke-width: 1.2; }
+    </style>
+  </defs>
+
+  <!-- Figure header -->
+  <g id="figure-header">
+    <text x="70" y="62" class="figure-title">从实验契约到可验证结论：Ownership、Evidence 与 Lifecycle</text>
+    <text x="70" y="92" class="figure-subtitle">控制输入，观测外部系统，冻结原始事实，再让验证后的证据支撑结论</text>
+
+    <g transform="translate(1240 44)">
+      <line x1="0" y1="0" x2="32" y2="0" class="connector connector-control"/>
+      <text x="42" y="5" class="chip-text">control / request</text>
+      <line x1="185" y1="0" x2="217" y2="0" class="connector connector-observation"/>
+      <text x="227" y="5" class="chip-text">observation</text>
+      <line x1="338" y1="0" x2="370" y2="0" class="connector connector-feedback"/>
+      <text x="380" y="5" class="chip-text">feedback</text>
+    </g>
+  </g>
+
+  <!-- Panel A: ownership, runtime observation, and evidence chain -->
+  <g id="panel-ownership">
+    <rect x="64" y="126" width="1672" height="652" rx="20" class="panel"/>
+    <text x="88" y="158" class="panel-kicker">A · OWNERSHIP &amp; EVIDENCE</text>
+    <text x="88" y="188" class="panel-title">实验与证据系统的 Ownership Boundary</text>
+
+    <!-- Prediction source; intentionally outside both ownership containers. -->
+    <g id="toy-model">
+      <rect x="92" y="238" width="216" height="150" rx="16" class="node node-weak"/>
+      <text x="112" y="269" class="node-title">M2 Toy Model</text>
+      <text x="112" y="296" class="annotation-strong">Predicts</text>
+      <text x="112" y="321" class="node-body mono">H_q → H_kv</text>
+      <text x="112" y="348" class="node-body">KV capacity changes with</text>
+      <text x="112" y="371" class="node-body mono">B / T / H_kv</text>
+      <rect x="112" y="402" width="174" height="27" rx="13.5" class="chip"/>
+      <text x="199" y="420" text-anchor="middle" class="chip-text">prediction · not runtime</text>
+    </g>
+    <path d="M308 312H360" class="connector connector-feedback"/>
+    <text x="334" y="298" text-anchor="middle" class="annotation">hypothesis</text>
+
+    <!-- Our system -->
+    <g id="our-system">
+      <rect x="340" y="218" width="840" height="520" rx="18" class="container-owned"/>
+      <rect x="364" y="238" width="154" height="28" rx="14" class="chip-owned"/>
+      <text x="441" y="257" text-anchor="middle" class="chip-text">CONTROLLED BY US</text>
+      <text x="536" y="257" class="container-title">Experiment &amp; Evidence Infrastructure</text>
+      <text x="1148" y="257" text-anchor="end" class="container-subtitle">inputs · client events · evidence · validation</text>
+
+      <g id="experiment-spec">
+        <rect x="370" y="288" width="270" height="166" rx="15" class="node node-owned"/>
+        <text x="392" y="318" class="node-title">ExperimentSpec</text>
+        <text x="392" y="345" class="node-body">• experimental variable</text>
+        <text x="392" y="368" class="node-body">• fixed conditions</text>
+        <text x="392" y="391" class="node-body">• workload / seed / version</text>
+        <rect x="392" y="410" width="110" height="27" rx="13.5" class="chip-owned"/>
+        <text x="447" y="428" text-anchor="middle" class="chip-text mono">spec_hash</text>
+        <text x="392" y="477" class="annotation">描述实验条件，不设置 vLLM scheduler state</text>
+      </g>
+
+      <g id="experiment-runner">
+        <rect x="684" y="288" width="450" height="166" rx="15" class="node node-owned"/>
+        <text x="706" y="318" class="node-title">Experiment Runner</text>
+        <text x="706" y="345" class="node-body">• start / probe server</text>
+        <text x="706" y="368" class="node-body">• warm-up · send real requests</text>
+        <text x="706" y="391" class="node-body">• record timeout / failure / client-side events</text>
+        <rect x="706" y="410" width="92" height="27" rx="13.5" class="chip-owned"/>
+        <text x="752" y="428" text-anchor="middle" class="chip-text mono">run_id</text>
+        <rect x="808" y="410" width="120" height="27" rx="13.5" class="chip-owned"/>
+        <text x="868" y="428" text-anchor="middle" class="chip-text">control plane</text>
+      </g>
+
+      <path d="M640 356H674" class="connector connector-control"/>
+      <text x="657" y="342" text-anchor="middle" class="annotation">contract</text>
+
+      <!-- Frozen evidence is the mandatory gate between observation and claims. -->
+      <g id="raw-evidence">
+        <rect x="370" y="510" width="310" height="162" rx="15" class="node node-evidence"/>
+        <text x="392" y="540" class="node-title">Frozen Raw Evidence</text>
+        <text x="392" y="566" class="node-body mono">manifest.json</text>
+        <text x="392" y="588" class="node-body mono">requests.jsonl · metrics.jsonl</text>
+        <text x="392" y="610" class="node-body mono">server.log · failures</text>
+        <rect x="392" y="628" width="156" height="27" rx="13.5" class="chip-evidence"/>
+        <text x="470" y="646" text-anchor="middle" class="chip-text">append-only · retained</text>
+      </g>
+
+      <g id="validator-aggregator">
+        <rect x="720" y="510" width="220" height="162" rx="15" class="node node-evidence"/>
+        <text x="742" y="540" class="node-title">Validator / Aggregator</text>
+        <text x="742" y="568" class="node-body">• check invariants</text>
+        <text x="742" y="591" class="node-body">• single-variable discipline</text>
+        <text x="742" y="614" class="node-body">• claims → raw evidence</text>
+        <rect x="742" y="632" width="116" height="27" rx="13.5" class="chip-evidence"/>
+        <text x="800" y="650" text-anchor="middle" class="chip-text">validated only</text>
+      </g>
+
+      <g id="reproducible-deliverables">
+        <rect x="978" y="510" width="170" height="162" rx="15" class="node node-evidence"/>
+        <text x="998" y="540" class="node-title">Deliverables</text>
+        <text x="998" y="564" class="annotation-strong">Reproducible</text>
+        <text x="998" y="590" class="node-body">Plots</text>
+        <text x="1068" y="590" class="node-body">Matrix</text>
+        <text x="998" y="614" class="node-body">Source Trace</text>
+        <text x="998" y="638" class="node-body">Runbook</text>
+      </g>
+
+      <path d="M680 588H710" class="connector connector-state"/>
+      <text x="695" y="575" text-anchor="middle" class="annotation">validate</text>
+      <path d="M940 588H968" class="connector connector-state"/>
+
+      <!-- Weak feedback loop: outputs inform the next prediction/spec, not runtime control. -->
+      <path d="M1062 510V482H505V464" class="connector connector-feedback"/>
+      <rect x="722" y="469" width="196" height="26" rx="13" class="chip"/>
+      <text x="820" y="487" text-anchor="middle" class="chip-text">next prediction / ExperimentSpec</text>
+
+      <!-- Traceability is metadata carried by all artifacts, not another processing step. -->
+      <g id="traceability-spine">
+        <path d="M374 724H1146" class="trace-rail"/>
+        <rect x="386" y="706" width="102" height="28" rx="14" class="chip"/>
+        <text x="437" y="725" text-anchor="middle" class="chip-text">Traceability</text>
+        <rect x="504" y="706" width="104" height="28" rx="14" class="chip-owned"/>
+        <text x="556" y="725" text-anchor="middle" class="chip-text mono">run_id</text>
+        <rect x="620" y="706" width="118" height="28" rx="14" class="chip-owned"/>
+        <text x="679" y="725" text-anchor="middle" class="chip-text mono">spec_hash</text>
+        <rect x="750" y="706" width="160" height="28" rx="14" class="chip-owned"/>
+        <text x="830" y="725" text-anchor="middle" class="chip-text mono">env_fingerprint</text>
+        <text x="928" y="725" class="annotation">input → events → evidence → claim</text>
+      </g>
+    </g>
+
+    <!-- Ownership boundary -->
+    <g id="ownership-boundary">
+      <line x1="1205" y1="218" x2="1205" y2="738" class="boundary"/>
+      <rect x="1188" y="401" width="34" height="154" rx="17" fill="#ffffff" stroke="#d1d6de"/>
+      <text transform="translate(1211 537) rotate(-90)" class="chip-text">OWNERSHIP BOUNDARY</text>
+    </g>
+
+    <!-- vLLM: external system under test -->
+    <g id="vllm-system">
+      <rect x="1230" y="218" width="470" height="520" rx="18" class="container-external"/>
+      <rect x="1254" y="238" width="164" height="28" rx="14" class="chip-external"/>
+      <text x="1336" y="257" text-anchor="middle" class="chip-text">CONTROLLED BY vLLM</text>
+      <text x="1434" y="257" class="container-title">External System Under Test</text>
+      <text x="1670" y="281" text-anchor="end" class="container-subtitle">observed, never directly set</text>
+
+      <g id="vllm-api">
+        <rect x="1260" y="315" width="180" height="70" rx="14" class="node node-external"/>
+        <text x="1280" y="345" class="node-title">OpenAI-compatible API</text>
+        <text x="1280" y="367" class="annotation">accept request</text>
+      </g>
+
+      <g id="vllm-waiting">
+        <rect x="1480" y="315" width="185" height="70" rx="14" class="node node-external"/>
+        <text x="1500" y="345" class="node-title">Waiting Requests</text>
+        <text x="1500" y="367" class="annotation">accepted · not scheduled</text>
+      </g>
+
+      <g id="vllm-scheduler">
+        <rect x="1260" y="425" width="230" height="132" rx="15" class="node node-external"/>
+        <text x="1280" y="455" class="node-title">Scheduler</text>
+        <text x="1280" y="481" class="node-body">Token Budget</text>
+        <text x="1280" y="503" class="node-body">Sequence Selection</text>
+        <rect x="1280" y="516" width="148" height="27" rx="13.5" class="chip-external"/>
+        <text x="1354" y="534" text-anchor="middle" class="chip-text">Server Batch · this iteration</text>
+      </g>
+
+      <g id="vllm-running">
+        <rect x="1535" y="425" width="130" height="70" rx="14" class="node node-external"/>
+        <text x="1555" y="455" class="node-title">Running</text>
+        <text x="1555" y="477" class="annotation">scheduled now</text>
+      </g>
+
+      <g id="vllm-model-runner">
+        <rect x="1535" y="530" width="130" height="70" rx="14" class="node node-external"/>
+        <text x="1555" y="560" class="node-title">Model Runner</text>
+        <text x="1555" y="582" class="annotation">execute batch</text>
+      </g>
+
+      <g id="vllm-kv-block-pool">
+        <rect x="1260" y="594" width="230" height="74" rx="14" class="node node-external"/>
+        <text x="1280" y="624" class="node-title">KV Block Pool</text>
+        <g transform="translate(1280 640)">
+          <rect width="24" height="13" rx="3" fill="#8c9baa"/>
+          <rect x="31" width="24" height="13" rx="3" fill="#aeb8c2"/>
+          <rect x="62" width="24" height="13" rx="3" fill="#8c9baa"/>
+          <rect x="93" width="24" height="13" rx="3" fill="#d7d9d5"/>
+          <rect x="124" width="24" height="13" rx="3" fill="#d7d9d5"/>
+        </g>
+      </g>
+
+      <g id="vllm-observation-surfaces">
+        <rect x="1520" y="628" width="155" height="78" rx="14" class="node node-external"/>
+        <text x="1540" y="654" class="node-title">Observation</text>
+        <text x="1540" y="677" class="node-body">Metrics · Logs</text>
+        <text x="1540" y="697" class="node-body">Responses</text>
+      </g>
+
+      <path d="M1440 350H1470" class="connector connector-state"/>
+      <path d="M1572 385V405H1375V415" class="connector connector-state"/>
+      <rect x="1478" y="390" width="170" height="22" rx="11" fill="#ffffff"/>
+      <text x="1563" y="405" text-anchor="middle" class="annotation">not immediately Running</text>
+      <path d="M1490 460H1525" class="connector connector-state"/>
+      <path d="M1600 495V520" class="connector connector-state"/>
+      <path d="M1375 557V584" class="connector connector-state"/>
+    </g>
+
+    <!-- Request crosses into vLLM; observation crosses back, but control does not. -->
+    <path d="M1134 350H1250" class="connector connector-control"/>
+    <rect x="920" y="331" width="196" height="28" rx="14" fill="#ffffff" stroke="#cbd5e1"/>
+    <text x="1018" y="350" text-anchor="middle" class="chip-text">OpenAI-compatible request →</text>
+
+    <path d="M1520 688V690H700V620H690" class="connector connector-observation"/>
+    <rect x="918" y="676" width="264" height="28" rx="14" fill="#ffffff" stroke="#dccb9f"/>
+    <text x="1050" y="695" text-anchor="middle" class="chip-text">responses / metrics / logs · observation only</text>
+
+    <rect x="90" y="697" width="218" height="34" rx="17" class="chip-evidence"/>
+    <text x="199" y="719" text-anchor="middle" class="annotation-strong">Observation ≠ Control</text>
+  </g>
+
+  <!-- Panel B: two independent lifecycle models -->
+  <g id="panel-lifecycles">
+    <rect x="64" y="812" width="1672" height="426" rx="20" class="panel"/>
+    <text x="88" y="844" class="panel-kicker">B · LIFECYCLE MODELS</text>
+    <text x="88" y="874" class="panel-title">Experiment Run 与 Request Event 是两个不同的状态机</text>
+
+    <!-- Run lifecycle -->
+    <g id="run-lifecycle">
+      <rect x="88" y="892" width="805" height="322" rx="16" class="subpanel"/>
+      <text x="110" y="922" class="container-title">Experiment Run Lifecycle</text>
+      <text x="862" y="922" text-anchor="end" class="container-subtitle">execution attempt</text>
+
+      <g>
+        <rect x="110" y="948" width="105" height="50" rx="12" class="node"/>
+        <text x="162.5" y="978" text-anchor="middle" class="state-label">PLANNED</text>
+        <rect x="240" y="948" width="105" height="50" rx="12" class="node"/>
+        <text x="292.5" y="978" text-anchor="middle" class="state-label">VALIDATED</text>
+        <rect x="370" y="948" width="105" height="50" rx="12" class="node node-owned"/>
+        <text x="422.5" y="978" text-anchor="middle" class="state-label">WARMING_UP</text>
+        <rect x="500" y="948" width="105" height="50" rx="12" class="node node-owned"/>
+        <text x="552.5" y="978" text-anchor="middle" class="state-label">RUNNING</text>
+        <rect x="630" y="948" width="105" height="50" rx="12" class="node node-owned"/>
+        <text x="682.5" y="978" text-anchor="middle" class="state-label">FINALIZING</text>
+        <rect x="760" y="948" width="105" height="50" rx="12" class="node node-success"/>
+        <text x="812.5" y="978" text-anchor="middle" class="state-label">COMPLETED</text>
+
+        <path d="M215 973H230" class="connector connector-state"/>
+        <path d="M345 973H360" class="connector connector-state"/>
+        <path d="M475 973H490" class="connector connector-state"/>
+        <path d="M605 973H620" class="connector connector-state"/>
+        <path d="M735 973H750" class="connector connector-state"/>
+      </g>
+
+      <g>
+        <rect x="232" y="1082" width="121" height="48" rx="12" class="node node-terminal"/>
+        <text x="292.5" y="1111" text-anchor="middle" class="state-label">BLOCKED</text>
+        <rect x="492" y="1082" width="121" height="48" rx="12" class="node node-terminal"/>
+        <text x="552.5" y="1111" text-anchor="middle" class="state-label">FAILED</text>
+        <rect x="622" y="1082" width="121" height="48" rx="12" class="node node-terminal"/>
+        <text x="682.5" y="1111" text-anchor="middle" class="state-label">ABORTED</text>
+
+        <path d="M292.5 998V1072" class="connector connector-error"/>
+        <text x="305" y="1034" class="annotation">environment / validation failure</text>
+        <path d="M552.5 998V1072" class="connector connector-error"/>
+        <text x="564" y="1057" class="annotation">measurement failure</text>
+        <path d="M682.5 998V1072" class="connector connector-error"/>
+        <text x="694" y="1034" class="annotation">interrupted during finalization</text>
+      </g>
+
+      <line x1="110" y1="1152" x2="865" y2="1152" class="divider"/>
+      <text x="110" y="1178" class="annotation-strong">Raw data already written is retained.</text>
+      <text x="110" y="1199" class="annotation">changed conditions → new run_id · incomplete run ≠ successful experiment</text>
+    </g>
+
+    <!-- Request event lifecycle -->
+    <g id="request-lifecycle">
+      <rect x="915" y="892" width="797" height="322" rx="16" class="subpanel"/>
+      <text x="937" y="922" class="container-title">Request Event Lifecycle</text>
+      <text x="1682" y="922" text-anchor="end" class="container-subtitle">CLIENT / LOAD GENERATOR</text>
+
+      <g>
+        <rect x="938" y="948" width="105" height="50" rx="12" class="node"/>
+        <text x="990.5" y="978" text-anchor="middle" class="state-label">CREATED</text>
+        <rect x="1073" y="948" width="182" height="50" rx="12" class="node node-owned"/>
+        <text x="1164" y="970" text-anchor="middle" class="state-label">WAITING_CLIENT_SLOT</text>
+        <text x="1164" y="988" text-anchor="middle" class="chip-text">load generator only</text>
+        <rect x="1285" y="948" width="95" height="50" rx="12" class="node node-owned"/>
+        <text x="1332.5" y="978" text-anchor="middle" class="state-label">SENT</text>
+        <rect x="1410" y="948" width="130" height="50" rx="12" class="node node-owned"/>
+        <text x="1475" y="970" text-anchor="middle" class="state-label">FIRST_TOKEN</text>
+        <text x="1475" y="988" text-anchor="middle" class="chip-text">streaming only · S5</text>
+        <rect x="1570" y="948" width="115" height="50" rx="12" class="node node-success"/>
+        <text x="1627.5" y="978" text-anchor="middle" class="state-label">COMPLETED</text>
+
+        <path d="M1043 973H1063" class="connector connector-state"/>
+        <path d="M1255 973H1275" class="connector connector-state"/>
+        <path d="M1380 973H1400" class="connector connector-state"/>
+        <path d="M1540 973H1560" class="connector connector-state"/>
+      </g>
+
+      <!-- Exact error-transition relation, rendered as a matrix to avoid crossing connectors. -->
+      <g id="request-terminal-transitions">
+        <text x="938" y="1032" class="panel-kicker">ALLOWED TERMINAL TRANSITIONS</text>
+        <rect x="938" y="1045" width="747" height="118" rx="13" fill="#ffffff" stroke="#d9dee6"/>
+        <line x1="1085" y1="1045" x2="1085" y2="1163" class="divider"/>
+        <line x1="938" y1="1082" x2="1685" y2="1082" class="divider"/>
+        <line x1="938" y1="1122" x2="1685" y2="1122" class="divider"/>
+
+        <text x="1011" y="1069" text-anchor="middle" class="chip-text">source state</text>
+        <text x="1192" y="1069" text-anchor="middle" class="chip-text">HTTP_ERROR</text>
+        <text x="1420" y="1069" text-anchor="middle" class="chip-text">TIMED_OUT</text>
+        <text x="1600" y="1069" text-anchor="middle" class="chip-text">CANCELLED</text>
+
+        <text x="1011" y="1107" text-anchor="middle" class="state-label">SENT</text>
+        <rect x="1148" y="1089" width="88" height="25" rx="12.5" class="chip-error"/>
+        <text x="1192" y="1106" text-anchor="middle" class="chip-text">→ allowed</text>
+        <rect x="1376" y="1089" width="88" height="25" rx="12.5" class="chip-error"/>
+        <text x="1420" y="1106" text-anchor="middle" class="chip-text">→ allowed</text>
+        <rect x="1556" y="1089" width="88" height="25" rx="12.5" class="chip-error"/>
+        <text x="1600" y="1106" text-anchor="middle" class="chip-text">→ allowed</text>
+
+        <text x="1011" y="1148" text-anchor="middle" class="state-label">FIRST_TOKEN</text>
+        <text x="1192" y="1148" text-anchor="middle" class="annotation">—</text>
+        <rect x="1376" y="1130" width="88" height="25" rx="12.5" class="chip-error"/>
+        <text x="1420" y="1147" text-anchor="middle" class="chip-text">→ allowed</text>
+        <rect x="1556" y="1130" width="88" height="25" rx="12.5" class="chip-error"/>
+        <text x="1600" y="1147" text-anchor="middle" class="chip-text">→ allowed</text>
+      </g>
+
+      <rect x="938" y="1177" width="424" height="25" rx="12.5" class="chip-owned"/>
+      <text x="1150" y="1194" text-anchor="middle" class="chip-text">WAITING_CLIENT_SLOT is not vLLM Waiting</text>
+    </g>
+  </g>
+
+  <!-- Panel C: three concepts that must not be collapsed into concurrency. -->
+  <g id="semantic-distinctions">
+    <rect x="64" y="1270" width="1672" height="226" rx="20" class="panel"/>
+    <text x="88" y="1302" class="panel-kicker">C · SEMANTIC DISTINCTIONS</text>
+    <text x="88" y="1332" class="panel-title">三个层次的状态，不能统一称为“并发”</text>
+
+    <g id="client-slot-card">
+      <rect x="88" y="1350" width="510" height="104" rx="15" class="node node-owned"/>
+      <rect x="108" y="1370" width="42" height="42" rx="10" class="chip-owned"/>
+      <circle cx="129" cy="1384" r="7" fill="none" stroke="#526d91" stroke-width="1.8"/>
+      <path d="M117 1403c3-8 21-8 24 0" fill="none" stroke="#526d91" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="168" y="1377" class="panel-kicker">CLIENT SIDE</text>
+      <text x="168" y="1402" class="node-title">WAITING_CLIENT_SLOT</text>
+      <text x="168" y="1426" class="node-body">Load generator waits for a client concurrency slot.</text>
+    </g>
+
+    <g id="server-waiting-card">
+      <rect x="645" y="1350" width="510" height="104" rx="15" class="node node-external"/>
+      <rect x="665" y="1370" width="42" height="42" rx="10" class="chip-external"/>
+      <rect x="676" y="1380" width="20" height="5" rx="2.5" fill="#8d8a80"/>
+      <rect x="676" y="1390" width="20" height="5" rx="2.5" fill="#aaa69b"/>
+      <rect x="676" y="1400" width="20" height="5" rx="2.5" fill="#c0bdb4"/>
+      <text x="725" y="1377" class="panel-kicker">SERVER STATE</text>
+      <text x="725" y="1402" class="node-title">vLLM Waiting</text>
+      <text x="725" y="1426" class="node-body">Request accepted by server, not yet scheduled to run.</text>
+    </g>
+
+    <g id="server-batch-card">
+      <rect x="1202" y="1350" width="510" height="104" rx="15" class="node node-evidence"/>
+      <rect x="1222" y="1370" width="42" height="42" rx="10" class="chip-evidence"/>
+      <path d="M1232 1402a11 11 0 1 1 20 0" fill="none" stroke="#9a7b35" stroke-width="1.8"/>
+      <path d="M1242 1391l7-6" stroke="#9a7b35" stroke-width="1.8" stroke-linecap="round"/>
+      <text x="1282" y="1377" class="panel-kicker">SCHEDULER OUTPUT</text>
+      <text x="1282" y="1402" class="node-title">Server Batch</text>
+      <text x="1282" y="1426" class="node-body">Sequences selected for one scheduling iteration.</text>
+    </g>
+
+    <text x="900" y="1480" text-anchor="middle" class="annotation-strong">Client Concurrency ≠ vLLM Waiting ≠ Server Batch · different layers of state</text>
+  </g>
+
+  <!-- Panel D: run status and conclusion status are orthogonal. -->
+  <g id="orthogonal-statuses">
+    <rect x="64" y="1528" width="1672" height="174" rx="20" class="panel"/>
+    <text x="88" y="1560" class="panel-kicker">D · INDEPENDENT STATUS DIMENSIONS</text>
+
+    <g id="execution-status">
+      <text x="90" y="1590" class="container-title">Execution Status</text>
+      <rect x="90" y="1606" width="126" height="32" rx="16" class="chip-success"/>
+      <text x="153" y="1627" text-anchor="middle" class="state-label">COMPLETED</text>
+      <rect x="228" y="1606" width="112" height="32" rx="16" class="chip-error"/>
+      <text x="284" y="1627" text-anchor="middle" class="state-label">BLOCKED</text>
+      <rect x="352" y="1606" width="104" height="32" rx="16" class="chip-error"/>
+      <text x="404" y="1627" text-anchor="middle" class="state-label">FAILED</text>
+      <rect x="468" y="1606" width="112" height="32" rx="16" class="chip-error"/>
+      <text x="524" y="1627" text-anchor="middle" class="state-label">ABORTED</text>
+    </g>
+
+    <g id="orthogonal-mark">
+      <text x="820" y="1625" text-anchor="middle" style="font-size:32px;font-weight:450;fill:#7b8492">⊥</text>
+      <text x="820" y="1645" text-anchor="middle" class="chip-text">相互独立</text>
+      <text x="820" y="1660" text-anchor="middle" class="chip-text">independent dimensions</text>
+    </g>
+
+    <g id="conclusion-status">
+      <text x="980" y="1590" class="container-title">Conclusion Status</text>
+      <rect x="980" y="1606" width="126" height="32" rx="16" class="chip-evidence"/>
+      <text x="1043" y="1627" text-anchor="middle" class="state-label">Supported</text>
+      <rect x="1118" y="1606" width="112" height="32" rx="16" class="chip-evidence"/>
+      <text x="1174" y="1627" text-anchor="middle" class="state-label">Refuted</text>
+      <rect x="1242" y="1606" width="148" height="32" rx="16" class="chip-evidence"/>
+      <text x="1316" y="1627" text-anchor="middle" class="state-label">Inconclusive</text>
+      <rect x="1410" y="1606" width="278" height="32" rx="16" class="chip-success"/>
+      <text x="1549" y="1627" text-anchor="middle" class="chip-text">COMPLETED + Inconclusive is valid</text>
+    </g>
+
+    <line x1="90" y1="1668" x2="1710" y2="1668" class="divider"/>
+    <text x="900" y="1692" text-anchor="middle" class="annotation-strong">A formal conclusion requires an eligible completed run + validated evidence · FAILED ↛ Supported</text>
+  </g>
+</svg>
