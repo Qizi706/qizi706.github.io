@@ -97,21 +97,21 @@ question
 
 ## 3. 总路线
 
-| ID  | 任务                      | 当前状态      | 直接产物                           |
-| --- | ------------------------- | ------------- | ---------------------------------- |
-| M0  | Cache、预分配、固定 `B=2` | Completed     | 测试、300 条长度扫描样本、实验文章 |
-| P0  | Python/NumPy 语义         | In progress   | 六个可预测的小实验                 |
-| M1  | Batch Size 曲线           | Completed     | `B=1/2/4/8` 原始数据与曲线         |
-| M2  | MHA/GQA 与 KV 容量        | Next after P0 | 正确性测试与容量表                 |
-| S0  | vLLM 环境与可观测性       | Pending       | 环境快照与 Capability Matrix       |
-| S1  | 单并发稳态基线            | Pending       | 三轮详细 Serving 结果              |
-| S2  | Input Length              | Pending       | TTFT/TPOT/E2E/KV 曲线              |
-| S3  | Client Concurrency        | Pending       | 吞吐饱和点与尾延迟                 |
-| S4  | Scheduler Budget          | Pending       | 配置上限与实际调度对照             |
-| S5  | Mixed Prefill/Decode      | Pending       | Long Prefill 与 ITL 时间线         |
-| S6  | Prefix Reuse              | Pending       | Prefix Hit 与 TTFT 对照            |
-| R0  | 固定版本源码追踪          | Pending       | 状态机、调用链与验证性复跑         |
-| F0  | 综合、复现与反馈          | Pending       | 复现包与两篇文章终稿               |
+| ID  | 任务                      | 当前状态    | 直接产物                           |
+| --- | ------------------------- | ----------- | ---------------------------------- |
+| M0  | Cache、预分配、固定 `B=2` | Completed   | 测试、300 条长度扫描样本、实验文章 |
+| P0  | Python/NumPy 语义         | Completed   | 六个可预测的小实验                 |
+| M1  | Batch Size 曲线           | Completed   | `B=1/2/4/8` 原始数据与曲线         |
+| M2  | MHA/GQA 与 KV 容量        | In progress | 正确性测试与容量表                 |
+| S0  | vLLM 环境与可观测性       | Pending     | 环境快照与 Capability Matrix       |
+| S1  | 单并发稳态基线            | Pending     | 三轮详细 Serving 结果              |
+| S2  | Input Length              | Pending     | TTFT/TPOT/E2E/KV 曲线              |
+| S3  | Client Concurrency        | Pending     | 吞吐饱和点与尾延迟                 |
+| S4  | Scheduler Budget          | Pending     | 配置上限与实际调度对照             |
+| S5  | Mixed Prefill/Decode      | Pending     | Long Prefill 与 ITL 时间线         |
+| S6  | Prefix Reuse              | Pending     | Prefix Hit 与 TTFT 对照            |
+| R0  | 固定版本源码追踪          | Pending     | 状态机、调用链与验证性复跑         |
+| F0  | 综合、复现与反馈          | Pending     | 复现包与两篇文章终稿               |
 
 ---
 
@@ -912,13 +912,13 @@ Output Token Throughput 增幅 < 10%
 
 ```json
 {
-	"request_id": "...",
-	"arrival_ns": 0,
-	"sent_ns": 0,
-	"first_token_ns": 0,
-	"token_times_ns": [],
-	"finish_ns": 0,
-	"status": "ok"
+ "request_id": "...",
+ "arrival_ns": 0,
+ "sent_ns": 0,
+ "first_token_ns": 0,
+ "token_times_ns": [],
+ "finish_ns": 0,
+ "status": "ok"
 }
 ```
 

@@ -105,78 +105,72 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 
 	<section class="tomorrow-section" aria-labelledby="tomorrow-heading">
 		<h2 id="tomorrow-heading">明日学习</h2>
-		<LearningStage period="2026.08.18" title="M1 · Batch Size 曲线与吞吐拐点" status="done">
+		<LearningStage period="2026.08.19" title="P0 · NumPy View/Copy 与轴语义闭环" status="done">
 			<p class="tomorrow-objective">
-				<strong>完成依据：</strong><code>{'B∈{1,2,4,8}'}</code> 全部通过独立 Oracle 与 Shape 检查；240
-				条原始样本可重建 P50/P95、Positions/s、两张曲线和 <code>Knee: B=8</code>。
+				<strong>完成依据：</strong>六个 Case 均保留预测、观察、判定与断言；已能区分
+				Binding、View、Copy、Stride 和 Buffer 分配，并完成 Attention/KV Cache 映射与闭卷口述。
 			</p>
 		</LearningStage>
 
 		<LearningStage
-			period="2026.08.19 · 120 min"
-			title="P0 · NumPy View/Copy 与轴语义闭环"
+			period="2026.08.20 · 120 min"
+			title="M2-A1 · 只完成 Query Head 轴变换"
 			status="active"
 			open
 		>
 			<p class="tomorrow-objective">
-				<strong>目标：</strong>在进入 MHA/GQA 前，不看运行结果也能预测 Binding、基础切片、Advanced
-				Indexing、<code>swapaxes</code> 和 <code>concatenate</code> 的 Shape、内存共享与分配行为，并把它们映射回当前
-				Attention/KV Cache 实现。
+				<strong>目标：</strong>不一次实现完整 Q/K/V；只把已经投影好的 Query 从
+				<code>[B,T,H×D_head]</code> 变换为 <code>[B,H,T,D_head]</code>，建立“轴语义 → Shape 变换 →
+				元素 Oracle → 测试”的最小闭环。
 			</p>
 
 			<dl class="tomorrow-contract" aria-label="明日学习契约">
 				<div>
 					<dt>question</dt>
 					<dd>
-						哪些 NumPy 操作只创建 View，哪些会复制或分配新 Buffer，轴变换又怎样影响 Attention
-						Shape？
+						怎样证明 Head 维被正确拆出并移动到 Sequence 前，而不是只得到一个碰巧正确的 Shape？
 					</dd>
 				</div>
 				<div>
 					<dt>prediction</dt>
 					<dd>
-						基础切片和 <code>swapaxes</code> 通常共享内存；Advanced Indexing 与 <code
-							>concatenate</code
-						> 产生新 Buffer。
+						拆分最后一维后仍需交换 Head 与 Sequence；目标元素 <code>q[b,h,t,d]</code> 应对应扁平投影中的
+						<code>q_flat[b,t,h×D_head+d]</code>。
 					</dd>
 				</div>
 				<div>
 					<dt>artifact</dt>
 					<dd>
-						<code>docs/NUMPY_SEMANTICS_NOTES.md</code>：事前预测、实际输出、差异解释和 Lab 映射。
+						填写 <code>docs/M2_NOTES.md</code>；独立实现一个 <code>split_heads</code> 函数和 Shape、元素映射两个
+						测试。
 					</dd>
 				</div>
 				<div>
 					<dt>gate</dt>
-					<dd>
-						不看代码也能解释 View/Copy/Stride/Allocation，并指出哪些操作会污染输入或增加 Benchmark
-						成本。
-					</dd>
+					<dd>两个测试通过；能手算一个坐标的映射，并在关闭代码后重新写出变换步骤。</dd>
 				</div>
 			</dl>
 
 			<ol class="tomorrow-steps">
 				<li>
-					<b>20 min</b>：逐段阅读 <code>examples/numpy_array_semantics.py</code>，先写
-					Shape、共享关系和修改传播预测。
-				</li>
-				<li><b>25 min</b>：运行示例，保存完整输出，逐项标记 Supported 或 Refuted。</li>
-				<li>
-					<b>35 min</b>：分别修改 Slice、Advanced Indexing 和 Swapped View，使用 <code
-						>np.shares_memory</code
-					> 与 Stride 验证原因。
+					<b>15 min</b>：只追踪现有 <code>attention.py</code> 中投影与 <code>swapaxes</code> 的输入输出
+					Shape，不阅读多头 Attention 完整实现。
 				</li>
 				<li>
-					<b>25 min</b>：回到 <code>attention.py</code>，解释 <code>x[:, t:t+1, :]</code>、<code
-						>swapaxes</code
-					> 与动态 Cache 拼接的成本。
+					<b>20 min</b>：在工作表中写下每一步 Shape、一个具体元素的坐标映射，以及 View/Copy 预测。
 				</li>
-				<li><b>15 min</b>：关闭代码完成口述验收，记录至少一个预测错误及修正后的规则。</li>
+				<li>
+					<b>25 min</b>：只实现 <code>split_heads(projected, num_heads)</code
+					>，禁止同时写权重投影、K/V 或 Attention。
+				</li>
+				<li><b>25 min</b>：先写 Shape 测试，再写一个坐标的元素映射测试。</li>
+				<li><b>20 min</b>：只根据失败信息修正实现；卡住时按工作表中的求助阶梯逐级获取提示。</li>
+				<li><b>15 min</b>：关闭代码重新写出变换，并记录错误发生在哪一层。</li>
 			</ol>
 
 			<p class="tomorrow-decision">
-				<strong>下一步判断：</strong>若能脱离代码解释五类操作及其在 Lab 中的作用，P0 标记完成并进入
-				M2-A Shape 契约；否则只补做答错的操作，不扩展新的 Python 教程。
+				<strong>下一步判断：</strong>只有能从空白处重建 Query 变换时，才进入 M2-A2，把同一规则迁移到
+				K/V 并增加参数校验；明日不进入 M2-B。
 			</p>
 		</LearningStage>
 	</section>

@@ -216,4 +216,4 @@ joined value: 999
 - [x] 已指出修改传播边界和可能增加 Benchmark 成本的操作。
 - [x] 闭卷口述：不看代码解释六个 Case，并回答它们怎样映射到 Attention / KV Cache。
 
-闭卷口述通过前，不把 P0 标记为 Completed，也不进入 M2。
+P0 已通过闭卷口述，进入 M2。
