@@ -1,0 +1,838 @@
+---
+title: '如何独立写出标准脚手架：从任务契约到可验证代码'
+description: '脚手架不是空目录和 TODO 的集合，而是一份可执行的问题定义。本文从任务拆分、接口契约、语义 Oracle、测试反馈、停止线和逐步撤掉 AI 辅助出发，给出一套能够反复练习的工程方法。'
+pubDate: '2026-08-19T23:20:00+08:00'
+updatedDate: '2026-08-19T23:40:00+08:00'
+categories:
+  - '随笔'
+tags:
+  - '软件工程'
+  - '测试'
+  - '代码设计'
+  - '学习方法'
+  - 'AI 协作'
+draft: false
+mathjax: false
+---
+
+## 1. (Why) 为什么脚手架反而更难写？
+
+一个已经整理好的项目，总让人觉得一切理所当然：文件恰好放在正确的位置，接口刚好够用，测试名称直接表达需求，运行命令也已经准备好。
+
+真正从一句需求开始时，问题却完全不同。
+
+<SlideCard title="一句‘实现多头 Attention’之后">
+
+## 代码还没写，决策已经出现
+
+- 新代码放进已有模块，还是创建新文件？
+- 函数接收原始输入，还是接收已经完成的投影？
+- Shape 不合法时返回空值，还是抛出异常？
+- 测试只检查尺寸，还是检查元素语义？
+- 要不要顺便实现 K/V、Cache、GQA 和 Benchmark？
+
+## 真正困难的部分
+
+- 不是记住某个 NumPy API
+- 而是决定**这一次到底解决哪个问题**
+
+</SlideCard>
+
+<SlideCard title="代码可以很便宜，正确性定义仍然昂贵">
+
+## 生成代码很容易
+
+- 创建目录、函数和测试文件
+- 填充类型注解与 TODO
+- 复制一份相邻模块的结构
+
+## 但工具不会自动替你决定
+
+- 哪个行为才是正确行为？
+- 哪个错误值得在边界处拒绝？
+- 哪个测试能够推翻“看起来正确”的实现？
+- 什么证据足够让任务进入下一阶段？
+
+> 脚手架能力的核心，是把模糊目标压缩成**可执行、可失败、可交接的契约**。
+
+</SlideCard>
+
+本文使用一个小型张量任务作为贯穿案例：把已经投影好的 Query 从 `[B, T, H × D_head]` 变换为 `[B, H, T, D_head]`。
+
+我们不会直接公布核心变换答案。目标是学会在实现之前，独立搭建足以引导实现的结构。
+
+## 2. (What) 什么是“标准脚手架”？
+
+<SlideCard title="脚手架是一种受控的不完整">
+
+## 它已经完成的事情
+
+- 固定任务边界
+- 固定输入、输出和不变量
+- 选择符合仓库习惯的文件位置
+- 接通第一条测试反馈
+- 标出刻意推迟的功能
+
+## 它不会提前完成的事情
+
+- 核心算法
+- 未被当前需求证明必要的抽象
+- 性能优化
+- 想象中的未来扩展
+
+> 好脚手架不是“空”，而是只缺少应该由下一步完成的那一块。
+
+</SlideCard>
+
+<SlideCard title="标准的四个条件">
+
+## 1. Boundary
+
+- 一句话能说清 Goal
+- 同时列出 Non-goals
+
+## 2. Contract
+
+- 输入、输出、错误与不变量都能被观察
+- 不使用“应该没问题”作为验收
+
+## 3. Consistency
+
+- 复用仓库已有目录、命名、测试框架和命令
+- 不为一个函数新建一套世界观
+
+## 4. Feedback
+
+- 一条命令获得第一条有用失败
+- 失败可以映射回某一层契约
+
+</SlideCard>
+
+```text
+标准脚手架
+= 清晰的任务边界
++ 可执行的接口契约
++ 与仓库一致的结构
++ 最短的验证反馈链
++ 恰到好处的不完整
+```
+
+<Note title="脚手架的完成标准" class="title-underline">
+
+另一个人只看接口、测试和运行命令，就知道下一步实现什么、怎样证明正确、什么时候停止。
+
+</Note>
+
+### 2.1 十行契约：写代码之前先回答
+
+<SlideCard title="Scope：先阻止任务膨胀">
+
+## Goal
+
+- 这次只解决什么？
+- 只保留一个主要动作
+
+## Non-goals
+
+- 哪些相关功能本轮明确不做？
+- 哪些诱人的“顺手优化”必须推迟？
+
+```text
+Goal:
+把扁平的 Head 特征拆成显式 Head 轴。
+
+Non-goals:
+不实现权重投影、Softmax、Causal Mask、KV Cache、GQA 和 Benchmark。
+```
+
+</SlideCard>
+
+<SlideCard title="Semantics：固定什么叫正确">
+
+## Input / Output
+
+- 类型怎样存储数据？
+- 每个 Axis 代表什么？
+- 输出的 Shape 和状态是什么？
+
+## Invariant / Errors
+
+- 无论采用什么 API，什么关系必须成立？
+- 哪些非法输入必须立即拒绝？
+
+```text
+Input:  projected[B, T, H * D_head]
+Output: query[B, H, T, D_head]
+Error:  num_heads 非法，或最后一维不能被 num_heads 整除
+
+Invariant:
+query[b, h, t, d]
+== projected[b, t, h * D_head + d]
+```
+
+</SlideCard>
+
+<SlideCard title="Engineering：让契约进入仓库">
+
+## Files
+
+- 新增或修改哪些文件？
+- 为什么它们属于这里？
+
+## Tests
+
+- 最小正常路径是什么？
+- 哪个反例最容易揭露语义错误？
+
+## Run
+
+- 哪一条命令能获得第一条反馈？
+- 新测试通过后，如何运行完整回归？
+
+</SlideCard>
+
+<CodeCard title="可以复制的十行契约" path="docs/TASK_CONTRACT.md">
+
+```text
+Goal:       这次只解决什么？
+Non-goals:  明确不做什么？
+Input:      输入类型、Shape、取值范围是什么？
+Output:     输出类型、Shape、语义是什么？
+Invariant:  无论怎样实现，什么必须成立？
+Errors:     哪些非法输入必须被拒绝？
+Files:      新增或修改哪些文件？
+Happy test: 最小正常路径是什么？
+Boundary:   哪个反例最容易揭露错误？
+Run:        用什么命令获得第一条反馈？
+```
+
+</CodeCard>
+
+如果这十行还写不清楚，先不要创建抽象、类层次和目录。此时缺少的不是代码，而是问题定义。
+
+## 3. (How) 从巨大需求缩到一个函数
+
+<SlideCard title="原始任务：实现 MHA、GQA 和 KV Cache">
+
+## 一个句子里混入了什么？
+
+- Q/K/V 权重投影
+- Batch、Head、Sequence、Head Dimension
+- Causal Mask 与 Softmax
+- Query Head 到 KV Head 的映射
+- Decode 状态与 Cache 增长
+- 容量公式与性能测量
+
+## 直接开写会发生什么？
+
+- 最终只有一个“数值不对”
+- 无法判断错误来自 Shape、Mask、映射还是状态
+- 测试也会被迫一次理解全部机制
+
+</SlideCard>
+
+<SlideCard title="连续缩小四次">
+
+## 每次删除一个不必要的未知量
+
+```text
+MHA/GQA/KV Cache
+  -> 先固定 Q/K/V Shape 契约
+  -> 先只处理 Query
+  -> 假设权重投影已经完成
+  -> 只实现 split_heads
+```
+
+## 最终只剩一个问题
+
+```text
+[B, T, H * D_head]
+        |
+        | split_heads
+        v
+[B, H, T, D_head]
+```
+
+- 怎样拆分最后一维？
+- 怎样证明 Head 和 Sequence 没有放反？
+
+</SlideCard>
+
+<Note title="一次只保留一个主要未知量" class="title-underline">
+
+如果你还在同时搜索“函数放哪里、参数怎么传、矩阵怎样算、测试框架怎么用、性能怎样测”，任务仍然太大。继续缩小，直到一次失败大致能指向一个层次。
+
+</Note>
+
+### 3.1 先读仓库，不要凭空设计
+
+<SlideCard title="Repository is the specification">
+
+## 先搜索什么？
+
+```bash
+rg --files src tests
+rg -n "class Test|def test_|raise ValueError" src tests
+```
+
+## 从相邻代码提取约定
+
+- 源码和测试分别放在哪里？
+- 使用 `unittest` 还是 `pytest`？
+- 常量、`setUp` 和辅助断言怎样组织？
+- 异常信息和类型注解是什么风格？
+- 完整回归测试怎样运行？
+
+> 标准首先意味着一致，而不是展示更多设计模式。
+
+</SlideCard>
+
+当前案例的最小文件树是：
+
+```text
+src/kv_cache_batch/
+├── attention.py        # 已有单头实现：观察约定
+└── multi_head.py       # 新增：当前最小变换
+
+tests/
+├── test_attention.py   # 已有回归测试
+└── test_multi_head.py  # 新增：当前反馈入口
+```
+
+不要因为未来“可能有更多模型”就立即创建 `interfaces/`、`strategies/`、`services/` 或插件注册系统。目录应该表达已经出现的稳定边界。
+
+### 3.2 实现脚手架：只固定公共表面
+
+<CodeCard title="M2-A1 / Query Head 轴变换" path="src/kv_cache_batch/multi_head.py">
+
+```python
+import numpy as np
+
+
+def split_heads(
+    projected: np.ndarray,
+    num_heads: int,
+) -> np.ndarray:
+    """Convert [B, T, H * D_head] into [B, H, T, D_head].
+
+    Raises:
+        ValueError: If the input violates the shape contract.
+    """
+    # TODO: validate rank and num_heads
+    # TODO: derive D_head from the final dimension
+    # TODO: split the final dimension
+    # TODO: move Head before Sequence
+    raise NotImplementedError
+```
+
+</CodeCard>
+
+<SlideCard title="一个好的 TODO 应该留下什么？">
+
+## 留下语义决策
+
+```python
+# 检查最后一维能否被 num_heads 整除
+# 将 Head 轴移动到 Sequence 前
+```
+
+## 不要留下空话
+
+```python
+# 处理错误
+# 转换 Shape
+# 完成功能
+```
+
+## 也不要把答案藏进注释
+
+- TODO 太抽象：无法指导下一步
+- TODO 太具体：学习者只是在重新输入答案
+- 合适的 TODO：说明必须完成的语义，不规定具体 API
+
+</SlideCard>
+
+### 3.3 测试脚手架：Shape 正确还不够
+
+<SlideCard title="为什么随机数不是第一个选择？">
+
+## 随机数适合
+
+- 数值稳定性
+- 大量组合
+- 统计性质
+
+## 顺序值更适合第一次追踪 Axis
+
+```python
+projected = np.arange(
+    B * T * H * D_HEAD,
+).reshape(B, T, H * D_HEAD)
+```
+
+- 每个元素带有唯一位置
+- 轴放反后不会因为值相同而蒙混过关
+- 可以手算一个坐标作为独立 Oracle
+
+</SlideCard>
+
+<CodeCard title="测试名称直接表达契约" path="tests/test_multi_head.py">
+
+```python
+import unittest
+
+import numpy as np
+
+from kv_cache_batch.multi_head import split_heads
+
+
+class TestSplitHeads(unittest.TestCase):
+    def setUp(self) -> None:
+        self.projected = np.arange(
+            BATCH_SIZE * SEQUENCE_LENGTH * NUM_HEADS * HEAD_DIM,
+        ).reshape(
+            BATCH_SIZE,
+            SEQUENCE_LENGTH,
+            NUM_HEADS * HEAD_DIM,
+        )
+
+    def test_split_heads_returns_contract_shape(self) -> None:
+        # Arrange: setUp 已准备输入
+        # Act: 调用 split_heads
+        # Assert: 输出应为 [B, H, T, D_head]
+        ...
+
+    def test_split_heads_preserves_element_mapping(self) -> None:
+        # Arrange: 选择非零的 b、h、t、d
+        # Act: 调用 split_heads
+        # Assert:
+        # q[b, h, t, d]
+        # == projected[b, t, h * HEAD_DIM + d]
+        ...
+```
+
+</CodeCard>
+
+<SlideCard title="最小测试组合">
+
+## Happy Path
+
+- 正常输入得到契约规定的 Shape
+
+## Semantic Invariant
+
+- 一个可手算的元素、状态或因果关系保持正确
+- 用来排除“Shape 正确、语义错误”
+
+## Boundary
+
+- 非法维度、空输入或不一致配置产生明确失败
+
+> 小任务不必一开始穷举所有边界，但必须知道这三层分别保护什么。
+
+</SlideCard>
+
+### 3.4 Oracle 必须独立于实现
+
+如果测试和实现都使用同一串 Shape 变换表达式，即使两边采用相同的错误顺序，测试也可能通过。
+
+这里更强的 Oracle 直接来自契约：
+
+```text
+q[b, h, t, d]
+== projected[b, t, h * D_head + d]
+```
+
+测试只选择一个具体的非零 `b/h/t/d`，手算扁平索引，再比较两个标量。它不知道实现使用了什么 NumPy API，因此能够独立挑战实现。
+
+<Note title="测试不应该只是实现的镜子" class="title-underline">
+
+Expected Value 应优先来自手算样例、协议定义、朴素实现、已有可信实现或独立数据源，而不是复制被测代码的算法。
+
+</Note>
+
+### 3.5 把失败接入最短反馈链
+
+<CodeCard title="只运行当前测试" path="shell">
+
+```bash
+OPENBLAS_NUM_THREADS=1 \
+OMP_NUM_THREADS=1 \
+PYTHONPATH=src \
+uv run python -m unittest discover \
+  -s tests \
+  -p 'test_multi_head.py' \
+  -v
+```
+
+</CodeCard>
+
+<SlideCard title="失败信息是导航，不是判决">
+
+## Import Error
+
+- 检查文件位置、包路径和导入名称
+
+## No Tests Found
+
+- 检查测试文件、类和方法命名
+
+## `NotImplementedError`
+
+- 脚手架已经连通
+- 现在才开始实现最小步骤
+
+## Shape Mismatch
+
+- 回到输入输出契约和拆分顺序
+
+## Shape 正确、元素错误
+
+- 检查 Head/Sequence 轴和索引映射
+
+## 新测试通过、旧测试失败
+
+- 修改越过了当前任务边界
+
+</SlideCard>
+
+推荐验证顺序：
+
+```text
+导入成功
+  -> 新测试被发现
+  -> Happy Path Shape
+  -> 元素语义 Oracle
+  -> 非法输入
+  -> 原有回归测试
+  -> 格式与静态检查
+```
+
+先证明正确，再讨论性能。一个 Shape 仍未固定的实现没有可靠的 Benchmark 解释基础。
+
+## 4. (Pitfalls) “看起来专业”的几种失败
+
+<SlideCard title="过度设计：为尚未出现的未来下注">
+
+## 症状
+
+- 只有一个函数，却创建抽象基类和策略注册器
+- 目录比可执行代码多
+- 配置项没有第二个真实取值
+
+## 修正
+
+- 等第二个真实实现出现
+- 等重复结构稳定
+- 再根据证据提取抽象
+
+> 更多层次不会自动带来更清楚的边界。
+
+</SlideCard>
+
+<SlideCard title="弱测试：只能证明程序没有崩溃">
+
+## 症状
+
+- 只检查返回对象存在
+- 只检查 Shape
+- 随机输入无法手算
+- Expected Value 复制实现算法
+
+## 修正
+
+- 增加一个语义不变量
+- 使用 Marker/顺序值输入
+- 增加一个最重要的非法配置
+- 让 Oracle 与实现走不同路径
+
+</SlideCard>
+
+<SlideCard title="脚手架偷偷写完了核心解法">
+
+## 症状
+
+- TODO 已经写出全部 API 和参数顺序
+- 学习者只需要复制粘贴
+- 第一次运行就全绿，却无法解释为什么
+
+## 修正
+
+- 固定职责、类型、Shape、错误和测试
+- 保留核心变换作为需要推导的空白
+- 完成后关闭模板重建一次
+
+</SlideCard>
+
+<SlideCard title="为了完整而留下不可执行文件">
+
+## 症状
+
+- 大量空目录和空配置
+- TODO 没有对应测试
+- 不知道运行哪条命令
+
+## 修正
+
+- 每个新文件必须服务当前契约
+- 每个关键 TODO 必须进入反馈链
+- 一条命令能够触发第一条有用失败
+
+</SlideCard>
+
+## 5. (How) 怎样把一次模仿变成自己的能力？
+
+阅读模板只会产生熟悉感。真正的构造能力来自**逐轮撤掉外部结构**。
+
+<SlideCard title="Round 1：带注释模仿">
+
+## 允许
+
+- 查看完整工作表
+- 搜索相邻实现
+- 查询单个 API
+
+## 必须回答
+
+- 每个文件为什么存在？
+- 每个 TODO 保护哪条契约？
+- 每个测试可能推翻什么错误？
+
+## Gate
+
+- 能解释脚手架中的每一项，而不是只让它运行
+
+</SlideCard>
+
+<SlideCard title="Round 2：关闭模板重建">
+
+## 动作
+
+- 关闭原文件
+- 从空白重新写十行契约
+- 重建目录、签名、测试名称和命令
+
+## 不要求
+
+- 逐字符还原
+- 第一次就写对全部实现
+
+## Gate
+
+- 20 分钟内恢复完整信息
+- 能指出自己遗忘的是哪一层
+
+</SlideCard>
+
+<SlideCard title="Round 3：迁移到相邻问题">
+
+## 从 Query 到 K/V
+
+- 改变 Head 数量
+- 增加权重宽度检查
+- 保持相同方法，不照抄具体实现
+
+## Gate
+
+- 能解释哪些结构复用
+- 能解释哪些契约必须改变
+
+</SlideCard>
+
+<SlideCard title="Round 4：迁移到另一类系统">
+
+## 换一个完全不同的任务
+
+- CSV 汇总器：字段校验
+- RPC 调用：Timeout 契约
+- Cache：容量上限与淘汰测试
+- CLI：Dry-run
+
+## Gate
+
+- 仍能独立写出 Goal、Non-goals、Invariant、Boundary 和 Run
+- 方法离开张量任务以后仍然成立
+
+</SlideCard>
+
+### 5.1 AI 应该放在哪一层？
+
+<SlideCard title="允许 AI 扩大反馈，不外包判断">
+
+## Contract Review
+
+```text
+这是我写的 Goal、Non-goals、输入输出和不变量。
+请只指出歧义、遗漏和无法测试的描述，不要生成实现。
+```
+
+## Counterexample
+
+```text
+请给一个能推翻当前 Shape 测试的反例，
+不要告诉我最终实现。
+```
+
+## First Broken Assumption
+
+```text
+这是我的推导和失败输出。
+请指出第一个不成立的假设。
+```
+
+## Diff Review
+
+```text
+请检查 Diff 是否越过范围、测试是否独立于实现。
+```
+
+</SlideCard>
+
+<SlideCard title="什么时候是在外包能力？">
+
+## 典型请求
+
+```text
+帮我创建所有文件、写完实现和全部测试，
+测试通过后告诉我结果。
+```
+
+## 获得了什么？
+
+- 一个可能可用的产物
+
+## 没有练到什么？
+
+- 任务拆分
+- 接口选择
+- 不变量定义
+- Oracle 设计
+- 失败定位
+
+> 完整生成适合明确授权的工程交付，不适合正在训练的核心能力。
+
+</SlideCard>
+
+求助阶梯：
+
+```text
+自己画契约
+  -> 查相邻代码
+  -> 构造最小样例
+  -> 请求反例
+  -> 请求定位第一个错误
+  -> 最后才请求参考实现
+```
+
+每一级独立尝试一个固定时间，例如 15 分钟。这样不会无限卡住，也不会在形成假设前立刻外包思考。
+
+### 5.2 七天练习：每天只增加一种能力
+
+| Day | 任务                          | 可见产物           |
+| --- | ----------------------------- | ------------------ |
+| 1   | 只写十行契约，不写实现        | 可否证的任务定义   |
+| 2   | 搜索仓库并创建最小文件与接口  | 符合现有风格的骨架 |
+| 3   | 增加 Happy Path 和语义 Oracle | 两种不同目的的测试 |
+| 4   | 增加一个最重要的边界失败      | 明确的异常契约     |
+| 5   | 关闭模板，从空白重建          | 第二份独立脚手架   |
+| 6   | 改变数据或约束，迁移方法      | 相邻任务实现       |
+| 7   | Review Git Diff，删除未来抽象 | 一份删减记录       |
+
+一周最终产物不是七份学习笔记：
+
+```text
+一个完成的最小功能
++ 一份从空白重建的脚手架
++ 一次迁移练习
++ 一份 Review 后的删减记录
+```
+
+## 6. (Gate) 怎样判断自己已经掌握？
+
+<SlideCard title="从使用到迁移">
+
+## Level 0 · 使用
+
+- 能运行别人生成的脚手架
+
+## Level 1 · 解释
+
+- 能说明每个文件、接口和测试为什么存在
+
+## Level 2 · 构造
+
+- 能从十行契约独立生成最小脚手架
+
+## Level 3 · 诊断
+
+- 能根据失败信息判断违反了哪一层契约
+
+## Level 4 · 迁移
+
+- 能把方法用于不同语言、仓库和问题类型
+
+</SlideCard>
+
+“我看懂了”只能证明接近 Level 1；“我照着写出来了”接近 Level 2。稳定的能力至少需要一次关闭模板重建和一次跨任务迁移。
+
+<Note title="阶段验收" class="title-underline">
+
+在 20 分钟内，面对一个边界清楚的小任务：写出 Goal 与 Non-goals；固定输入、输出、不变量和错误；选择符合仓库习惯的文件；设计 Happy、Semantic、Boundary 三层测试；给出唯一运行命令；说明刻意推迟的内容。
+
+</Note>
+
+### 6.1 Review Checklist
+
+<SlideCard title="Scope & Contract">
+
+## Scope
+
+- [ ] Goal 只有一个主要动作
+- [ ] Non-goals 明确列出本轮不做的功能
+- [ ] 新文件都服务于当前任务
+
+## Contract
+
+- [ ] 输入输出包含类型、Shape 或状态语义
+- [ ] 至少一个不变量独立于具体实现
+- [ ] 非法输入有明确行为
+
+</SlideCard>
+
+<SlideCard title="Tests & Feedback">
+
+## Tests
+
+- [ ] Happy Path 检查基本结构
+- [ ] Semantic Test 检查真正含义
+- [ ] Boundary Test 检查最重要的误用
+- [ ] Expected Value 没有复制实现算法
+
+## Feedback
+
+- [ ] 一条命令就能获得第一条有用反馈
+- [ ] 新测试通过后还会运行原有回归测试
+- [ ] 失败能够映射回某个契约层次
+
+</SlideCard>
+
+<SlideCard title="Restraint">
+
+- [ ] 没有为尚未出现的第二个实现建立抽象
+- [ ] TODO 描述语义决策，而不是隐藏整个任务
+- [ ] 没有在正确性之前增加 Benchmark
+- [ ] 能说明为什么现在应该停在这里
+
+</SlideCard>
+
+<Note title="Takeaways" class="title-underline">
+
+标准脚手架不是目录模板，而是可执行的问题定义：缩小范围，固定契约，选择仓库中的位置，建立独立 Oracle，接通反馈，并明确停止线。真正的独立不是拒绝文档、搜索、AI 或 Review，而是自己掌握什么算正确、什么证据足够继续。
+
+</Note>
+
+<Note title="配套练习" class="title-underline">
+
+使用 [`M2 学习工作表`](/labs/kv-cache-batch/view/docs/M2_NOTES.md/)完成第一次练习：先填写预测和元素映射，再创建接口与测试；通过以后关闭工作表，从空白重建一次。
+
+</Note>
