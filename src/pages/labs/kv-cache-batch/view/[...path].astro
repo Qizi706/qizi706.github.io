@@ -2,27 +2,32 @@
 import { readFile } from 'node:fs/promises';
 import nodePath from 'node:path';
 import {
-	encodeKvCacheBatchArtifactPath,
-	kvCacheBatchArtifacts,
-	kvCacheBatchBasePath,
-	type KvCacheBatchArtifact,
-} from '../../../../data/kv-cache-batch-artifacts';
+	collectLabArtifacts,
+	encodeLabArtifactPath,
+	getLabBasePath,
+	resolveLabArtifactPath,
+} from '../../../../utils/lab-artifacts.mjs';
 
-export function getStaticPaths() {
-	return kvCacheBatchArtifacts.map((file) => ({
-		params: { path: file.path },
-		props: { file },
-	}));
+const labName = 'kv-cache-batch';
+
+export async function getStaticPaths() {
+	const artifacts = await collectLabArtifacts('kv-cache-batch');
+	return artifacts
+		.filter((file) => file.viewable)
+		.map((file) => ({
+			params: { path: file.path },
+			props: { file },
+		}));
 }
 
 interface Props {
-	file: KvCacheBatchArtifact;
+	file: Awaited<ReturnType<typeof collectLabArtifacts>>[number];
 }
 
 const { file } = Astro.props;
-const sourcePath = nodePath.join(process.cwd(), 'public', 'labs', 'kv-cache-batch', file.path);
+const sourcePath = resolveLabArtifactPath(labName, file.path);
 const content = await readFile(sourcePath, 'utf8');
-const rawPath = kvCacheBatchBasePath + encodeKvCacheBatchArtifactPath(file.path);
+const rawPath = getLabBasePath(labName) + encodeLabArtifactPath(file.path);
 const downloadName = nodePath.basename(file.path);
 ---
 

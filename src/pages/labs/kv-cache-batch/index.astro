@@ -1,15 +1,24 @@
 ---
 import LabArchiveDownload from '../../../components/LabArchiveDownload.astro';
 import {
-	encodeKvCacheBatchArtifactPath,
-	kvCacheBatchArtifacts as files,
-	kvCacheBatchBasePath as basePath,
-} from '../../../data/kv-cache-batch-artifacts';
+	collectLabArtifacts,
+	encodeLabArtifactPath,
+	getLabArchiveInfo,
+	getLabBasePath,
+} from '../../../utils/lab-artifacts.mjs';
 
+const labName = 'kv-cache-batch';
+const files = await collectLabArtifacts(labName);
+const basePath = getLabBasePath(labName);
 const filenameWidth = Math.max(...files.map(({ path }) => path.length)) + 8;
 const parentPath = '/blog/vllm-inference-performance-lab/';
-const archiveFilename = 'kv-cache-batch.tar.gz';
-const archivePath = `/labs/${archiveFilename}`;
+const archive = await getLabArchiveInfo(labName);
+const archivePath = `/labs/${archive.filename}?v=${archive.sha256.slice(0, 12)}`;
+
+function getArtifactHref(file: (typeof files)[number]): string {
+	const encodedPath = encodeLabArtifactPath(file.path);
+	return file.viewable ? `${basePath}view/${encodedPath}/` : `${basePath}${encodedPath}`;
+}
 ---
 
 <!doctype html>
@@ -56,9 +65,9 @@ const archivePath = `/labs/${archiveFilename}`;
 		<h1>Index of /labs/kv-cache-batch/</h1>
 		<hr />
 		<pre
-			class="directory-listing"><span class="entry"><a href={parentPath}>../</a></span><LabArchiveDownload href={archivePath} filename={archiveFilename} />{files.map(
+			class="directory-listing"><span class="entry"><a href={parentPath}>../</a></span><LabArchiveDownload href={archivePath} filename={archive.filename} />{files.map(
 				(file) => (
-					<span class="entry"><a href={basePath + 'view/' + encodeKvCacheBatchArtifactPath(file.path) + '/'}>{file.path}</a>{' '.repeat(
+					<span class="entry"><a href={getArtifactHref(file)}>{file.path}</a>{' '.repeat(
 						filenameWidth - file.path.length,
 					)}{file.modified}{file.size.toString().padStart(20)}</span>
 				),

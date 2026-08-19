@@ -1,52 +1,16 @@
-import { access, mkdir, readdir, stat } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { collectLabArtifacts, discoverLabs } from '../src/utils/lab-artifacts.mjs';
 
 const workspaceRoot = process.cwd();
-const labPagesRoot = path.join(workspaceRoot, 'src', 'pages', 'labs');
 const publicLabsRoot = path.join(workspaceRoot, 'public', 'labs');
 
-const excludedPaths = [
-	'.venv',
-	'__pycache__',
-	'.pytest_cache',
-	'.mypy_cache',
-	'.ruff_cache',
-	'.DS_Store',
-];
-
-async function pathExists(targetPath) {
-	try {
-		await access(targetPath);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-async function discoverLabs() {
-	const entries = await readdir(labPagesRoot, { withFileTypes: true });
-	const labs = [];
-
-	for (const entry of entries) {
-		if (!entry.isDirectory()) continue;
-
-		const indexPage = path.join(labPagesRoot, entry.name, 'index.astro');
-		const sourceDirectory = path.join(publicLabsRoot, entry.name);
-		if ((await pathExists(indexPage)) && (await pathExists(sourceDirectory))) {
-			labs.push(entry.name);
-		}
-	}
-
-	return labs.sort();
-}
-
-function createArchive(labName) {
+function createArchive(labName, artifacts) {
 	const archivePath = path.join(publicLabsRoot, `${labName}.tar.gz`);
-	const excludeArguments = excludedPaths.flatMap((excludedPath) => [
-		`--exclude=${labName}/${excludedPath}`,
-		`--exclude=${labName}/**/${excludedPath}`,
-	]);
+	const archiveEntries = artifacts.map(({ path: artifactPath }) =>
+		path.posix.join(labName, artifactPath),
+	);
 
 	const result = spawnSync(
 		'tar',
@@ -63,8 +27,7 @@ function createArchive(labName) {
 			'--group=0',
 			'--numeric-owner',
 			'--format=ustar',
-			...excludeArguments,
-			labName,
+			...archiveEntries,
 		],
 		{ encoding: 'utf8' },
 	);
@@ -84,7 +47,15 @@ if (labs.length === 0) {
 }
 
 for (const labName of labs) {
-	const archivePath = createArchive(labName);
+	const artifacts = await collectLabArtifacts(labName);
+	if (artifacts.length === 0) {
+		throw new Error(`No publishable artifacts found for ${labName}.`);
+	}
+
+	const archivePath = createArchive(labName, artifacts);
 	const archiveStat = await stat(archivePath);
-	console.log(`Created ${path.relative(workspaceRoot, archivePath)} (${archiveStat.size} bytes)`);
+	console.log(
+		`Created ${path.relative(workspaceRoot, archivePath)} ` +
+			`(${artifacts.length} files, ${archiveStat.size} bytes)`,
+	);
 }

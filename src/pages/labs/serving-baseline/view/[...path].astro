@@ -2,27 +2,32 @@
 import { readFile } from 'node:fs/promises';
 import nodePath from 'node:path';
 import {
-	encodeServingBaselineArtifactPath,
-	servingBaselineArtifacts,
-	servingBaselineBasePath,
-	type ServingBaselineArtifact,
-} from '../../../../data/serving-baseline-artifacts';
+	collectLabArtifacts,
+	encodeLabArtifactPath,
+	getLabBasePath,
+	resolveLabArtifactPath,
+} from '../../../../utils/lab-artifacts.mjs';
 
-export function getStaticPaths() {
-	return servingBaselineArtifacts.map((file) => ({
-		params: { path: file.path },
-		props: { file },
-	}));
+const labName = 'serving-baseline';
+
+export async function getStaticPaths() {
+	const artifacts = await collectLabArtifacts('serving-baseline');
+	return artifacts
+		.filter((file) => file.viewable)
+		.map((file) => ({
+			params: { path: file.path },
+			props: { file },
+		}));
 }
 
 interface Props {
-	file: ServingBaselineArtifact;
+	file: Awaited<ReturnType<typeof collectLabArtifacts>>[number];
 }
 
 const { file } = Astro.props;
-const sourcePath = nodePath.join(process.cwd(), 'public', 'labs', 'serving-baseline', file.path);
+const sourcePath = resolveLabArtifactPath(labName, file.path);
 const content = await readFile(sourcePath, 'utf8');
-const rawPath = servingBaselineBasePath + encodeServingBaselineArtifactPath(file.path);
+const rawPath = getLabBasePath(labName) + encodeLabArtifactPath(file.path);
 const downloadName = nodePath.basename(file.path);
 ---
 
