@@ -1,19 +1,23 @@
 ---
-title: '如何独立写出标准脚手架：从任务契约到可验证代码'
-description: '脚手架不是空目录和 TODO 的集合，而是一份可执行的问题定义。本文从任务拆分、接口契约、语义 Oracle、测试反馈、停止线和逐步撤掉 AI 辅助出发，给出一套能够反复练习的工程方法。'
+title: '如何独立写出完整系统：从标准脚手架到系统所有权'
+description: '完整系统不是功能和文件的堆积，而是一个能够正确运行、受控失败、被观测、被复现并持续演进的责任边界。本文从标准脚手架出发，建立从组件契约、垂直切片到系统所有权的训练方法。'
 pubDate: '2026-08-19T23:20:00+08:00'
-updatedDate: '2026-08-19T23:40:00+08:00'
+updatedDate: '2026-08-20T00:05:32+08:00'
 categories:
   - '随笔'
 tags:
   - '软件工程'
+  - '系统设计'
   - '测试'
+  - '可观测性'
   - '代码设计'
   - '学习方法'
   - 'AI 协作'
 draft: false
 mathjax: false
 ---
+
+本文分成两层：前半部分训练如何把一个模糊任务变成可验证的组件，后半部分再把同一方法扩大到请求生命周期、并发状态、故障恢复、性能观测和运行交接。脚手架是起点，系统所有权才是终点。
 
 ## 1. (Why) 为什么脚手架反而更难写？
 
@@ -747,9 +751,364 @@ uv run python -m unittest discover \
 + 一份 Review 后的删减记录
 ```
 
-## 6. (Gate) 怎样判断自己已经掌握？
+## 6. (Beyond) 脚手架之后，怎样拥有一个完整系统？
 
-<SlideCard title="从使用到迁移">
+写出脚手架，只解决了“下一步怎样开始”。完整系统还要回答另一个更困难的问题：当请求变多、依赖失败、配置改变、进程重启、指标异常时，谁来解释并控制它的行为？
+
+<SlideCard title="完整不等于功能很多">
+
+## 功能列表很长，可能仍然只是 Demo
+
+- 只能运行 Happy Path
+- 输入错误时行为不确定
+- 请求变慢时不知道时间花在哪里
+- 依赖失败后只能手动重启碰碰运气
+- 换一台机器便无法复现
+
+## 功能很少，也可以是完整系统
+
+- 边界与 Non-goals 清楚
+- 正确性和资源不变量可验证
+- 失败行为有定义
+- 日志与指标能够还原请求
+- 构建、运行、恢复和交接可以复现
+
+> 完整，是对一个有限责任边界形成闭环，而不是实现无限多的功能。
+
+</SlideCard>
+
+```text
+完整系统
+= 有边界的契约
++ 可执行的端到端路径
++ 可验证的状态与不变量
++ 受控的失败与恢复
++ 可解释的性能与可观测性
++ 可复现的运行与演进
+```
+
+脚手架能力仍然重要。系统不是跳过小任务后突然出现的，而是把同一套契约方法逐层扩大：从一个函数，扩大到一个请求；从一个请求，扩大到状态、资源、故障和运维。
+
+### 6.1 六道系统门
+
+<SlideCard title="Gate 1：问题与边界">
+
+## 必须回答
+
+- 谁在使用系统？
+- 它解决哪个具体问题？
+- 一次成功如何被观察？
+- 哪些需求明确不属于当前版本？
+
+## Artifact
+
+- 一页 `DESIGN.md`
+- API 或命令行契约
+- Goal、Non-goals 与验收条件
+
+## Gate
+
+另一个人可以只根据文档描述系统负责什么，也能指出它不负责什么。
+
+</SlideCard>
+
+<SlideCard title="Gate 2：端到端路径">
+
+## 不要先横向铺满所有层
+
+```text
+先写完所有 API
+  -> 再写所有 Service
+  -> 再写所有 Storage
+  -> 最后才第一次运行
+```
+
+这种做法会让错误同时跨越多个层次。
+
+## 先完成最窄的垂直切片
+
+```text
+一个真实输入
+  -> 一条处理路径
+  -> 一次状态变化
+  -> 一个真实输出
+  -> 一条可追踪记录
+```
+
+## Gate
+
+从干净环境启动后，一条命令能够触发一条完整请求路径，而不是只运行孤立函数。
+
+</SlideCard>
+
+<SlideCard title="Gate 3：状态与正确性">
+
+## 系统不变量
+
+- 一个请求不能被完成两次
+- 被取消的请求最终必须释放资源
+- 队列长度不能超过声明容量
+- 状态转换只能沿允许的边发生
+- 一个请求不能读取另一个请求的私有状态
+
+## 需要的证据
+
+- 单元测试保护局部语义
+- 集成测试保护组件契约
+- 端到端测试保护真实路径
+- 并发测试挑战共享状态
+
+## Gate
+
+你能先写出“不允许发生什么”，再用测试主动尝试制造它。
+
+</SlideCard>
+
+<SlideCard title="Gate 4：失败与恢复">
+
+## Happy Path 之外
+
+- 输入非法
+- 队列已满
+- 调用超时
+- 客户端取消
+- 依赖不可用
+- 进程在处理中退出
+- 重试到达了一个不确定状态
+
+## 每个失败都要有四个答案
+
+```text
+Detection: 如何知道失败发生？
+Containment: 如何阻止影响继续扩散？
+Recovery: 如何恢复或安全终止？
+Evidence: 如何证明恢复行为正确？
+```
+
+## Gate
+
+至少能稳定复现一个真实故障，并通过日志、指标和测试解释系统如何处理它。
+
+</SlideCard>
+
+<SlideCard title="Gate 5：性能与可观测性">
+
+## 性能问题不是“跑一个 Benchmark”
+
+- Workload 是什么？
+- 哪个变量改变，哪些变量固定？
+- 延迟、吞吐、内存和错误率分别代表什么？
+- Warm-up、重复次数和环境是否记录？
+- 原始样本能否重新聚合？
+
+## 可观测性不是“多打印一些日志”
+
+- Request ID 能否贯穿组件？
+- 能否区分排队、执行、传输和等待？
+- 指标能否对应到状态机与资源所有权？
+- 失败请求是否也被保留？
+
+## Gate
+
+面对一次变慢，不修改代码也能先根据已有证据缩小问题范围。
+
+</SlideCard>
+
+<SlideCard title="Gate 6：运行、交接与演进">
+
+## 一个系统必须能够离开作者
+
+- Fresh Clone 可以构建和启动
+- 配置显式、可比较、可版本化
+- Health 与 Readiness 有明确含义
+- 依赖升级后可以重新验证
+- 失败后有 Runbook，而不是依赖作者记忆
+- 变更可以回滚，限制条件不会藏在聊天记录里
+
+## Gate
+
+另一个人根据仓库文档，能够启动系统、制造一次已知故障、定位原因并恢复。
+
+</SlideCard>
+
+### 6.2 从一个请求建立系统骨架
+
+系统设计最容易犯的错误，是先画出很多组件，再寻找它们之间为什么需要通信。更可靠的顺序，是先追踪一条真实状态变化。
+
+<CodeCard title="System Contract" path="docs/SYSTEM_CONTRACT.md">
+
+```text
+Problem:       系统替谁解决什么问题？
+Non-goals:     当前版本明确不解决什么？
+Entry:         请求从哪里进入？
+Lifecycle:     请求经过哪些状态？
+Ownership:     每份状态和资源由谁拥有？
+Invariants:    什么永远不能发生？
+Failure model: 哪些失败必须处理，哪些失败暂不保证？
+Observability: 怎样定位一条请求和一次资源变化？
+Operations:    怎样启动、验证、恢复和停止？
+Acceptance:    哪些可执行证据证明当前系统完成？
+```
+
+</CodeCard>
+
+假设系统接收一个推理请求，可以先画出最小状态机：
+
+```text
+Received
+   |
+   v
+Queued ---- capacity exceeded ----> Rejected
+   |
+   +---- client cancelled --------> Cancelled
+   |
+   v
+Running ---- backend failed ------> Failed
+   |
+   v
+Completed
+```
+
+这张图的价值不在于“看起来像架构设计”，而在于迫使实现回答：谁执行状态转换？转换是否原子？取消与完成同时发生时谁获胜？资源在哪一条边上被释放？日志怎样记录这次转换？
+
+<Note title="先拥有状态，再拥有组件" class="title-underline">
+
+组件名可以重构，状态责任不能含糊。只要仍然说不清队列、请求、连接和 Cache 分别由谁创建、修改与释放，继续增加目录不会让系统更完整。
+
+</Note>
+
+### 6.3 用失败矩阵替代“以后再考虑”
+
+不需要第一天处理所有灾难，但必须明确选择了哪些保证。
+
+| Failure    | Expected behavior             | Evidence                 | 当前决定      |
+| ---------- | ----------------------------- | ------------------------ | ------------- |
+| 非法请求   | 在入口拒绝，不占用执行资源    | API Test + Error Log     | 必须处理      |
+| 队列满     | 快速返回 Overload，不无限等待 | Load Test + Queue Metric | 必须处理      |
+| 客户端取消 | 停止后续工作并释放容量        | Cancellation Test        | 必须处理      |
+| 后端超时   | 请求进入 Failed，错误可追踪   | Fault Injection          | 必须处理      |
+| 进程崩溃   | 是否恢复进行中请求            | Recovery Test            | 先声明保证    |
+| 机器失联   | 是否跨节点接管                | Multi-node Test          | 当前 Non-goal |
+
+`Non-goal` 不是逃避，而是把尚未提供的保证诚实地移出系统边界。真正危险的是文档没有承诺，调用者却从偶然行为中推断出了承诺。
+
+### 6.4 把测量结果变成系统证据
+
+<SlideCard title="客户端现象不等于服务端因果">
+
+## 客户端可以证明
+
+- 用户总共等待了多久
+- 首个响应何时到达
+- 请求成功或失败
+- 某组负载下的相关性
+
+## 客户端不能独立证明
+
+- 时间具体花在 Scheduler 还是 Model Runner
+- KV Cache 是否命中
+- 某次停顿是否来自内存压力
+- Batch 为什么在某个时刻形成
+
+## 因果解释还需要
+
+- 服务端阶段时间戳
+- Queue、Batch、Cache 与资源指标
+- 固定版本的源码路径
+- 必要时的 Trace 或验证性改动
+
+</SlideCard>
+
+每条原始请求至少应保留：
+
+```text
+request_id
+arrival_time
+queue_enter / queue_leave
+execution_start / first_output / completion
+input_tokens / output_tokens
+status / error_type
+experiment_config / backend_version
+```
+
+聚合图表是结论入口，原始记录才是审查入口。没有服务端证据时，可以报告客户端相关性，但结论应标记为 `Inconclusive`，不能替 Scheduler 或 KV Cache 编造故事。
+
+### 6.5 把当前 AI Infra 路线升级成完整系统训练
+
+最合适的练习不是从零重写 vLLM，而是在真实 Backend 周围建立一个你能够完全解释的 Serving 实验系统：
+
+```text
+Load Generator
+      |
+      v
+Request API
+      |
+      v
+Admission Control / Bounded Queue
+      |
+      v
+Concurrency or Token Budget
+      |
+      v
+vLLM Backend
+      |
+      v
+Per-request Trace / Metrics / Report
+```
+
+当前路线中的每个 Gate 可以补齐一种系统能力：
+
+| Gate | 机制问题                 | 系统能力               |
+| ---- | ------------------------ | ---------------------- |
+| M2   | MHA/GQA 与 KV 容量       | 正确性模型与资源预算   |
+| S0   | 环境与 Capability Matrix | 可复现运行边界         |
+| S1   | 单并发基线               | 最窄端到端路径         |
+| S2   | Input Length             | Workload 与容量变化    |
+| S3   | Client Concurrency       | 排队、过载与尾延迟     |
+| S4   | Scheduler Budget         | 配置上限与实际状态转换 |
+| S5   | Mixed Prefill/Decode     | 资源竞争与请求干扰     |
+| S6   | Prefix Reuse             | Cache 行为与证据边界   |
+| R0   | 固定版本源码追踪         | 进入真实主线代码       |
+| F0   | 复现包与反馈             | 交接、Review 与修正    |
+
+这样，M2 的一个 Shape 变换并不是“小练习做完就丢掉”，而是在为后续回答这些问题建立 Oracle：Head 怎样映射？KV 容量怎样增长？一次请求为什么消耗这些资源？真实系统的行为何时与简化模型不同？
+
+### 6.6 独立能力来自三次撤掉支撑
+
+<SlideCard title="Cycle 1：有指导地完成闭环">
+
+- 自己写 System Contract、状态机和不变量
+- 可以让 AI 帮助生成机械代码、测试组合和数据处理
+- 每个生成改动都必须映射回自己的契约
+- 完成一次可运行、可失败、可观测的垂直切片
+
+</SlideCard>
+
+<SlideCard title="Cycle 2：同领域，从空白重建">
+
+- 不复制上一份目录和接口
+- 只保留需求与验收标准
+- 自己决定组件边界和失败策略
+- AI 只做 Contract Review、Counterexample 和 Diff Review
+
+</SlideCard>
+
+<SlideCard title="Cycle 3：迁移到新约束">
+
+- 更换 Backend、语言或部署环境
+- 保留问题类型，改变资源与失败条件
+- 重新建立预测、状态模型和验证证据
+- 接受一次真实外部 Review
+
+> 复现原项目证明记住了路径；约束改变后仍能重新建模，才证明能力已经迁移。
+
+</SlideCard>
+
+训练系统能力时，最不应该外包的是：需求边界、状态机、不变量、失败策略、验收标准和最终取舍。AI 可以扩大搜索与反馈，但这些决定必须能够在关闭对话后由自己重新推导。
+
+## 7. (Gate) 怎样判断自己已经掌握？
+
+<SlideCard title="从使用脚手架到拥有系统">
 
 ## Level 0 · 使用
 
@@ -771,17 +1130,31 @@ uv run python -m unittest discover \
 
 - 能把方法用于不同语言、仓库和问题类型
 
+## Level 5 · 系统闭环
+
+- 能让一个请求端到端运行、失败、被观测并恢复
+
+## Level 6 · 所有权
+
+- 能在新约束下重新设计，并让他人复现、Review 与维护
+
 </SlideCard>
 
 “我看懂了”只能证明接近 Level 1；“我照着写出来了”接近 Level 2。稳定的能力至少需要一次关闭模板重建和一次跨任务迁移。
 
-<Note title="阶段验收" class="title-underline">
+<Note title="组件阶段验收" class="title-underline">
 
 在 20 分钟内，面对一个边界清楚的小任务：写出 Goal 与 Non-goals；固定输入、输出、不变量和错误；选择符合仓库习惯的文件；设计 Happy、Semantic、Boundary 三层测试；给出唯一运行命令；说明刻意推迟的内容。
 
 </Note>
 
-### 6.1 Review Checklist
+<Note title="系统阶段验收" class="title-underline">
+
+从 Fresh Clone 启动系统，发送真实请求，制造一次过载和一次依赖故障；仅凭保存的日志与指标解释发生了什么，恢复服务，并让另一个人按照文档复现全过程。
+
+</Note>
+
+### 7.1 Review Checklist
 
 <SlideCard title="Scope & Contract">
 
@@ -825,14 +1198,27 @@ uv run python -m unittest discover \
 
 </SlideCard>
 
+<SlideCard title="System Ownership">
+
+- [ ] 一次请求的状态机和资源所有者明确
+- [ ] 至少一个并发不变量被测试挑战
+- [ ] 至少一个真实故障可以稳定复现与恢复
+- [ ] 原始请求记录足以重新计算关键指标
+- [ ] 客户端现象与服务端因果没有混写
+- [ ] Fresh Clone、配置、启动和停止步骤可复现
+- [ ] Non-goals 与尚未达到的保证明确记录
+- [ ] 另一个人能够根据文档完成一次故障演练
+
+</SlideCard>
+
 <Note title="Takeaways" class="title-underline">
 
-标准脚手架不是目录模板，而是可执行的问题定义：缩小范围，固定契约，选择仓库中的位置，建立独立 Oracle，接通反馈，并明确停止线。真正的独立不是拒绝文档、搜索、AI 或 Review，而是自己掌握什么算正确、什么证据足够继续。
+标准脚手架不是目录模板，而是可执行的问题定义；完整系统也不是文件和功能的堆积，而是对一个有限责任边界形成闭环。真正的独立不是拒绝文档、搜索、AI 或 Review，而是自己掌握系统为何这样设计、什么永远不能发生、失败后如何恢复，以及什么证据足够支持下一次改变。
 
 </Note>
 
 <Note title="配套练习" class="title-underline">
 
-使用 [`M2 学习工作表`](/labs/kv-cache-batch/view/docs/M2_NOTES.md/)完成第一次练习：先填写预测和元素映射，再创建接口与测试；通过以后关闭工作表，从空白重建一次。
+先使用 [`M2 学习工作表`](/labs/kv-cache-batch/view/docs/M2_NOTES.md/)完成组件契约练习：填写预测和元素映射，再创建接口与测试；通过以后关闭工作表，从空白重建一次。随后沿着[阶段 2 学习执行手册](/labs/kv-cache-batch/view/docs/LEARNING_PLAN.md/)进入 S0-S6，把相同方法扩大到真实请求、调度、故障、指标和源码路径。
 
 </Note>
