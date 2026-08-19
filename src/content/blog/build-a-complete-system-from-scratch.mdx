@@ -1,8 +1,8 @@
 ---
-title: '如何从零构建一个完整系统？'
-description: '以真实 vLLM Serving 实验为例，从系统承诺、状态所有权和一条可运行请求出发，逐步补上失败、观测、复现与交付闭环。'
+title: '只有编辑器和构建工具，如何从零构建一个完整系统？'
+description: '以正在生长的 KV Cache 与 Serving Lab 为例：从一条可观察行为开始，经过测试、失败、自动化、重构和交接，让完整、可读的项目自然长出来。'
 pubDate: '2026-08-19T23:20:00+08:00'
-updatedDate: '2026-08-20T02:18:31+08:00'
+updatedDate: '2026-08-20T02:48:37+08:00'
 categories:
   - '随笔'
 tags:
@@ -10,7 +10,6 @@ tags:
   - '系统设计'
   - 'AI Infra'
   - '测试'
-  - '可观测性'
   - '学习方法'
   - 'AI 协作'
 draft: false
@@ -19,586 +18,457 @@ mathjax: false
 
 import ArticleImage from '../../components/ArticleImage.astro';
 
-## 1. Aside：我连续两次把问题答小了
+## 1. 我把“完整系统”讲复杂了
 
-我最初把目标写成“独立写出脚手架”，后来又改成“从空文件完成一个程序”。两句话都没有错；可它们回答的只是：**代码怎样出现？**
+这篇文章的上一版里有 System Contract、状态机、Owner、Failure Matrix、Metrics 和一长串 Gate。它们分别都能在软件工程书里找到正确的位置，但放在“如何从零开始”这个问题前面，就变成了一组来历不明的规矩。
 
-真正困扰我的问题更大：现实里没有需求文档、目录树和标准答案，只有一个含糊的问题。我能不能自己找到使用者和约束，作出取舍，让第一条请求跑起来，再把状态、并发、失败、观测和交付接上，直到另一个人可以接手？
+读完以后，我仍然不知道明天打开编辑器应该写哪一行。
 
-这次改题本身就是第一课：目标边界一旦写错，后面的代码越整齐，偏得反而越远。
+真正的问题其实很朴素：假设没有 IDE 替我创建目录，没有脚手架替我选择架构，手边只有一个能编辑文本的工具和一个能重复执行命令的构建工具，我怎样从空目录出发，最后留下一个别人能读、能运行、能修改的项目？
+
+答案也应该从空目录开始，而不是从“一个完整系统应该有多少模块”开始。
+
+> 一个完整系统，不过是一组能互相解释的普通文件。
+
+这里的“只有编辑器和构建工具”不是说计算机上没有操作系统、编译器或 Python Runtime；它的意思是：**不依赖 IDE 中不可见的按钮和状态**。编辑器负责改变文件，构建工具负责把“如何得到结果”变成可重复的命令。换成 C++，它可以是 CMake；在本文的 Python Lab 里，它是 `uv` 和 `pyproject.toml`。
 
 <ArticleImage
 	src="/assets/build-a-complete-system-from-scratch/m2-to-serving-evidence.webp"
-	alt="学习者从 MHA 与 GQA 的 KV 容量模型出发，构建真实 vLLM Serving 实验并整理指标、源码和复现证据"
+	alt="从 Attention 与 KV Cache 的最小实现出发，逐步进入 Batch 实验、真实 Serving、源码追踪和复现交付"
 	width="100%"
 	maxWidth="100%"
 	loading="eager"
-	caption="本文的贯穿案例：M2 机制模型 → S0–S6 Serving 实验 → R0 源码因果 → F0 复现交付。"
+	caption="这不是开工前画好的架构图，而是项目解决一个又一个具体问题后留下的生长方向。"
 />
 
-## 2. (Why) 空仓库里的第一行，真的是代码吗？
+## 2. “完整”不是文件多
 
-<SlideCard title="Quiz: 现在，请从一无所有构建一个系统">
+先看两个极端。
 
-# 你会先写什么？
+一个 `main.py` 可以完成真正的工作；十层目录也可以什么都做不了。Docker、CI、数据库和 Dashboard 会让项目看起来很像系统，却不能代替一个正确的输入输出。
 
-## 看起来都很合理
+<SlideCard title="Quiz: 哪一个更接近完整系统？">
 
-- `main.py`
-- 一棵漂亮的目录树
-- API Interface 和一排 `TODO`
-- Dockerfile、CI、Metrics……工程感拉满
-
-## 但我们还不知道
-
-- 谁会使用它？
-- 它替谁承担什么责任？
-- 什么现象出现，才算问题被解决？
-- 哪些失败必须处理？哪些保证第一版明确没有？
-
-> 所以第一行通常不是代码，而是一条可以被反驳的系统承诺。
-
-</SlideCard>
-
-“从零开始”很容易被理解成把一个空文件逐行写长。这个动作能解释程序怎样出现，却不能解释系统怎样出现。
-
-系统真正面对的是另一种空白：问题尚未形式化，组件彼此依赖，状态会并发变化，外部世界一定失败，资源永远有限，最后还得部署、复现和交接。AI 可以一口气生成二十个文件，但目录只是决定留下的形状，不是决定本身。
-
-目录树长得像一家大公司的组织架构，也不妨碍它一条真实请求都接不住。
-
-## 3. (What) “完整”到底是什么意思？
-
-先把三个经常混用的词拆开：
-
-| 层次           | 形成的闭环                                 | 仍未回答的问题                     |
-| -------------- | ------------------------------------------ | ---------------------------------- |
-| 完整程序       | 输入、计算、输出、错误                     | 多组件状态、外部依赖、运行生命周期 |
-| 完整系统       | 请求、状态、资源、失败、观测、部署与恢复   | 企业级规模、合规与组织约束         |
-| 大规模生产平台 | 高可用、多租户、安全、合规、跨节点持续演进 | 超出本文范围                       |
-
-本文讨论第二层。单机系统可以完整，全球平台也可能不完整。区别不在机器数量，而在它有没有诚实地声明边界，并在边界内形成闭环。
-
-> #### 🔑 第一把钥匙：完整 = 有边界的承诺
->
-> 系统不需要承诺一切；它需要说清楚承诺什么、怎样证明，以及暂时不保证什么。
-
-> #### 🔑 第二把钥匙：系统 = 对象 + 状态机 + 可观察的因果链
->
-> 谁拥有状态？状态如何变化？资源何时获得和释放？失败后留下什么？如果这些问题没有答案，再多 Class 也只是比较精致的 Demo。
-
-<SlideCard title="三个闭环，而不是很多文件">
-
-# 请求闭环
-
-- 一个真实调用方只能从公开边界进入
-- 请求至少穿过一个会失败的真实依赖
-- 成功、拒绝、超时和取消都有定义
-
-# 状态闭环
-
-- 每份状态和资源都有唯一 Owner
-- 容量有上限
-- 并发、崩溃与恢复行为可以重复
-
-# 证据闭环
-
-- 日志、指标或 Trace 能还原一次请求
-- 构建、启动、停止和复现可以照文档完成
-- 结论能回到原始记录，而不是只剩一张图
-
-</SlideCard>
-
-“独立构建”也不等于闭卷。可以查文档、用框架、复用数据库和推理引擎，也可以让 AI 生成机械代码。不能外包的是问题定义、状态模型、失败策略、验收标准和最终取舍——因为出问题时，系统不会接受“这是模板生成的”作为解释。
-
-## 4. (How) 让一条真实请求把系统拽出来
-
-### 4.1 写代码以前：先写一张系统承诺
-
-假设我在本机运行 Load Generator 和模型 Backend。十个调用方都认为“提交成功”等于“最终会执行”，但 GPU 只能稳定承受两个活动请求。
-
-第十一个请求怎么办？进程退出怎么办？调用方重复提交怎么办？
-
-如果现在直接写 FastAPI，这些问题不会消失，只会藏进 Handler。第一张纸应该是一个短小的 System Contract：
-
-<CodeCard title="System Contract" path="docs/system-contract.md">
+# A
 
 ```text
-Problem / Users:
-  谁遇到了什么问题？谁调用、运行和维护系统？
-
-Promise / Non-goals:
-  当前版本承诺哪些端到端行为？明确不提供什么？
-
-External interface:
-  请求、响应、错误与兼容边界是什么？
-
-Lifecycle / Ownership:
-  Run 与 Request 有哪些状态？谁修改每份状态、占有每份资源？
-
-Invariants / Capacity:
-  什么永远不能发生？队列、并发、内存和等待上限是多少？
-
-Failure / Recovery:
-  超时、取消、过载、崩溃和重启分别怎样处理？
-
-Observability / Acceptance:
-  怎样还原一条请求？哪些测试、原始数据和复现演练证明完成？
+src/
+├── api/
+├── core/
+├── domain/
+├── infrastructure/
+└── services/
 ```
 
-</CodeCard>
+每个目录都有一个 `TODO`。
 
-Contract 不是瀑布式终稿。实验可以推翻它，但修改时必须回答：哪个观察推翻了旧假设？哪些模块、测试和运行承诺跟着变化？
+# B
 
-### 4.2 贯穿案例：不要在 vLLM 前面再造一个 vLLM
+```text
+attention.py
+test_attention.py
+pyproject.toml
+```
 
-本文不另起一个“练手项目”。贯穿全文的系统，就是当前阶段 2 主线：从 M2 的 MHA/GQA 与 KV 容量模型出发，进入 S0–S6 的真实 vLLM Serving 实验，最后完成 R0 源码追踪与 F0 复现交付。
+一条命令能在声明的输入与容差下检查 Cached Decode 与 Full Recompute 是否逐位置相等。
 
-现有 [`benchmark_ollama_input_length.py`](/labs/serving-baseline/scripts/benchmark_ollama_input_length.py) 已经贯通了第一条窄路径：Warm-up、构造 Prompt、发送 HTTP 请求、记录 Backend 与 Client 时间、保存逐请求 CSV、聚合结果。
-
-但它还不是新的 Serving 实验系统：
-
-- 旧环境快照不能代表 S0 的当前环境；
-- S1 需要三轮独立稳态基线和逐请求详情；
-- S3 需要并发事件与服务端 Waiting/Running 证据；
-- S5 需要真实流式 Chunk 时间戳，非流式脚本无法提供 ITL；
-- R0/F0 还要把实测现象连到固定版本源码和复现包。
-
-<SlideCard title="Quiz: 要不要先造一个 Job Gateway？">
-
-# 看起来很“系统”
-
-- `/v1/jobs`
-- 自己的 Queue、Admission、Worker Pool
-- 自己的 Scheduler 和 Metrics
-
-# 实际上会挡住学习对象
-
-- 外层 Worker 可能让 S3 的并发根本到不了 vLLM
-- Gateway Queue Wait 会和 vLLM Waiting 混在一起
-- S4 的 Scheduler Budget 可能永远没有被触及
-- Job Polling 也不会自动产生 S5 所需的 Chunk 时间戳
-
-> 当前任务是观察、解释并验证真实 vLLM，不是先写第二套调度器把它藏起来。
+> 在这个问题的边界内，B 已经形成了第一个小闭环；A 只有一张组织架构图。
 
 </SlideCard>
 
-因此，我们只拥有实验规格、负载生成、客户端事件、证据采集、验证、聚合和复现；vLLM 继续拥有 Admission、Waiting/Running、Scheduler Budget、KV Block 和模型执行。
+所以，本文把“完整”定义成四件能现场演示的事：
 
-```mermaid
-flowchart TB
-  accTitle: 实验与证据系统的责任边界
-  accDescr: 我们控制实验输入、客户端事件和证据验证，vLLM 控制运行时调度与 KV Block；观测结果先冻结为原始证据，再经过验证形成可复现交付物。
+1. 从干净环境可以构建并运行；
+2. 一条真实输入可以走到可观察的输出；
+3. 错误实现会被测试或检查明确拒绝；
+4. 下一位开发者知道从哪里修改，并能判断自己有没有改坏。
 
-  toy["M2 Toy Model<br/>预测 H_q、H_kv 与 KV 容量"]
+这不是“大规模生产平台”的定义。单机上的教学项目也可以完整；部署在十台机器上的服务也可能只有 Happy Path。完整不是规模，而是项目在自己声明的范围里没有依赖作者口头施法。
 
-  subgraph ours["Controlled by us · Experiment & Evidence"]
-    direction TB
-    spec["ExperimentSpec<br/>workload · seed · version · spec_hash"] --> runner["Experiment Runner<br/>warm-up · requests · client events"]
-    raw["Frozen Raw Evidence<br/>manifest · requests · metrics · logs"] --> validator["Validator / Aggregator<br/>invariants · single variable · traceability"] --> deliverables["Reproducible Deliverables<br/>plots · matrix · source trace · runbook"]
-  end
+## 3. 空目录里的第一件东西：一个能失败的例子
 
-  subgraph backend["Controlled by vLLM · External system under test"]
-    direction TB
-    api["OpenAI-compatible API"] --> waiting["Waiting Requests"] --> scheduler["Scheduler<br/>token budget · sequence selection"] --> running["Running"] --> model["Model Runner"]
-    scheduler --> kv["KV Block Pool"]
-    model --> observation["Metrics · Logs · Responses"]
-    kv --> observation
-  end
+以我现在的 [`kv-cache-batch` Lab](/labs/kv-cache-batch/) 为例。最初要回答的问题并不是“如何设计一个 AI Infra 平台”，而是：
 
-  toy -. hypothesis .-> spec
-  runner -->|request| api
-  observation -->|observation only| raw
+> 对同一组输入和权重，使用 KV Cache 的逐 Token Decode，是否与每一步重算完整前缀得到相同结果？
 
-  classDef prediction fill:#f8fafc,stroke:#94a3b8,color:#0f172a
-  classDef owned fill:#eef2ff,stroke:#6366f1,color:#0f172a
-  classDef evidence fill:#fef3c7,stroke:#d97706,color:#0f172a
-  classDef external fill:#f1f5f9,stroke:#64748b,color:#0f172a
-  class toy prediction
-  class spec,runner owned
-  class raw,validator,deliverables evidence
-  class api,waiting,scheduler,running,model,kv,observation external
-```
-
-_Observation 不等于 Control。看到一个指标，不等于拥有它背后的状态。_
-
-第一版也明确延后：自定义 Job API、持久队列、幂等重试、多 Backend Adapter、优先级调度、Kubernetes、多租户和公网部署。它们可能是 F0 之后的迁移项目，却不该抢走 M2 → S0–S6 → R0 的注意力。
-
-### 4.3 系统里有什么对象？先画状态机
-
-一个 Experiment Run 是一次不可变的实验尝试。开始测量后，Workload、模型、Backend 版本和 Server Config 不能原地修改；变量变了，就创建新的 `run_id`。
-
-```mermaid
-stateDiagram-v2
-  accTitle: Experiment Run 生命周期
-  accDescr: 实验从计划和校验进入预热、测量、收尾与完成；环境校验失败会阻塞，测量失败或中断则进入失败或中止状态。
-
-  [*] --> PLANNED
-  PLANNED --> VALIDATED
-  VALIDATED --> WARMING_UP
-  VALIDATED --> BLOCKED: environment / validation failure
-  WARMING_UP --> RUNNING
-  WARMING_UP --> FAILED: warm-up failure
-  RUNNING --> FINALIZING
-  RUNNING --> FAILED: measurement failure
-  RUNNING --> ABORTED: interrupted
-  FINALIZING --> COMPLETED
-  FINALIZING --> ABORTED: interrupted
-  COMPLETED --> [*]
-  BLOCKED --> [*]
-  FAILED --> [*]
-  ABORTED --> [*]
-```
-
-无论终态如何，已经追加的 Raw Data 都保留。`ABORTED` 不是“垃圾数据”的别名；它是系统在诚实描述现场。
-
-Request 是另一个对象。它可能还在等客户端并发槽位，也可能已经发给 vLLM；两者不能都叫“排队”。
-
-```mermaid
-stateDiagram-v2
-  accTitle: Request Event 生命周期
-  accDescr: 客户端请求从创建、等待客户端并发槽位到发出；流式请求记录首个 token，随后完成，也可能在发送后进入 HTTP 错误、超时或取消终态。
-
-  [*] --> CREATED
-  CREATED --> WAITING_CLIENT_SLOT
-  WAITING_CLIENT_SLOT --> SENT
-  SENT --> COMPLETED: non-streaming
-  SENT --> FIRST_TOKEN: streaming · S5
-  FIRST_TOKEN --> COMPLETED
-  SENT --> HTTP_ERROR
-  SENT --> TIMED_OUT
-  SENT --> CANCELLED
-  FIRST_TOKEN --> TIMED_OUT
-  FIRST_TOKEN --> CANCELLED
-  COMPLETED --> [*]
-  HTTP_ERROR --> [*]
-  TIMED_OUT --> [*]
-  CANCELLED --> [*]
-```
-
-<SlideCard title="Quiz: Client Concurrency 等于 Server Batch 吗？">
-
-# 不等于
-
-- Client Concurrency
-  - 负载生成器允许同时发出的请求数
-- vLLM Waiting / Running
-  - 服务端拥有的请求状态
-- Server Batch
-  - Scheduler 在 Token Budget、KV 容量和请求阶段下形成的结果
-
-> Client Concurrency 是实验输入；Server Batch 是需要被观察的结果。
-
-</SlideCard>
-
-```mermaid
-flowchart LR
-  accTitle: 三种不能混用的并发状态
-  accDescr: 客户端并发槽位、服务端等待状态和单轮调度形成的 Server Batch 分属客户端、服务端请求状态和调度器输出，不能当作同一个指标。
-
-  client["Client Concurrency<br/>负载生成器的并发槽位"] ---|"≠"| waiting["vLLM Waiting<br/>已接收但尚未调度"] ---|"≠"| batch["Server Batch<br/>单轮实际调度的 Sequences"]
-
-  classDef clientState fill:#eef2ff,stroke:#6366f1,color:#0f172a
-  classDef serverState fill:#f1f5f9,stroke:#64748b,color:#0f172a
-  classDef schedulerOutput fill:#fef3c7,stroke:#d97706,color:#0f172a
-  class client clientState
-  class waiting serverState
-  class batch schedulerOutput
-```
-
-状态所有权必须写死：
-
-| 事实                              | 唯一 Owner                   | 观察方式                       |
-| --------------------------------- | ---------------------------- | ------------------------------ |
-| ExperimentSpec、Run 状态          | Experiment Runner / Manifest | 原子写 Manifest，配置带 Hash   |
-| Client Slot 与请求事件            | Async Workload Runner        | 单调时钟与 `requests.jsonl`    |
-| Waiting/Running、Scheduler Budget | 真实 vLLM                    | `/metrics`、日志、固定版本源码 |
-| KV Block 与 Prefix Hit            | 真实 vLLM                    | S0 确认后的 Metrics / Log      |
-| 汇总与图表                        | Validator / Aggregator       | 只读取冻结的 Raw Artifact      |
-
-还有一组经常被混写的状态：运行完成，不代表结论成立。
-
-```mermaid
-flowchart LR
-  accTitle: 执行状态与结论状态相互独立
-  accDescr: 一次运行的执行终态和基于证据得出的结论是两个独立维度；完成的运行可以没有确定结论，失败的运行不能支撑正式结论。
-
-  execution["Execution Status<br/>COMPLETED · BLOCKED · FAILED · ABORTED"] --- independent(("相互独立")) --- conclusion["Conclusion Status<br/>Supported · Refuted · Inconclusive"]
-  rule["正式结论 = eligible COMPLETED run + validated evidence"]
-  conclusion --> rule
-
-  classDef executionState fill:#eef2ff,stroke:#6366f1,color:#0f172a
-  classDef conclusionState fill:#fef3c7,stroke:#d97706,color:#0f172a
-  classDef ruleState fill:#dcfce7,stroke:#16a34a,color:#0f172a
-  class execution executionState
-  class conclusion conclusionState
-  class rule ruleState
-```
-
-一个 `COMPLETED` Run 仍然可能得到 `Inconclusive`：参数被接受但没有生效、负载没有触及限制、服务端状态不可观测，都足以让因果判断停下来。
-
-### 4.4 先走通一条窄路，再让模块生长
-
-第一条 Walking Slice 只需要：冻结配置 → 发出一条真实请求 → 保存原始事件 → 读回并验证 → 复现同一结果。
-
-它暂时不需要通用插件系统、任务平台或漂亮 Dashboard。每增加一个 Gate，再让新的压力催生一个职责：
-
-| 主线压力                             | 新责任                      | 这时才出现的产物                        |
-| ------------------------------------ | --------------------------- | --------------------------------------- |
-| M2 需要证明 Head Axis 与容量         | 机制 Oracle                 | `multi_head.py`、元素映射测试、容量 CSV |
-| S0 发现 Backend 能力可能漂移         | Capability Probe            | 版本、Help、启动日志、Capability Matrix |
-| S1 的汇总必须追到每个请求            | Raw Writer 与 Validator     | 三轮详细结果、Metrics 快照              |
-| S3 需要制造并发而不伪装 Server Batch | Async Workload Runner       | 请求事件、Client Slot 时间              |
-| S5 需要 TTFT / ITL                   | Streaming Parser            | 首 Token 与逐 Token JSONL               |
-| R0/F0 需要解释和交接                 | Source Trace / Reproduction | 固定版本调用链、复现包                  |
-
-<CodeCard title="F0 以后可能留下的形状" path="public/labs/kv-cache-batch/">
+这个问题很好，因为它能被程序反驳。只需要三个文件：
 
 ```text
 kv-cache-batch/
-├── src/kv_cache_batch/
-│   ├── attention.py
-│   └── multi_head.py             # M2 到来时出现
-├── tests/
-├── docs/
-│   ├── LEARNING_PLAN.md
-│   └── M2_NOTES.md
-├── tools/serving/                # 只在对应 Gate 到来时生长
-│   ├── stream_harness.py         # S5
-│   ├── validate_run.py
-│   └── aggregate.py
-└── results/serving/
-    ├── raw/
-    ├── metrics/
-    ├── processed/
-    ├── source-trace.md
-    └── reproduction.md
+├── pyproject.toml
+├── src/kv_cache_batch/attention.py
+└── tests/test_attention.py
+```
+
+从空目录得到它，不需要项目向导：
+
+```bash
+mkdir -p kv-cache-batch/src/kv_cache_batch kv-cache-batch/tests
+cd kv-cache-batch
+
+$EDITOR pyproject.toml
+$EDITOR src/kv_cache_batch/attention.py
+$EDITOR tests/test_attention.py
+
+uv sync
+```
+
+Shell 只是启动编辑器和构建工具；真正决定项目的内容都已经写进文件。`pyproject.toml` 先只保存项目名、Python 版本、NumPy 依赖和 Build Backend，不预先注册一堆还不存在的命令。
+
+`attention.py` 里先写一个慢但容易相信的实现，再写准备验证的 Cache 实现。测试把两者放在同一个输入上：
+
+```python
+expected = decode_without_cache(x, wq, wk, wv)
+actual, k_cache, v_cache = cached_attention(x, wq, wk, wv)
+
+np.testing.assert_allclose(actual, expected, rtol=1e-7, atol=1e-8)
+```
+
+然后让构建工具重复这个事实：
+
+```bash
+OPENBLAS_NUM_THREADS=1 \
+OMP_NUM_THREADS=1 \
+uv run python -m unittest discover -s tests -v
+```
+
+到这里没有 Repository、Service、Factory，甚至没有配置文件夹。但是已经有了一条完整的推理链：
+
+```text
+问题
+  -> 可计算的参考答案
+  -> 待验证的实现
+  -> 自动比较
+  -> 成功或失败
+```
+
+这就是第一条 Walking Slice。它不是整个项目，却从输入到证据贯通了整个项目最核心的一小块。
+
+为什么一定要先有它？因为后面无论增加 Batch、Multi-Head、GQA 还是真实 vLLM，都必须回答同一个问题：**我增加的是能力，还是只是增加了代码？** 如果旧的可观察行为还在，项目是在生长；如果旧行为已经无法证明，项目只是在变大。
+
+## 4. 唯一需要记住的方法：一次消掉一个未知
+
+写系统时最容易陷入两种状态：要么一直“设计”，迟迟没有第一条结果；要么一直加功能，直到没有人知道某个结果为什么正确。
+
+我现在使用的循环只有下面这一条：
+
+```text
+提出一个具体问题
+  -> 在运行前写下预测
+  -> 构造最小可观察例子
+  -> 写出一条端到端路径
+  -> 让测试或数据指出第一个错误
+  -> 修正，并把重复动作交给构建工具
+  -> 只重构这次变化暴露出的结构问题
+  -> 留下代码、测试或原始数据
+```
+
+重点是“一个”。一次实验既改 Batch Size、Sequence Length，又换模型和线程数，最后得到的图很热闹，但没有回答任何一个问题。一次重构同时引入插件系统、配置中心和异步任务，也很难知道哪一层真正必要。
+
+不过，“一次只消掉一个未知”不是要求永远只写一个函数。它是在决定下一步时问：
+
+> 当前阻止我继续的第一个不确定性是什么？
+
+在第一个 Cache 实现里，不确定性是数值等价；在 Batch 实验里，不确定性是多个 Sequence 有没有共享状态；进入真实 Serving 后，不确定性才会变成排队、调度、KV Block 与流式延迟。问题变了，项目才有理由长出新的结构。
+
+## 5. 项目结构不是设计出来的，是被问题“压”出来的
+
+### 5.1 第一次压力：一个函数已经装不下实验
+
+Cache 正确以后，我要比较 No Cache、Dynamic Cache 和 Preallocated Cache 的耗时。计时需要 Warm-up、重复运行、固定随机种子和保存样本。
+
+如果把这些都塞进 `attention.py`，机制实现和实验流程会因为不同原因变化：前者因为算法变化，后者因为实验协议变化。于是项目第一次自然分开：
+
+```text
+src/kv_cache_batch/
+├── attention.py      # 机制：Attention 与 KV Cache 怎样工作
+└── benchmark.py      # 实验：怎样构造输入、预热、计时并写出样本
+```
+
+这不是为了满足某种目录规范。拆分的原因非常具体：我希望修改 Warm-up 次数时，不必碰 Attention；修改 Attention 时，正确性测试仍然可以直接调用它，而不是启动整套 CLI。
+
+### 5.2 第二次压力：最终数字已经无法解释自己
+
+最初只打印平均耗时似乎够用。很快问题出现了：一次早期实验没有固定 BLAS 线程，No Cache 看起来获得了四十倍以上的异常“加速”。如果只保留最后一张表，现场已经无法恢复。
+
+于是 Raw Data 出现了：
+
+```text
+results/
+└── batch-size-scan/
+    ├── raw.csv
+    ├── summary.csv
+    ├── batch-latency-percentiles.svg
+    ├── positions-throughput.svg
+    └── knee-analysis.md
+```
+
+同时，汇总逻辑从 Benchmark 中分离：
+
+```text
+benchmark.py              产生事实
+summarize_batch_size.py   读取事实，生成解释材料
+```
+
+现在任何一个 P50、P95 或吞吐曲线点都能重新从 `raw.csv` 计算。`raw.csv` 不能证明实验设计一定正确，但它防止了“图还在，现场没了”。
+
+注意顺序：不是第一天先建一个 `results/raw/processed/figures/archive` 帝国，而是当一个汇总数字不足以回答异常时，项目才长出 Raw Artifact 和独立汇总器。
+
+### 5.3 第三次压力：单 Head 模型解释不了真实 KV 容量
+
+当前项目正在进入 M2。已有的 `attention.py` 只有单 Head；下一步需要解释 MHA/GQA 中 `H_q`、`H_kv` 与 KV Cache 容量的关系。
+
+这时才准备增加：
+
+```text
+src/kv_cache_batch/multi_head.py
+tests/test_multi_head.py
+```
+
+第一步甚至不是完整 Attention，只是一个轴变换：
+
+```python
+def split_heads(projected: np.ndarray, num_heads: int) -> np.ndarray:
+    """Convert [B, T, H * D_head] into [B, H, T, D_head]."""
+```
+
+为什么如此小？因为 `[B, T, H × D_head] -> [B, H, T, D_head]` 有两个不同的失败方式：Shape 可以正确，Head 和 Sequence 的元素位置却仍然放反。最小的 Shape 测试加一个非零坐标的元素映射测试，恰好能暴露这两个问题。
+
+等 Head 轴真的可靠，再迁移到 Q/K/V、Cached MHA、GQA 映射和容量公式。模块的名字和边界由已经理解的机制决定，而不是由想象中的最终 Transformer 决定。
+
+### 5.4 第四次压力：Toy 实验回答不了真实服务问题
+
+NumPy Lab 可以证明 Cache 复用、Batch 维和 Head 映射，却不能证明 vLLM 如何排队、怎样形成 Batch，或 GPU 上的吞吐为何饱和。
+
+所以 M2 结束后，正确动作不是继续补 MLP、Tokenizer 和 Sampling，把 Toy Transformer 越写越大；而是把 vLLM 当作外部系统，通过真实 HTTP 请求、服务端 Metrics、日志和固定版本源码观察它。
+
+到那时，Serving Harness、Metrics Snapshot 和 Source Trace 才会出现。它们不会被塞进 `attention.py`，因为它们回答的是另一组问题：怎样制造负载、怎样保存服务端现场、怎样把现象追到实现。
+
+这也是为什么现在不需要先造一个 Job Gateway。外层 Queue 和 Worker Pool 看起来更像“完整系统”，却可能挡住真正想观察的 vLLM Scheduler。
+
+<SlideCard title="系统是怎样长出来的？">
+
+# 不是先画完目录
+
+```text
+需求大全 -> 模块大全 -> 分别填空
+```
+
+# 而是保持一条活着的路径
+
+```text
+正确函数
+  -> 可重复测试
+  -> 可重复实验
+  -> 原始证据
+  -> 新机制
+  -> 外部系统
+  -> 源码解释与复现交付
+```
+
+每一步都能运行；每个新文件都能回答“它是被哪个具体问题逼出来的”。
+
+</SlideCard>
+
+## 6. 为什么最后会显得有条理？
+
+有条理不是因为目录漂亮，而是因为每类事实只有一个自然的去处。
+
+```text
+pyproject.toml   怎样得到可运行环境和命令
+src/             系统怎样工作
+tests/           哪些行为不能被破坏
+results/         某次运行实际发生了什么
+docs/            为什么这样做，以及下一步做什么
+README.md        一个新来的人怎样进入项目
+```
+
+这棵树背后只有一个判断标准：**把会因为同一种原因变化的内容放在一起，把因为不同原因变化的内容分开。**
+
+什么时候应该拆文件？我现在用四个非常朴素的信号：
+
+- 一个文件同时在回答“机制怎样工作”和“实验怎样运行”；
+- 为了测试核心逻辑，不得不启动 CLI、网络或整套环境；
+- 一个输入变化需要在很多地方重复修改同一知识；
+- 某段输出已经成为结论依据，却不能从保存的原始输入重新生成。
+
+没有这些信号，就不急着抽象。出现这些信号，也不需要重写全项目：移动最小的一块，让旧测试继续通过，再从新的入口增加行为。
+
+这就是重构在整个方法里的位置：它不是开工仪式，也不是项目完成后的大扫除；它发生在**已有行为被保护，而下一次变化已经暴露出结构摩擦**的时候。
+
+## 7. 构建工具是项目的可执行记忆
+
+只用编辑器写代码并不困难。真正容易丢失的是：昨天到底用哪个版本、哪组参数、什么顺序得到今天的结果？
+
+构建工具的价值不是显得专业，而是把短期记忆搬进项目。
+
+当前 Lab 至少有三种可重复动作：
+
+```bash
+# 得到环境
+uv sync
+
+# 运行正确性回归
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  uv run python -m unittest discover -s tests -v
+
+# 重新产生 Batch Size 原始数据和汇总
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  uv run kv-cache-batch --experiment batch-size \
+  --csv results/batch-size-scan/raw.csv
+
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  uv run kv-cache-batch-summary \
+  --input results/batch-size-scan/raw.csv \
+  --output-dir results/batch-size-scan \
+  --sequence-length 128 --dtype float64 --blas-threads 1
+```
+
+这里最重要的不是 `uv`。换成 `make test`、`cmake --build` 和 `ctest`，方法完全一样：
+
+1. 人只决定“我要验证什么”；
+2. 工具负责稳定地重复“怎样验证”；
+3. 命令、依赖和关键环境变量留在项目里，而不是留在 Shell History 里。
+
+每次发现自己第三次手工输入同一组命令，就应该考虑把它变成构建目标或脚本。每次发现“一键运行”会掩盖关键参数，就把参数打印进 Manifest 或日志。自动化不是越多越好；它应该减少思维中断，同时保留因果链。
+
+## 8. 只有朴素工具，怎样调试一个越来越大的系统？
+
+调试不是盯着整个项目想“哪里错了”，而是寻找**第一个与预测不同的可观察状态**。
+
+仍然以当前 Lab 为例。
+
+### Shape 对了，结果还是错
+
+不要先读完整 MHA 实现。构造顺序值数组，手算一个非零坐标：
+
+```text
+q[b, h, t, d]
+  == projected[b, t, h * D_head + d]
+```
+
+如果不等，错误就在拆分或交换轴这两步之间。大数组和真实模型暂时都与问题无关。
+
+### Batch 结果错了
+
+先分别运行每个 Sequence 的参考实现，再与 Batched 路径逐项比较。只修改其中一个 Sequence，观察另一个输出是否变化。若变化，问题不是“Batch 性能不好”，而是状态隔离已经被破坏。
+
+### 性能结果离谱
+
+先保留全部样本，再检查线程数、Warm-up、运行顺序和计时边界。早期四十倍以上的异常结果不是靠更多理论消失的，而是靠固定 BLAS 线程并比较前后样本漂移定位的。
+
+### 客户端延迟变高
+
+客户端只能证明端到端现象，不能自动证明 Scheduler 因果。需要把 Request Event 与服务端 Metrics、日志或固定版本源码对齐；证据不足时，结论就是 `Inconclusive`。
+
+这些例子看似不同，动作其实相同：
+
+```text
+缩小输入
+  -> 找到一个可信参考
+  -> 比较边界上的状态
+  -> 把失败保存成测试
+  -> 修正最靠前的错误
+```
+
+编辑器足以写出最小失败样例，构建工具足以反复运行它。Profiler、Debugger 和 Trace 当然有用，但它们是在这个模型上增加观察能力，而不是替代“我要观察什么”的判断。
+
+## 9. 怎样让这种能力真正属于自己？
+
+独立并不等于不查文档，也不等于拒绝 AI。真正需要独立的是：把模糊问题变成可运行例子、判断第一个错误在哪里，并在条件改变后重新完成一次。
+
+我把训练分成三遍。
+
+### 第一遍：跟着一条窄路径做出来
+
+只阅读当前步骤所需的最小材料，写下运行前预测，然后实现一条能被测试的路径。当前的 [M2 工作表](/labs/kv-cache-batch/view/docs/M2_NOTES.md/) 就只做 `split_heads` 和两个测试，不顺手完成整个 Multi-Head Attention。
+
+这一遍练的是“把知识变成行为”。
+
+### 第二遍：关闭答案，从空白处重建
+
+测试通过后，关闭文章、AI 对话和原实现，在临时文件里重新写出核心变换。然后解释每个轴、每个中间 Shape 和一次具体元素映射。
+
+如果只能认出正确答案，却不能重新构造它，掌握仍停在阅读层。
+
+### 第三遍：只改变一个条件
+
+把 `H_q=H_kv` 改成 `H_q=8, H_kv=2`，或把单请求改成并发请求。先预测哪些结论仍成立、哪些会变化，再修改实现与测试。
+
+这一遍练的是迁移。能够修改一个条件而不推倒重来，才说明脑中形成了机制，而不是记住了文件。
+
+<CodeCard title="一次 120 分钟练习应该留下什么？" path="public/labs/kv-cache-batch/docs/M2_NOTES.md">
+
+```text
+Question:
+  怎样证明 Head 轴被正确拆出，而不只是 Shape 碰巧正确？
+
+Prediction:
+  q[b,h,t,d] == projected[b,t,h*D_head+d]
+
+Action:
+  实现 split_heads；写 Shape 与元素映射测试
+
+Feedback:
+  unittest 的第一个失败 + 手算坐标
+
+Artifact:
+  一个函数、两个测试、一次失败记录
+
+Transfer:
+  关闭代码后重写；下一轮迁移到 K/V
 ```
 
 </CodeCard>
 
-目录是系统决策留下的化石，不是第一天应该膜拜的蓝图。一个文件如果不能对应当前 Gate 的 Question、Artifact 或 Acceptance，就先别创建。
+AI 最适合站在 Feedback 一侧：检查我的预测、制造反例、Review Diff、指出证据断点。若 AI 直接生成了整套实现，我仍要完成第二遍和第三遍；否则得到的是一次交付，不是可以迁移的能力。
 
-## 5. (How) 用 Gate 构建，而不是用功能列表堆积
+## 10. 把方法放回我当前的学习主线
 
-现有 [`LEARNING_PLAN.md`](/labs/kv-cache-batch/view/docs/LEARNING_PLAN.md/) 已经给出了顺序，不需要再发明第二张路线图：
+这篇文章不是在宣称我已经完成了一个 vLLM Serving 系统。当前仓库能证明的是：
 
-```text
-M2
- -> S0 -> S1 -> S2 -> S3 -> S4 -> S5 -> S6
- -> R0 -> F0
-```
+- 已实现 No Cache、Dynamic Cache、Preallocated Cache 与固定形状的 Batched Decode；
+- 已用 Oracle 和测试约束正确性；
+- 已保存 M1 的 240 条 Batch Size 原始样本，并能重建汇总与曲线；
+- 已完成 P0 的 NumPy View/Copy、Stride 与轴语义练习。
 
-把原计划折叠成七个系统 Gate：
+还不能证明的是 MHA/GQA、真实 vLLM 的排队与调度、流式 TTFT/ITL、Prefix Reuse 和源码因果。这些仍是后续工作，不能因为路线图写得完整就当作系统已经完成。
 
-| Gate               | 回答的问题                             | 通过证据                                 |
-| ------------------ | -------------------------------------- | ---------------------------------------- |
-| M2 资源模型        | 每个 Sequence 携带多少 KV 状态？       | Oracle、Shape、Head 隔离、容量 CSV       |
-| S0 运行边界        | 当前 Backend 到底支持并暴露什么？      | 环境、Help、启动日志、Capability Matrix  |
-| S1 Walking Slice   | 一条真实请求能否留下可重建证据？       | 三轮逐请求结果、Metrics 快照、可重建汇总 |
-| S2–S3 Workload     | 长度与客户端并发怎样触发饱和？         | 单变量曲线、请求事件、服务端状态         |
-| S4 Scheduler       | 预算是否生效并真正被工作负载触及？     | 两组独立扫描、启动与运行证据             |
-| S5–S6 Stream/Reuse | TTFT、ITL 与 Prefix Reuse 怎样被观测？ | Chunk 时间线、Prefix Hit、三次复现       |
-| R0–F0 因果与交付   | 现象为何发生，别人能否复现？           | 固定版本 Source Trace、异常记录、复现包  |
-
-### 5.1 参数生效，需要连续四次确认
-
-<SlideCard title="Quiz: CLI 接受参数，等于 Backend 支持吗？">
-
-# 不等于
-
-1. Argument accepted
-2. Startup log confirmed
-3. Metric / state visible
-4. Workload actually exercised
-
-任一环缺失，都不能把“没有变化”解释成“参数没用”。它也许被忽略了，也许负载没有触及上限，也许 KV 容量先成为瓶颈，也许变化落在没有采集的状态里。
-
-> 这时最准确的结论不是成功或失败，而是 `Unsupported`、`Unobservable` 或 `Inconclusive`。
-
-</SlideCard>
-
-### 5.2 失败不是边角料，是系统输入
-
-| Failure              | Run behavior     | 必须保留的证据                 | 结论边界                    |
-| -------------------- | ---------------- | ------------------------------ | --------------------------- |
-| 缺少 Metrics / 参数  | `BLOCKED`        | Help、错误、Capability         | 依赖能力不继续扫描          |
-| HTTP Error / Timeout | 继续或按阈值失败 | 原样写入 `requests.jsonl`      | 不删除以美化成功率          |
-| Output 提前停止      | 正常记录         | Actual tokens、Stop reason     | 不用配置上限冒充工作量      |
-| Metrics 采样空洞     | 标记受影响区间   | 采样时间与错误                 | 服务端因果为 `Inconclusive` |
-| Streaming 解析失败   | 请求进入错误终态 | 已到达 Chunk 与异常            | 不伪造 ITL                  |
-| vLLM 退出 / 实验中断 | `ABORTED`        | Manifest、Raw Data、Server Log | 复跑必须使用新 `run_id`     |
-
-<CodeCard title="每个 Run 的最小证据契约" path="results/serving/<run-id>/">
+当前唯一动作是 M2-A1：
 
 ```text
-manifest.json
-  run_id, spec_hash, environment, versions, model_revision,
-  server_command, workload, start_ns, end_ns, run_state
-
-requests.jsonl
-  request_id, arrival_ns, waiting_client_slot_ns, sent_ns,
-  first_token_ns?, token_times_ns?, finish_ns,
-  input_tokens, output_tokens, status, error_type, stop_reason
-
-metrics.jsonl
-  sampled_at_ns, running_requests, waiting_requests,
-  kv_usage?, prefix_hits?, backend_metric_names
-
-server.log
-  startup, capability confirmation, request and failure context
+填写 Shape 与元素映射预测
+  -> 实现 split_heads(projected, num_heads)
+  -> 写两个最小测试
+  -> 运行构建命令
+  -> 关闭代码重新实现
 ```
 
-</CodeCard>
+之后才依次进入 Q/K/V、Cached MHA、GQA 和 KV 容量；M2 通过后停止扩展 Toy Transformer，进入真实 vLLM 环境、负载、调度、流式请求、Prefix Reuse、源码追踪和复现交付。
 
-`first_token_ns` 和 `token_times_ns` 到 S5 才是必需字段；S1–S4 的非流式记录不能拿 Submit ACK 冒充 TTFT。Metrics 后的 `?` 也不是偷懒：S0 没证明可观测的字段，就必须显式写 `Unobservable`。
+整条路线看起来很长，但每天面对的仍然只是一个能失败的小问题。系统的完整性来自这些小闭环能够首尾相接，不是来自某一天突然写完了所有模块。
 
-### 5.3 一张图必须能走回原始现场
+## 11. 最后一次验收：作者离开房间
 
-Validator 至少检查：
+项目什么时候可以称为完整？让另一名开发者只拿到仓库，在没有作者解释的情况下完成一次演示：
 
-- 每个 `request_id` 唯一，时间戳单调；
-- `created = completed + http_error + timed_out + cancelled`；
-- 配置请求数与 Raw Row 数一致，或差异有明确记录；
-- 一组对照只改变一个主变量；
-- P50/P95/P99、吞吐和曲线点都能由 Raw Artifact 重建。
+1. 从干净环境执行文档里的命令，构建并运行；
+2. 用一个最小输入观察核心行为；
+3. 故意破坏一条不变量，看到测试在正确位置失败；
+4. 从原始记录重新生成一个汇总结果；
+5. 修改一个已声明的条件，并知道应该改哪段代码、补哪个测试。
 
-客户端可以证明 Arrival、Sent、First Token、Chunk、Finish、HTTP 状态和实际 Token 数，却不能独立证明请求为什么等待、KV Cache 是否命中或某轮 Batch 为何形成。服务端因果还需要 Metrics、Log、Trace 或固定版本源码。
+如果第二步依赖 IDE 里某个忘记记录的按钮，第三步只能靠作者肉眼判断，第四步只剩截图，第五步需要全局搜索后碰运气，那么项目还没有完成交接。
 
-<SlideCard title="Quiz: P95 上升了，可以怪 Scheduler 吗？">
+反过来，只要这些动作成立，即使系统只有一台机器、几个模块和朴素的命令行，它也已经是一个完整、可读、可以继续生长的项目。
 
-# 客户端可以证明
+<Note title="Take-away Messages" class="title-underline">
 
-- 某个 Workload 下端到端延迟或 ITL 变差
-
-# 客户端不能独立证明
-
-- 请求在 Scheduler 中等待了多久
-- KV Cache 是否命中
-- 某轮实际 Batch 怎样形成
-
-# 所以还要对齐
-
-- Request Event
-- Server Metrics / Log
-- 固定版本 Source Trace
-
-</SlideCard>
-
-## 6. (Debug) 卡住时，先定位自己在哪一层
-
-“我不知道下一步写什么”至少有六种完全不同的原因：
-
-<SlideCard title="System Debug Ladder">
-
-1. **问题定义**
-   - 使用者与成功场景仍然含糊
-   - 补一个真实故事，不写代码
-2. **系统边界**
-   - 不知道本系统和依赖分别负责什么
-   - 重写 Promise、Non-goals 与 External Contract
-3. **状态所有权**
-   - Run、Client Request 与 vLLM 状态混在一起
-   - 画状态机，为每份事实指定 Owner
-4. **请求路径**
-   - Runner、Writer、Sampler 的记录无法对齐
-   - 追踪一个 `run_id + request_id`
-5. **能力与环境**
-   - 参数、指标、端口或版本不确定
-   - 回到 S0，用最小请求和 Capability Matrix 固定它
-6. **证据与因果**
-   - 系统能跑，但解释只是一个合理故事
-   - 补原始事件、服务端观测与独立对照
-
-</SlideCard>
-
-求助时提交当前层的模型、原始证据和第一个错误假设，而不是一句“请重写整个系统”。好的帮助应该缩小搜索空间，不应该拿走系统所有权。
-
-## 7. (Practice) 怎样让能力最后属于自己？
-
-### 7.1 AI 应该站在反馈侧
-
-<SlideCard title="AIGC Policy">
-
-# ✅ 交给 AI
-
-- 审查我先写出的 Contract 和状态机
-- 构造能破坏不变量的并发交错
-- 指出第一个缺少证据的因果判断
-- 生成 Fixture、解析器和重复绘图代码
-
-# ❌ 不外包
-
-- 需求、责任边界与验收标准
-- 一次生成完整目录和全部实现
-- Tests Passed 后直接宣布系统完成
-- 自己无法解释的状态、指标和结论
-
-</SlideCard>
-
-一个有效的协作顺序是：
-
-1. 我先写 Contract、Prediction 和 Acceptance，AI 找反例。
-2. 我贯通第一条真实请求，AI 帮我定位第一个错误假设。
-3. 我完成失败、负载和证据闭环，AI 作为 Reviewer 提替代解释。
-4. 我改变一个约束并独立演进系统，用迁移结果检查能力是否真的形成。
-
-当我已经能审查字段、时间语义、不变量和原始结果时，AI 生成机械代码可以加速工作；不能解释和验证的生成结果，不属于我的系统能力。
-
-### 7.2 三轮训练，而不是一次通关
-
-#### 第一轮：在当前主线上完成系统
-
-沿 M2 → S0–S6 → R0 → F0 前进。每个 Gate 都留下同一张学习卡：
-
-```text
-Question:    这次要消除哪个系统不确定性？
-Prediction:  哪个判断可能是错的？
-Action:      让哪条系统行为成立？
-Artifact:    代码、测试、Trace、数据或 Runbook 在哪里？
-Acceptance:  哪些现场现象证明通过？
-Feedback:    谁或什么挑战了结论？
-Reflection:  哪个模型失败？下一步因此怎样改变？
-```
-
-#### 第二轮：只改变一个现实条件
-
-更换模型、Backend 或硬件中的一个。先预测哪些趋势应保持、哪些可能改变，再冻结新环境，复跑一组基线和压力实验。不要复制旧结论。
-
-#### 第三轮：换系统，不复制目录
-
-F0 与 Transfer Gate 通过后，再选择另一套系统。只带走 Contract、Walking Slice、State Ownership、Failure Matrix、Raw Evidence 和 Reproduction；如果仍能从现实问题推进到请求、状态、失败和交接，能力才完成迁移。
-
-### 7.3 当前进度：不要把计划写成成绩
-
-<Note title="当前唯一动作仍然是 M2-A1" class="title-underline">
-
-仓库已经有 Attention、KV Cache、Batch 实现与 M1 的 240 条原始样本；P0 NumPy 语义验收也已完成。它们证明了机制实现与受控实验，不等于已经完成 Serving 系统。
-
-当前 M2 仍是 `In progress`：先在 `multi_head.py` 中完成 `split_heads(projected, num_heads)`，用 Shape 与非零坐标元素映射证明 `[B, T, H × D_head] -> [B, H, T, D_head]`。M2 通过前不进入 S0；S0 通过前不开始性能扫描。S0–S6、R0 与 F0 都还是计划，不是本文已经取得的结果。
-
-</Note>
-
-## 8. 最终自测：作者离开以后，系统还存在吗？
-
-把它当成一次毕业演示：另一名使用者只拿到仓库，在没有现场解释的情况下，他能否完成以下任务？
-
-1. 按 Manifest 启动同版本 vLLM，并确认 Capability Matrix。
-2. 从冻结的 ExperimentSpec 复跑一组 S1。
-3. 把任意汇总值追到 `requests.jsonl` 的记录和公式。
-4. 证明 S2/S3 的对照只改变一个主变量，并区分 Client 与 Server 状态。
-5. 证明 S4 的负载确实触及 Scheduler Budget，而不是只改了 CLI。
-6. 从 S5 的真实 Chunk 时间戳重建 TTFT 与 ITL。
-7. 中断一次实验，确认 Raw Data 保留、Run 为 `ABORTED`、正式汇总没有生成。
-8. 把一个已复现现象追到固定版本源码，再完成一次验证性复跑。
-
-如果这些动作必须由作者在旁边“口头施法”，系统还没有完成；如果只能在原模型、原 Backend 和原机器上重复，能力也还没有完成迁移。
-
-<Note title="Takeaways" class="title-underline">
-
-- 完整不是功能多，而是在有限边界内履行了承诺。
-- 第一行不是目录树，而是可反驳的系统承诺。
-- 架构先写对象、状态、Owner 和数据方向，再写模块名。
-- 失败与原始证据属于系统，不是写报告时才补的附件。
-- 独立不是拒绝工具，而是能解释决定、复现失败，并在约束改变后重新建立闭环。
+- 不要从目录开始；从一个能被反驳的行为开始。
+- 永远保住一条从输入到证据的可运行窄路径。
+- 新模块应该由真实变化压力产生，不由架构名词产生。
+- 测试保存行为，Raw Data 保存现场，构建工具保存重复方法，文档保存理由。
+- 重构发生在旧行为已有保护、下一次变化暴露结构摩擦的时候。
+- 独立能力的验收不是“这次写完”，而是能从空白重建，并在改变一个条件后再次完成。
 
 </Note>
