@@ -28,7 +28,7 @@ export default defineConfig({
     }),
     syntaxHighlight: {
       type: 'shiki',
-      excludeLangs: ['math'],
+      excludeLangs: ['math', 'mermaid'],
     },
     shikiConfig: {
       theme: pygmentsDefaultTheme,

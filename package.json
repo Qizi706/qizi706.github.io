@@ -24,6 +24,7 @@
 		"@fontsource/kalam": "^5.3.0",
 		"astro": "^7.1.6",
 		"katex": "0.16.22",
+		"mermaid": "^11.17.0",
 		"rehype-katex": "^7.0.1",
 		"remark-math": "^6.0.0",
 		"sharp": "^0.35.0",
