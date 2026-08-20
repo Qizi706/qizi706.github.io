@@ -36,10 +36,7 @@ jobs:
         run: npm run build
 
       - name: Prepare EdgeOne deployment bundle
-        run: |
-          mkdir -p .edgeone/assets
-          cp -a dist/. .edgeone/assets/
-          npm exec --yes edgeone@1.6.28 -- makers generate-routes
+        run: cp edgeone.json dist/edgeone.json
 
       - name: Validate EdgeOne settings
         env:
@@ -55,7 +52,7 @@ jobs:
         env:
           EDGEONE_CHINA_API_TOKEN: ${{ secrets.EDGEONE_CHINA_API_TOKEN }}
         run: |
-          npm exec --yes edgeone@1.6.28 -- makers deploy .edgeone \
+          npm exec --yes edgeone@1.6.28 -- makers deploy dist \
             --name qizi706-blog \
             --env production \
             --area global \
