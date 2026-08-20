@@ -1,0 +1,571 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { getCollection } from 'astro:content';
+import FormattedDate from '../../components/FormattedDate.astro';
+import LabDirectoryListing from '../../components/LabDirectoryListing.astro';
+import PageLayout from '../../layouts/PageLayout.astro';
+import {
+	collectLabArtifacts,
+	getLabArchiveInfo,
+	getLabManifest,
+	listLabDirectoryEntries,
+} from '../../utils/lab-artifacts.mjs';
+import { getPostUrl } from '../../utils/posts';
+
+interface PhaseArticle {
+	id: string;
+	role: string;
+	status: 'draft' | 'published';
+}
+
+interface ResolvedArticle {
+	article: PhaseArticle;
+	post: CollectionEntry<'blog'>;
+}
+
+const labName = 'kv-cache-batch';
+const manifest = await getLabManifest(labName);
+const { milestone, preview, completed, current, evidence } = manifest.progress;
+const allPosts = await getCollection('blog');
+const postById = new Map(allPosts.map((post) => [post.id, post]));
+const articles: ResolvedArticle[] = (preview.articles as PhaseArticle[]).map(
+	(article: PhaseArticle) => {
+		const post = postById.get(article.id);
+		if (!post) throw new Error(`Phase 2 article not found: ${article.id}`);
+		if ((article.status === 'draft') !== post.data.draft) {
+			throw new Error(`Phase 2 article status mismatch: ${article.id}`);
+		}
+		return { article, post };
+	},
+);
+const draftArticles = articles.filter(({ article }) => article.status === 'draft');
+const publishedArticles = articles.filter(({ article }) => article.status === 'published');
+const artifacts = await collectLabArtifacts(labName);
+const rootEntries = listLabDirectoryEntries(artifacts);
+const archive = await getLabArchiveInfo(labName);
+const archiveHref = `/labs/${archive.filename}?v=${archive.sha256.slice(0, 12)}`;
+const labHref = `/labs/${labName}/`;
+const currentDocumentHref = `/labs/${labName}/view/${current.document}/`;
+const description =
+	'阶段 2 的共学入口：查看当前任务、前置阅读、完成记录、实验原始证据、文章草稿与完整 Lab 文件。';
+---
+
+<PageLayout
+	title="阶段 2 共学记录：LLM 推理核心知识与 vLLM 性能实验"
+	{description}
+	mainClass="phase2-learning-page"
+	noindex
+>
+	<header class="phase-hero">
+		<p class="eyebrow">LINK-ONLY LEARNING LOG · PHASE 02</p>
+		<h1>LLM 推理核心知识与 vLLM 性能实验</h1>
+		<p class="lead">
+			这不是完成后的成果陈列，而是一条可以中途加入的学习路线。你可以看到我现在做到哪里、为什么这样安排，下载同一份
+			Lab，并按相同的预测、实现、测量和验收过程跟着做。
+		</p>
+		<div class="release-note" role="note">
+			<strong>[灰度共学]</strong>
+			<span>页面和草稿会随学习进度变化，不出现在主页、文章归档、RSS 或 sitemap。</span>
+			<span>这不是权限控制：拿到链接的人都可以访问和转发。</span>
+		</div>
+	</header>
+
+	<nav class="section-nav" aria-label="阶段共学页目录">
+		<a href="#start">从这里开始</a>
+		<a href="#current">当前任务</a>
+		<a href="#completed">完成记录</a>
+		<a href="#experiments">实验</a>
+		<a href="#articles">文章</a>
+		<a href="#files">文件</a>
+	</nav>
+
+	<section id="start" class="section-block">
+		<div class="section-heading">
+			<p>00 / ONBOARDING</p>
+			<h2>从这里开始</h2>
+		</div>
+
+		<dl class="milestone-ledger">
+			<div>
+				<dt>period</dt>
+				<dd>{milestone.period}</dd>
+			</div>
+			<div>
+				<dt>goal</dt>
+				<dd>{milestone.goal}</dd>
+			</div>
+			<div>
+				<dt>core route</dt>
+				<dd>{milestone.coreRoute}</dd>
+			</div>
+			<div>
+				<dt>final output</dt>
+				<dd>{milestone.finalArtifact}</dd>
+			</div>
+		</dl>
+
+		<ol class="follow-steps">
+			<li>
+				<strong>先看路线，不先抄代码。</strong>
+				打开<a href={`/labs/${labName}/view/docs/PLAN.md/`}>阶段 2 学习执行手册</a
+				>，确认核心路线、当前 Gate 和停止条件。
+			</li>
+			<li>
+				<strong>拿到相同材料。</strong>
+				<a href={archiveHref} download={archive.filename}>下载完整 Lab</a
+				>，或从本页末尾逐层浏览目录；原始数据、测试、记录和代码都在其中。
+			</li>
+			<li>
+				<strong>从当前任务跟做。</strong>
+				先写 Prediction，再完成当天前置阅读和正确性测试，不直接从我的结果倒推答案。
+			</li>
+			<li>
+				<strong>用证据决定下一步。</strong>
+				只有 Acceptance 通过才前进；结果不同就保存环境、原始数据和反例，而不是修改结论迎合本文。
+			</li>
+		</ol>
+	</section>
+
+	<section id="current" class="section-block current-block">
+		<div class="section-heading">
+			<p>01 / CURRENT</p>
+			<h2>现在跟做：{current.id} · {current.title}</h2>
+		</div>
+
+		<div class="current-summary">
+			<p><strong>时间：</strong>{current.period}</p>
+			<p><strong>唯一目标：</strong>{current.objective}</p>
+			<p><strong>问题：</strong>{current.question}</p>
+			<p><strong>运行前预测：</strong>{current.prediction}</p>
+		</div>
+
+		<div class="current-grid">
+			<div>
+				<h3>前置阅读 · 15 min</h3>
+				<ul>
+					{
+						current.preRead.map((reference: { label: string; href: string }) => (
+							<li>
+								<a href={reference.href}>{reference.label}</a>
+							</li>
+						))
+					}
+				</ul>
+				<p>每篇只记录一句：它确认或修正了哪条预测。</p>
+			</div>
+			<div>
+				<h3>交付与门禁</h3>
+				<p><strong>Artifact：</strong>{current.artifact}</p>
+				<p><strong>Acceptance：</strong>{current.acceptance}</p>
+				<p><a href={currentDocumentHref}>打开当前工作表 →</a></p>
+			</div>
+		</div>
+
+		<ol class="task-steps">
+			{current.steps.map((step: string) => <li>{step}</li>)}
+		</ol>
+		<p class="next-decision"><strong>下一步判断：</strong>{current.nextDecision}</p>
+	</section>
+
+	<section id="completed" class="section-block">
+		<div class="section-heading">
+			<p>02 / COMPLETED</p>
+			<h2>已完成任务</h2>
+		</div>
+		<p class="evidence-line">
+			当前累计 {evidence.tests} 项回归测试、{evidence.rawSamples} 条原始计时样本；{
+				evidence.summary
+			}。
+		</p>
+		<ol class="record-list">
+			{
+				completed.map((task: { id: string; period: string; title: string; summary: string }) => (
+					<li>
+						<div class="record-meta">
+							<span>{task.id}</span>
+							<time>{task.period}</time>
+						</div>
+						<h3>{task.title}</h3>
+						<p>{task.summary}</p>
+					</li>
+				))
+			}
+		</ol>
+	</section>
+
+	<section id="experiments" class="section-block">
+		<div class="section-heading">
+			<p>03 / EXPERIMENTS</p>
+			<h2>已经可以复查的实验</h2>
+		</div>
+		<div class="experiment-grid">
+			{
+				preview.experiments.map(
+					(experiment: { id: string; title: string; summary: string; href: string }) => (
+						<article>
+							<span>{experiment.id} · evidence</span>
+							<h3>{experiment.title}</h3>
+							<p>{experiment.summary}</p>
+							<a href={experiment.href}>查看记录与原始文件 →</a>
+						</article>
+					),
+				)
+			}
+		</div>
+	</section>
+
+	<section id="articles" class="section-block">
+		<div class="section-heading">
+			<p>04 / WRITING</p>
+			<h2>文章：先读机制，再读证据</h2>
+		</div>
+
+		<h3 class="group-title">灰度草稿</h3>
+		<ul class="article-list">
+			{
+				draftArticles.map(({ article, post }) => (
+					<li>
+						<div>
+							<span class="status draft">DRAFT · LINK ONLY</span>
+							<a href={getPostUrl(post)}>{post.data.title}</a>
+						</div>
+						<p>{article.role}</p>
+						<small>
+							更新于 <FormattedDate date={post.data.updatedDate ?? post.data.pubDate} />
+						</small>
+					</li>
+				))
+			}
+		</ul>
+
+		<h3 class="group-title">已发布文章</h3>
+		<ul class="article-list">
+			{
+				publishedArticles.map(({ article, post }) => (
+					<li>
+						<div>
+							<span class="status published">PUBLISHED</span>
+							<a href={getPostUrl(post)}>{post.data.title}</a>
+						</div>
+						<p>{article.role}</p>
+						<small>
+							发布于 <FormattedDate date={post.data.pubDate} />
+						</small>
+					</li>
+				))
+			}
+		</ul>
+	</section>
+
+	<section id="files" class="section-block">
+		<div class="section-heading">
+			<p>05 / FILES</p>
+			<h2>完整 Lab 目录</h2>
+		</div>
+		<p>
+			当前公开 {artifacts.length} 个可审计文件。目录一次只展开一层：先进入 <code>src/</code>、<code
+				>tests/</code
+			>、
+			<code>docs/</code> 或 <code>results/</code>，再查看其中内容；不会在这里铺开所有文件名。
+		</p>
+		<div class="file-listing">
+			<LabDirectoryListing
+				{labName}
+				entries={rootEntries}
+				parentHref={labHref}
+				{archiveHref}
+				archiveFilename={archive.filename}
+			/>
+		</div>
+	</section>
+
+	<footer class="page-boundary">
+		<p>
+			<strong>如何理解进度：</strong>文章写清楚只代表 Explained；测试通过代表
+			Implemented；原始数据可重建才代表 Measured。
+		</p>
+		<p>
+			当前核心进度仍是 M2-A2，真实 vLLM 的 S0–S4
+			尚未开始。这里展示计划和草稿，不把未来任务提前写成完成。
+		</p>
+	</footer>
+</PageLayout>
+
+<style>
+	:global(.page-frame.phase2-learning-page) {
+		max-width: 68rem;
+		color: #1f2937;
+		font-family: var(--font-body);
+	}
+
+	.phase-hero {
+		padding-bottom: 1.5rem;
+		border-bottom: 1px solid #cbd5e1;
+	}
+
+	.eyebrow,
+	.section-heading p {
+		margin: 0;
+		color: #64748b;
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		letter-spacing: 0.08em;
+	}
+
+	.phase-hero h1 {
+		margin: 0.5rem 0 0.75rem;
+		font-size: clamp(1.7rem, 4vw, 2.5rem);
+		line-height: 1.25;
+	}
+
+	.lead {
+		max-width: 52rem;
+		margin: 0;
+		color: #475569;
+		font-size: 1rem;
+		line-height: 1.8;
+	}
+
+	.release-note {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.8rem;
+		margin-top: 1rem;
+		padding: 0.7rem 0.8rem;
+		border: 1px dashed #94a3b8;
+		background: #f8fafc;
+		color: #475569;
+		font-size: 0.78rem;
+		line-height: 1.55;
+	}
+
+	.section-nav {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1rem;
+		padding: 1rem 0;
+		border-bottom: 1px solid #e2e8f0;
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+	}
+
+	.section-block {
+		padding: 2rem 0;
+		border-bottom: 1px solid #e2e8f0;
+		scroll-margin-top: 1rem;
+	}
+
+	.section-heading {
+		margin-bottom: 1rem;
+	}
+
+	.section-heading h2 {
+		margin: 0.25rem 0 0;
+		font-size: 1.35rem;
+	}
+
+	.milestone-ledger {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.75rem;
+		margin: 0;
+	}
+
+	.milestone-ledger div,
+	.current-grid > div,
+	.experiment-grid article {
+		padding: 0.85rem 0.95rem;
+		border: 1px solid #dbe3ec;
+		background: #f8fafc;
+	}
+
+	.milestone-ledger dt,
+	.record-meta,
+	.experiment-grid article > span {
+		color: #64748b;
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+
+	.milestone-ledger dd {
+		margin: 0.3rem 0 0;
+		line-height: 1.6;
+	}
+
+	.follow-steps,
+	.task-steps {
+		margin: 1.25rem 0 0;
+		padding-left: 1.4rem;
+		line-height: 1.75;
+	}
+
+	.follow-steps li,
+	.task-steps li {
+		margin: 0.55rem 0;
+	}
+
+	.current-block {
+		padding-right: 1rem;
+		padding-left: 1rem;
+		border-right: 2px solid #a5b4fc;
+		border-left: 2px solid #a5b4fc;
+		background: linear-gradient(90deg, #f8fafc 0, transparent 18%, transparent 82%, #f8fafc 100%);
+	}
+
+	.current-summary p,
+	.current-grid p,
+	.experiment-grid p,
+	.article-list p,
+	.section-block > p,
+	.page-boundary p {
+		line-height: 1.65;
+	}
+
+	.current-grid,
+	.experiment-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.8rem;
+		margin-top: 1rem;
+	}
+
+	.current-grid h3,
+	.experiment-grid h3 {
+		margin: 0 0 0.55rem;
+		font-size: 1rem;
+	}
+
+	.current-grid ul {
+		margin: 0;
+		padding-left: 1.2rem;
+	}
+
+	.next-decision {
+		margin: 1rem 0 0;
+		padding-top: 0.75rem;
+		border-top: 1px dashed #cbd5e1;
+	}
+
+	.evidence-line {
+		padding: 0.7rem 0.8rem;
+		background: #f1f5f9;
+	}
+
+	.record-list,
+	.article-list {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.record-list li,
+	.article-list li {
+		padding: 0.9rem 0;
+		border-top: 1px dashed #cbd5e1;
+	}
+
+	.record-list li:last-child,
+	.article-list li:last-child {
+		border-bottom: 1px dashed #cbd5e1;
+	}
+
+	.record-meta {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.record-list h3 {
+		margin: 0.25rem 0;
+		font-size: 1rem;
+	}
+
+	.record-list p,
+	.article-list p {
+		margin: 0.25rem 0;
+		color: #475569;
+	}
+
+	.experiment-grid article a {
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+	}
+
+	.group-title {
+		margin: 1.25rem 0 0.5rem;
+		font-size: 1rem;
+	}
+
+	.article-list li > div {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.4rem 0.75rem;
+	}
+
+	.article-list li > div > a {
+		font-weight: 600;
+	}
+
+	.article-list small {
+		color: #64748b;
+		font-family: var(--font-mono);
+	}
+
+	.status {
+		padding: 0.08rem 0.35rem;
+		border: 1px solid #cbd5e1;
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+	}
+
+	.status.draft {
+		color: #7c3aed;
+		background: #f5f3ff;
+	}
+
+	.status.published {
+		color: #15803d;
+		background: #f0fdf4;
+	}
+
+	.file-listing {
+		margin-top: 1rem;
+		padding: 0.8rem;
+		border: 1px solid #cbd5e1;
+		background: #fff;
+	}
+
+	.page-boundary {
+		padding: 1.25rem 0 0;
+		color: #475569;
+		font-size: 0.85rem;
+	}
+
+	.page-boundary p {
+		margin: 0.35rem 0;
+	}
+
+	@media (max-width: 720px) {
+		.milestone-ledger,
+		.current-grid,
+		.experiment-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.current-block {
+			margin-right: -0.4rem;
+			margin-left: -0.4rem;
+			padding-right: 0.8rem;
+			padding-left: 0.8rem;
+		}
+
+		.record-meta {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 0.15rem;
+		}
+	}
+</style>

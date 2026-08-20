@@ -4,10 +4,17 @@ import CoreCard from '../../components/CoreCard.astro';
 import Note from '../../components/Note.astro';
 import SlideCard from '../../components/SlideCard.astro';
 import BlogPost from '../../layouts/BlogPost.astro';
+import { getLabManifest } from '../../utils/lab-artifacts.mjs';
 
 export async function getStaticPaths() {
-	const posts = (await getCollection('blog')).filter(
-		(post) => import.meta.env.DEV || !post.data.draft,
+	const labManifest = await getLabManifest('kv-cache-batch');
+	const grayDraftIds = new Set(
+		labManifest.progress.preview.articles
+			.filter((article: { id: string; status: string }) => article.status === 'draft')
+			.map((article: { id: string }) => article.id),
+	);
+	const posts = (await getCollection('blog')).filter((post) =>
+		import.meta.env.DEV ? true : !post.data.draft || grayDraftIds.has(post.id),
 	);
 	return posts.map((post) => ({
 		params: { slug: post.id },

@@ -10,6 +10,7 @@ type BlogData = CollectionEntry<'blog'>['data'];
 type Props = Pick<BlogData, 'title' | 'description' | 'pubDate' | 'updatedDate' | 'heroImage'> & {
 	categories?: BlogData['categories'];
 	tags?: BlogData['tags'];
+	draft?: BlogData['draft'];
 	hideTitleDivider?: boolean;
 };
 
@@ -19,6 +20,7 @@ const {
 	pubDate,
 	updatedDate,
 	heroImage,
+	draft = false,
 	categories = [],
 	tags = [],
 	hideTitleDivider = false,
@@ -27,7 +29,7 @@ const {
 
 <html lang="zh-CN">
 	<head>
-		<BaseHead title={title} description={description} />
+		<BaseHead title={title} description={description} noindex={draft} />
 		<style>
 			main {
 				display: block;
@@ -93,6 +95,20 @@ const {
 				font-size: 0.7rem;
 				line-height: 1.6;
 			}
+			.draft-preview {
+				display: flex;
+				flex-wrap: wrap;
+				justify-content: space-between;
+				gap: 0.35rem 1rem;
+				margin: 0 0 1rem;
+				padding: 0.65rem 0.8rem;
+				border: 1px dashed rgb(var(--gray-light));
+				color: rgb(var(--gray));
+				background: rgb(var(--gray-light) / 18%);
+				font-family: var(--font-mono);
+				font-size: 0.72rem;
+				line-height: 1.5;
+			}
 			.category {
 				color: var(--accent);
 			}
@@ -144,6 +160,14 @@ const {
 					{heroImage && <Image width={1020} height={510} src={heroImage} alt="" />}
 				</div>
 				<div class="prose">
+					{
+						draft && (
+							<aside class="draft-preview" aria-label="灰度草稿提示">
+								<span>[GRAY DRAFT] 仍在校对，不属于正式文章归档。</span>
+								<a href="/learning/phase-2/">返回阶段共学页</a>
+							</aside>
+						)
+					}
 					<div class:list={['title', { 'title--no-divider': hideTitleDivider }]}>
 						<div class="date">
 							<FormattedDate date={pubDate} />

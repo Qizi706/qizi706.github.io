@@ -7,15 +7,16 @@ interface Props {
 	title: string;
 	description: string;
 	mainClass?: string;
+	noindex?: boolean;
 }
 
-const { title, description, mainClass } = Astro.props;
+const { title, description, mainClass, noindex = false } = Astro.props;
 ---
 
 <!doctype html>
 <html lang="zh-CN">
 	<head>
-		<BaseHead title={title} description={description} />
+		<BaseHead title={title} description={description} {noindex} />
 	</head>
 	<body>
 		<Header />
