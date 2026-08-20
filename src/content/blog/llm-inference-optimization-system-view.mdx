@@ -562,7 +562,7 @@ request rate / client concurrency
 
 ## 8. 当前证据与下一门禁
 
-这篇文章只维护相对稳定的机制模型。一个月内的核心交付路线是 M2 → S0–S4 → F0；Mixed Prefill/Decode、Prefix Reuse、固定版本源码追踪与跨环境迁移作为进阶扩展，不阻塞阶段 2 的基础完成。完整步骤、命令、产物目录和验收条件统一保存在[阶段 2 学习执行手册](/labs/kv-cache-batch/view/docs/PLAN.md/)。
+这篇文章只维护相对稳定的机制模型。一个月内的核心交付路线是 M2 → S0–S4 → F0；Mixed Prefill/Decode、Prefix Reuse、固定版本源码追踪与跨环境迁移作为进阶扩展，不阻塞阶段 2 的基础完成。完整步骤、命令、产物目录和验收条件统一保存在[阶段 2 学习执行手册](/labs/kv-cache-batch/docs/PLAN.md)。
 
 F0 的阶段产出固定为《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》。在 S0–S4 的真实数据出现前，这个标题只存在于计划中，不创建空文章或把 Toy 结果改写成 Serving 结论。
 
@@ -585,7 +585,7 @@ M2-A2：让 Q/K/V 共享一套可验证的投影与 Head Shape 契约。当前�
 
 </SlideCard>
 
-A2 的预测、前置阅读、执行顺序与验收清单见 [M2 工作表](/labs/kv-cache-batch/view/docs/gates/M2.md/)。未完成的 Gate 一律保持 `In progress` 或 `Pending`；理论预测不能代替原始数据、服务端指标或固定版本源码。
+A2 的预测、前置阅读、执行顺序与验收清单见 [M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md)。未完成的 Gate 一律保持 `In progress` 或 `Pending`；理论预测不能代替原始数据、服务端指标或固定版本源码。
 
 ## 9. 重新回答最初的问题
 

@@ -381,7 +381,7 @@ q[b, h, t, d]
 
 ### 第一遍：跟着一条窄路径做出来
 
-只阅读当前步骤所需的最小材料，写下运行前预测，然后实现一条能被测试的路径。[M2 工作表](/labs/kv-cache-batch/view/docs/gates/M2.md/) 已经保存 A1 的 `split_heads` 证据；当前 A2 只增加 Q/K/V 投影、Shape/元素 Oracle 和非法配置测试，不顺手完成整个 Multi-Head Attention。
+只阅读当前步骤所需的最小材料，写下运行前预测，然后实现一条能被测试的路径。[M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md) 已经保存 A1 的 `split_heads` 证据；当前 A2 只增加 Q/K/V 投影、Shape/元素 Oracle 和非法配置测试，不顺手完成整个 Multi-Head Attention。
 
 这一遍练的是“把知识变成行为”。
 

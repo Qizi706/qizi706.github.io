@@ -1,0 +1,84 @@
+{
+	"headers": [
+		{
+			"source": "/labs/*.c",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.cc",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.cpp",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.csv",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.h",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.hpp",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.js",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.json",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.lock",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.log",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.md",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.mjs",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.py",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.sh",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.svg",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.toml",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.ts",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.txt",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.yaml",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		},
+		{
+			"source": "/labs/*.yml",
+			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+		}
+	]
+}

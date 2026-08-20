@@ -8,7 +8,7 @@
 	},
 	"publish": ["lab.json", "README.md", "logs", "responses", "results", "scripts"],
 	"notes": [
-		"Directories open one level at a time. File names open a UTF-8 viewer.",
+		"Directories open one level at a time. File names open the original published artifact.",
 		"The public installation log contains a sanitized home-directory path."
 	],
 	"checks": {

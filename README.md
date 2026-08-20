@@ -342,14 +342,14 @@ npm run astro -- dev stop
 每个可下载 Lab 的唯一事实源位于：
 
 ```text
-public/labs/<lab-name>/
+labs/<lab-name>/
 ```
 
 新增、修改或删除其中的文件后，不需要手工维护网页文件清单。`npm run build` 会先执行
 `labs:sync`，使用同一次目录扫描：
 
 1. 重建 `public/labs/<lab-name>.tar.gz`；
-2. 生成文件浏览页及每个文本文件的静态查看路由；
+2. 生成与 Nginx autoindex 一致的逐级目录页；
 3. 使用压缩包内容 Hash 更新下载链接，避免浏览器或 CDN 继续缓存旧包。
 
 如果只想刷新下载包而不构建整个网站，运行：
@@ -358,7 +358,14 @@ public/labs/<lab-name>/
 npm run labs:sync
 ```
 
-扫描器会排除隐藏文件、虚拟环境和 Python 工具缓存。文本文件会链接到站内查看器；其他文件仍会进入压缩包，并在目录页直接链接到原文件。
+扫描器会排除隐藏文件、虚拟环境和 Python 工具缓存。文件名直接指向发布后的原文件；
+同一个 URL 可以在浏览器中打开，也可以交给 `wget`：
+
+```sh
+wget https://zqwiki.cn/labs/<lab-name>/<relative-path>
+```
+
+`https://zqwiki.cn/labs/index.json` 列出每个文件的 URL、大小和 SHA-256，便于脚本批量下载并校验。
 
 ## 发布到 EdgeOne Makers
 

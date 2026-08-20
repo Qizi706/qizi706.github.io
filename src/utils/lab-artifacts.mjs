@@ -39,6 +39,10 @@ const viewableExtensions = new Set([
 	'.yml',
 ]);
 
+function isViewableLabArtifactPath(artifactPath) {
+	return viewableExtensions.has(path.extname(artifactPath).toLowerCase());
+}
+
 const modifiedDateFormatter = new Intl.DateTimeFormat('en-GB', {
 	timeZone: 'Asia/Shanghai',
 	day: '2-digit',
@@ -229,9 +233,10 @@ export async function collectLabArtifacts(labName) {
 				path: artifactPath,
 				absolutePath,
 				modified: formatModifiedDate(modifiedDate),
+				modifiedTimestamp: modifiedDate.getTime(),
 				size: fileStat.size,
 				sha256: await hashFile(absolutePath),
-				viewable: viewableExtensions.has(path.extname(artifactPath).toLowerCase()),
+				viewable: isViewableLabArtifactPath(artifactPath),
 			};
 		}),
 	);
@@ -301,7 +306,19 @@ export function listLabDirectoryEntries(artifacts, directoryPath = '') {
 		const separatorIndex = relativePath.indexOf('/');
 		if (separatorIndex !== -1) {
 			const name = relativePath.slice(0, separatorIndex);
-			entries.set(name, { kind: 'directory', name, path: prefix + name });
+			const existingEntry = entries.get(name);
+			if (
+				!existingEntry ||
+				artifact.modifiedTimestamp > (existingEntry.modifiedTimestamp ?? Number.NEGATIVE_INFINITY)
+			) {
+				entries.set(name, {
+					kind: 'directory',
+					name,
+					path: prefix + name,
+					modified: artifact.modified,
+					modifiedTimestamp: artifact.modifiedTimestamp,
+				});
+			}
 			continue;
 		}
 
@@ -323,12 +340,17 @@ export function encodeLabArtifactPath(artifactPath) {
 	return artifactPath.split('/').map(encodeURIComponent).join('/');
 }
 
+export function getLabArtifactRawHref(labName, artifactPath) {
+	const normalizedPath = normalizeRelativePath(artifactPath, 'artifact path');
+	return getLabBasePath(labName) + encodeLabArtifactPath(normalizedPath);
+}
+
 export function getLabDirectoryHref(labName, directoryPath = '') {
 	const normalizedDirectory = normalizeArtifactDirectoryPath(directoryPath);
 	const basePath = getLabBasePath(labName);
 	return normalizedDirectory === ''
 		? basePath
-		: `${basePath}view/${encodeLabArtifactPath(normalizedDirectory)}/`;
+		: `${basePath}${encodeLabArtifactPath(normalizedDirectory)}/`;
 }
 
 export function resolveLabArtifactPath(labName, artifactPath) {

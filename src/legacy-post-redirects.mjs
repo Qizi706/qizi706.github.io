@@ -8,7 +8,7 @@ function createLabArtifactRedirects(labName, movedArtifacts) {
 	return Object.fromEntries(
 		Object.entries(movedArtifacts).flatMap(([oldPath, newPath]) => [
 			[`/labs/${labName}/${oldPath}`, `/labs/${labName}/${newPath}`],
-			[`/labs/${labName}/view/${oldPath}/`, `/labs/${labName}/view/${newPath}/`],
+			[`/labs/${labName}/view/${oldPath}/`, `/labs/${labName}/${newPath}`],
 		]),
 	);
 }
@@ -19,17 +19,17 @@ export const legacyPostRedirects = {
 	'/labs/llm-inference-request-lifecycle/[...path]': '/labs/serving-baseline/view/[...path]',
 	'/labs/attention-kv-caceh/': '/labs/kv-cache-batch/',
 	'/labs/attention-kv-caceh/view/src/attention_kv_caceh/__init__.py/':
-		'/labs/kv-cache-batch/view/src/kv_cache_lab/__init__.py/',
+		'/labs/kv-cache-batch/src/kv_cache_lab/__init__.py',
 	'/labs/attention-kv-caceh/view/src/attention_kv_caceh/attention.py/':
-		'/labs/kv-cache-batch/view/src/kv_cache_lab/attention.py/',
+		'/labs/kv-cache-batch/src/kv_cache_lab/attention.py',
 	'/labs/attention-kv-caceh/view/src/attention_kv_caceh/benchmark.py/':
-		'/labs/kv-cache-batch/view/src/kv_cache_lab/benchmark.py/',
+		'/labs/kv-cache-batch/src/kv_cache_lab/benchmark.py',
 	'/labs/attention-kv-caceh/src/attention_kv_caceh/__init__.py/':
-		'/labs/kv-cache-batch/view/src/kv_cache_lab/__init__.py/',
+		'/labs/kv-cache-batch/src/kv_cache_lab/__init__.py',
 	'/labs/attention-kv-caceh/src/attention_kv_caceh/attention.py/':
-		'/labs/kv-cache-batch/view/src/kv_cache_lab/attention.py/',
+		'/labs/kv-cache-batch/src/kv_cache_lab/attention.py',
 	'/labs/attention-kv-caceh/src/attention_kv_caceh/benchmark.py/':
-		'/labs/kv-cache-batch/view/src/kv_cache_lab/benchmark.py/',
+		'/labs/kv-cache-batch/src/kv_cache_lab/benchmark.py',
 	'/labs/attention-kv-caceh/view/[...path]': '/labs/kv-cache-batch/view/[...path]',
 	'/labs/attention-kv-caceh/[...path]': '/labs/kv-cache-batch/view/[...path]',
 	...createLabArtifactRedirects('serving-baseline', {

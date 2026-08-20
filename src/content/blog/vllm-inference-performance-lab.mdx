@@ -433,19 +433,19 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
 
 可以从 [实验产物目录](/labs/kv-cache-batch/) 统一浏览、查看原始文件或下载。文章中涉及的主要文件包括：
 
-- [Lab README](/labs/kv-cache-batch/view/README.md/)
-- [Attention 与 Cache 实现](/labs/kv-cache-batch/view/src/kv_cache_lab/attention.py/)
-- [Benchmark Harness](/labs/kv-cache-batch/view/src/kv_cache_lab/benchmark.py/)
-- [Batch Size 汇总与绘图脚本](/labs/kv-cache-batch/view/src/kv_cache_lab/summarize_batch_size.py/)
-- [M2 Head 轴实现（A1）](/labs/kv-cache-batch/view/src/kv_cache_lab/multi_head.py/)
-- [正确性测试](/labs/kv-cache-batch/view/tests/test_attention.py/)
-- [M2 Head 契约测试](/labs/kv-cache-batch/view/tests/test_multi_head.py/)
-- [Batch Size 汇总公式测试](/labs/kv-cache-batch/view/tests/test_summarize_batch_size.py/)
-- [M2 学习工作表](/labs/kv-cache-batch/view/docs/gates/M2.md/)
-- [Batch Length Scan 的 300 条原始样本](/labs/kv-cache-batch/view/results/batch-length-scan/raw.csv/)
-- [Batch Size Scan 的 240 条原始样本](/labs/kv-cache-batch/view/results/batch-size-scan/raw.csv/)
-- [Batch Size 汇总表](/labs/kv-cache-batch/view/results/batch-size-scan/summary.csv/)
-- [Batch Size Knee 分析](/labs/kv-cache-batch/view/results/batch-size-scan/knee-analysis.md/)
+- [Lab README](/labs/kv-cache-batch/README.md)
+- [Attention 与 Cache 实现](/labs/kv-cache-batch/src/kv_cache_lab/attention.py)
+- [Benchmark Harness](/labs/kv-cache-batch/src/kv_cache_lab/benchmark.py)
+- [Batch Size 汇总与绘图脚本](/labs/kv-cache-batch/src/kv_cache_lab/summarize_batch_size.py)
+- [M2 Head 轴实现（A1）](/labs/kv-cache-batch/src/kv_cache_lab/multi_head.py)
+- [正确性测试](/labs/kv-cache-batch/tests/test_attention.py)
+- [M2 Head 契约测试](/labs/kv-cache-batch/tests/test_multi_head.py)
+- [Batch Size 汇总公式测试](/labs/kv-cache-batch/tests/test_summarize_batch_size.py)
+- [M2 学习工作表](/labs/kv-cache-batch/docs/gates/M2.md)
+- [Batch Length Scan 的 300 条原始样本](/labs/kv-cache-batch/results/batch-length-scan/raw.csv)
+- [Batch Size Scan 的 240 条原始样本](/labs/kv-cache-batch/results/batch-size-scan/raw.csv)
+- [Batch Size 汇总表](/labs/kv-cache-batch/results/batch-size-scan/summary.csv)
+- [Batch Size Knee 分析](/labs/kv-cache-batch/results/batch-size-scan/knee-analysis.md)
 
 ```text
 kv-cache-batch/
@@ -477,7 +477,7 @@ kv-cache-batch/
 
 ## 10. 当前状态与下一门禁
 
-本文是阶段 2 的**中间机制产出**，只记录已经发生的 Toy Attention 实验、可重建证据与明确的数据缺口，不冒充最终 vLLM Benchmark。一个月内的核心路线是 M2 → S0–S4 → F0；S5、S6、R0 与 T0 属于不阻塞阶段交付的进阶扩展。完整步骤、命令、目录结构和验收条件，以[阶段 2 学习执行手册](/labs/kv-cache-batch/view/docs/PLAN.md/)为唯一来源。
+本文是阶段 2 的**中间机制产出**，只记录已经发生的 Toy Attention 实验、可重建证据与明确的数据缺口，不冒充最终 vLLM Benchmark。一个月内的核心路线是 M2 → S0–S4 → F0；S5、S6、R0 与 T0 属于不阻塞阶段交付的进阶扩展。完整步骤、命令、目录结构和验收条件，以[阶段 2 学习执行手册](/labs/kv-cache-batch/docs/PLAN.md)为唯一来源。
 
 F0 将使用真实 vLLM 数据单独完成《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》。在那之前，本页标题保持“机制实验”，不会因为计划已经写好就升级证据等级。
 
@@ -493,4 +493,4 @@ F0 将使用真实 vLLM 数据单独完成《vLLM 推理性能实验：并发、
 
 </Note>
 
-当前任务的预测、前置阅读和逐项验收见 [M2 工作表](/labs/kv-cache-batch/view/docs/gates/M2.md/)。后续 Gate 只有在真实产物产生后才回写本文；没有数据时使用 `Inconclusive` 或 `Pending`，不把计划写成结果。
+当前任务的预测、前置阅读和逐项验收见 [M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md)。后续 Gate 只有在真实产物产生后才回写本文；没有数据时使用 `Inconclusive` 或 `Pending`，不把计划写成结果。
