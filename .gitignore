@@ -3,6 +3,10 @@ dist/
 # generated types
 .astro/
 
+# generated Lab publication staging
+/public/labs/
+/public/.labs-stage-*
+
 # dependencies
 node_modules/
 

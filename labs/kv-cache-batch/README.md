@@ -2,9 +2,9 @@
 
 这个 Lab 用最小 NumPy 实现验证三个问题：KV Cache 是否保持 Attention 语义、缓存分配策略如何改变耗时，以及把两个独立 Sequence 放进同一个 Batch 后实际节省了什么。
 
-阶段 2 后续任务的逐步操作、命令、产物和验收条件见 [`docs/LEARNING_PLAN.md`](./docs/LEARNING_PLAN.md)。
+阶段 2 后续任务的逐步操作、命令、产物和验收条件见 [`docs/PLAN.md`](./docs/PLAN.md)。Lab 的发布边界和学习进度由 [`lab.json`](./lab.json) 统一声明。
 
-阶段文档：[LLM 推理优化的系统视角：从 KV Cache 到调度](/blog/llm-inference-optimization-system-view/)
+方法文章：[只有编辑器和构建工具，如何从零构建一个完整系统？](/blog/build-a-complete-system-from-scratch/)
 
 ## 实验问题与预测
 
@@ -19,16 +19,20 @@
 
 ```text
 kv-cache-batch/
+├── lab.json              # 公开白名单、证据门禁与当前进度
 ├── docs/
-│   └── LEARNING_PLAN.md   # 阶段 2 的逐步执行与验收手册
+│   ├── PLAN.md           # 阶段 2 的逐步执行与验收手册
+│   └── gates/            # P0、M1、M2 的独立证据记录
 ├── examples/
 │   └── numpy_array_semantics.py # NumPy View、Copy、Stride 与分配练习
 ├── src/kv_cache_lab/
 │   ├── attention.py       # Attention、KV Cache 与 Batched Decode 实现
 │   ├── benchmark.py       # 正确性门禁、计时和原始 CSV 输出
+│   ├── multi_head.py      # MHA/GQA 的 Shape 与投影契约
 │   └── summarize_batch_size.py # Batch Size 汇总、曲线和 Knee 分析
 ├── tests/
 │   ├── test_attention.py  # 独立数值与 Shape 测试
+│   ├── test_multi_head.py # M2 Head 轴与投影契约测试
 │   └── test_summarize_batch_size.py # 汇总公式与 Knee 判定测试
 └── results/
     ├── batch-length-scan/
@@ -97,7 +101,7 @@ Cache Strategy 与 Batch Length 实验扫描 Sequence Length；Batch Size 实验
 ## 复现
 
 ```bash
-cd public/labs/kv-cache-batch
+cd labs/kv-cache-batch
 uv sync
 
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
@@ -198,15 +202,18 @@ Batch Size Scan 使用 3 次 Warm-up 时，首个运行组合的前 5 次与后 
 
 ## 下一步
 
-M1 已完成：原始样本、汇总、两张独立曲线和 Knee 判断都可从 `raw.csv` 重建。下一步进入 M2，把张量扩展为 `[B, H_kv, T, D_head]`，验证 MHA/GQA 的 Head 映射与 KV 容量公式。
+P0 与 M1 已完成：NumPy 语义记录通过验收，Batch Size 的原始样本、汇总、两张独立曲线和 Knee 判断都可从 `raw.csv` 重建。M2-A1 也已完成：`split_heads` 通过 3 项定向测试，完整 9 项回归测试通过。
+
+当前唯一任务是 **M2-A2**：把同一个 Head 拆分契约迁移到 Q/K/V，并在错误 Shape 进入 `reshape` 前拒绝它。具体预测、120 分钟顺序和验收清单见 [`docs/gates/M2.md`](docs/gates/M2.md)。
 
 **预测：**
 
 ```text
-H1：B 增大时，Batch Wall Time 会增加。
-H2：Positions/s 会提高，但不会保持线性增长。
-H3：Batch Wall Time / B 会下降，因为固定开销被摊薄。
-H4：B=8 以内可能没有明确拐点；若没有，只能写 Not reached。
+A2-H1：固定 B=2、T=5、D_model=7、H_q=4、H_kv=2、D_head=3，
+       Q Shape 为 [2,4,5,3]，K/V Shape 为 [2,2,5,3]。
+A2-H2：矩阵投影创建新 Buffer，split_heads 结果与各自投影结果共享内存。
+A2-H3：输入维度、Head 数、投影宽度或 D_head 契约不成立时，
+       实现在 reshape 前抛出 ValueError。
 ```
 
-实际结果在 `B=8` 首次满足相邻吞吐增幅低于 10%，因此本次不是 `Not reached`，而是 `Knee: B=8`。
+A2 通过前不实现 Score、Causal Mask、Softmax、KV Cache 或 GQA Head 映射；通过后进入 `H_q=H_kv` 的无 Cache MHA Oracle。

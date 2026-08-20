@@ -1,0 +1,167 @@
+---
+import { readFile } from 'node:fs/promises';
+import nodePath from 'node:path';
+import LabDirectoryListing from '../../../../components/LabDirectoryListing.astro';
+import {
+	collectLabArtifactDirectories,
+	collectLabArtifacts,
+	discoverLabs,
+	encodeLabArtifactPath,
+	getLabBasePath,
+	getLabDirectoryHref,
+	getLabManifest,
+	listLabDirectoryEntries,
+	resolveLabArtifactPath,
+} from '../../../../utils/lab-artifacts.mjs';
+
+export async function getStaticPaths() {
+	const paths = [];
+	for (const labName of await discoverLabs()) {
+		const artifacts = await collectLabArtifacts(labName);
+		const directoryPaths = collectLabArtifactDirectories(artifacts);
+		paths.push(
+			...directoryPaths.map((directoryPath) => ({
+				params: { lab: labName, path: directoryPath },
+				props: {
+					labName,
+					kind: 'directory' as const,
+					directoryPath,
+					entries: listLabDirectoryEntries(artifacts, directoryPath),
+				},
+			})),
+			...artifacts
+				.filter((file) => file.viewable)
+				.map((file) => ({
+					params: { lab: labName, path: file.path },
+					props: { labName, kind: 'file' as const, file },
+				})),
+		);
+	}
+	return paths;
+}
+
+type Artifact = Awaited<ReturnType<typeof collectLabArtifacts>>[number];
+type DirectoryEntry = ReturnType<typeof listLabDirectoryEntries>[number];
+type Props =
+	| { labName: string; kind: 'file'; file: Artifact }
+	| { labName: string; kind: 'directory'; directoryPath: string; entries: DirectoryEntry[] };
+
+const props = Astro.props;
+const { labName } = props;
+const manifest = await getLabManifest(labName);
+const isDirectory = props.kind === 'directory';
+const directoryPath = isDirectory ? props.directoryPath : undefined;
+const file = props.kind === 'file' ? props.file : undefined;
+const sourcePath = file ? resolveLabArtifactPath(labName, file.path) : undefined;
+const content = sourcePath ? await readFile(sourcePath, 'utf8') : undefined;
+const rawPath = file ? getLabBasePath(labName) + encodeLabArtifactPath(file.path) : undefined;
+const downloadName = file ? nodePath.basename(file.path) : undefined;
+const currentPath = directoryPath ?? file?.path ?? '';
+const parentDirectory = nodePath.posix.dirname(currentPath);
+const parentHref = getLabDirectoryHref(labName, parentDirectory === '.' ? '' : parentDirectory);
+const displayedPath = `/labs/${labName}/view/${directoryPath ? `${directoryPath}/` : ''}`;
+---
+
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/png" sizes="64x64" href="/favicon.ico?v=4" />
+		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+		<title>
+			{isDirectory ? `Index of ${displayedPath}` : `${file?.path} — ${manifest.title}`}
+		</title>
+		<meta
+			name="description"
+			content={isDirectory
+				? `Directory listing for ${displayedPath}`
+				: `UTF-8 viewer for ${file?.path}`}
+		/>
+		<style>
+			:root {
+				color-scheme: light;
+			}
+
+			body.artifact-viewer {
+				color: #000;
+				background: #fff;
+			}
+
+			body.artifact-viewer a {
+				color: #000;
+			}
+
+			body.directory-viewer {
+				margin: 8px;
+				color: #111;
+				background: #fff;
+				font-family: serif;
+			}
+
+			.directory-viewer h1 {
+				font-size: 2rem;
+			}
+
+			.directory-viewer footer {
+				font-size: 0.875rem;
+			}
+
+			.artifact-viewer header {
+				display: flex;
+				align-items: baseline;
+				gap: 1rem;
+			}
+
+			.artifact-viewer h1 {
+				font-size: 1.5rem;
+			}
+
+			.artifact-viewer nav {
+				margin-left: auto;
+				margin-bottom: 1rem;
+				white-space: nowrap;
+			}
+
+			.artifact-viewer nav a + a {
+				margin-left: 0.75rem;
+			}
+
+			.artifact-viewer main {
+				overflow-x: auto;
+			}
+
+			.artifact-viewer pre {
+				margin: 0;
+				tab-size: 4;
+			}
+		</style>
+	</head>
+	<body class={isDirectory ? 'directory-viewer' : 'artifact-viewer'}>
+		{
+			isDirectory ? (
+				<>
+					<h1>Index of {displayedPath}</h1>
+					<hr />
+					<LabDirectoryListing {labName} entries={props.entries} {parentHref} />
+					<hr />
+					<footer>
+						<p>Directories open one level at a time. File names open a UTF-8 viewer.</p>
+					</footer>
+				</>
+			) : (
+				<>
+					<header>
+						<h1>{file?.path}</h1>
+						<nav aria-label="Artifact actions">
+							<a href={parentHref}>Back</a>
+							<a href={rawPath}>Raw</a>
+							<a href={rawPath} download={downloadName}>Download</a>
+						</nav>
+					</header>
+					<main><pre set:text={content} /></main>
+				</>
+			)
+		}
+	</body>
+</html>

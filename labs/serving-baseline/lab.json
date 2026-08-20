@@ -1,0 +1,25 @@
+{
+	"slug": "serving-baseline",
+	"title": "Local LLM Serving Baseline",
+	"description": "Sanitized scripts, raw logs, responses, and measurements for the local serving baseline",
+	"parent": {
+		"href": "/blog/llm-inference-request-lifecycle-practice/",
+		"label": "本地 LLM 推理服务实验"
+	},
+	"publish": ["lab.json", "README.md", "logs", "responses", "results", "scripts"],
+	"notes": [
+		"Directories open one level at a time. File names open a UTF-8 viewer.",
+		"The public installation log contains a sanitized home-directory path."
+	],
+	"checks": {
+		"required": [
+			"README.md",
+			"scripts/benchmark_ollama_input_length.py",
+			"scripts/install_vllm_metal.sh",
+			"logs/vllm_metal_install.log",
+			"logs/vllm_metal_server.log",
+			"responses/vllm_chat_completion.json",
+			"results/ollama_input_length_scan_v2.csv"
+		]
+	}
+}

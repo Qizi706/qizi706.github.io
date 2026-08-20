@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { lstat, readFile, readdir, stat } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
-const workspaceRoot = process.cwd();
-const labPagesRoot = path.join(workspaceRoot, 'src', 'pages', 'labs');
-const publicLabsRoot = path.join(workspaceRoot, 'public', 'labs');
+export const workspaceRoot = process.cwd();
+export const labsRoot = path.join(workspaceRoot, 'labs');
+export const publicLabsRoot = path.join(workspaceRoot, 'public', 'labs');
 
 const excludedEntryNames = new Set([
 	'.DS_Store',
@@ -64,6 +64,23 @@ function assertLabName(labName) {
 	}
 }
 
+function normalizeRelativePath(relativePath, label = 'path') {
+	if (typeof relativePath !== 'string' || relativePath === '') {
+		throw new Error(`Invalid ${label}: ${relativePath}`);
+	}
+
+	const normalizedPath = relativePath.replaceAll('\\', '/');
+	const segments = normalizedPath.split('/');
+	if (
+		path.posix.isAbsolute(normalizedPath) ||
+		segments.some((segment) => segment === '' || segment === '.' || segment === '..')
+	) {
+		throw new Error(`Invalid ${label}: ${relativePath}`);
+	}
+
+	return normalizedPath;
+}
+
 function isExcludedEntry(entryName) {
 	return entryName.startsWith('.') || excludedEntryNames.has(entryName);
 }
@@ -81,9 +98,7 @@ function getGitModifiedDate(relativePath) {
 		encoding: 'utf8',
 	});
 
-	if (statusResult.status !== 0 || statusResult.stdout.trim() !== '') {
-		return undefined;
-	}
+	if (statusResult.status !== 0 || statusResult.stdout.trim() !== '') return undefined;
 
 	const logResult = spawnSync('git', ['log', '-1', '--format=%ct', '--', relativePath], {
 		cwd: workspaceRoot,
@@ -101,49 +116,110 @@ async function hashFile(filePath) {
 	return createHash('sha256').update(content).digest('hex');
 }
 
-async function walkLabDirectory(rootPath, relativeDirectory = '') {
-	const directoryPath = path.join(rootPath, ...relativeDirectory.split('/').filter(Boolean));
-	const entries = await readdir(directoryPath, { withFileTypes: true });
-	const files = [];
+function assertInsideRoot(rootPath, targetPath, label) {
+	const normalizedRoot = path.resolve(rootPath);
+	const normalizedTarget = path.resolve(targetPath);
+	if (
+		normalizedTarget !== normalizedRoot &&
+		!normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`)
+	) {
+		throw new Error(`${label} escapes Lab root: ${targetPath}`);
+	}
+	return normalizedTarget;
+}
 
+async function walkPublishPath(labRoot, relativePath) {
+	const normalizedPath = normalizeRelativePath(relativePath, 'publish path');
+	const absolutePath = assertInsideRoot(
+		labRoot,
+		path.join(labRoot, ...normalizedPath.split('/')),
+		'Publish path',
+	);
+	const entryStat = await lstat(absolutePath);
+
+	if (entryStat.isSymbolicLink()) {
+		throw new Error(`Symbolic links are not publishable: ${normalizedPath}`);
+	}
+	if (entryStat.isFile()) return [normalizedPath];
+	if (!entryStat.isDirectory()) throw new Error(`Unsupported Lab entry: ${normalizedPath}`);
+
+	const entries = await readdir(absolutePath, { withFileTypes: true });
+	const files = [];
 	for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name, 'en'))) {
 		if (isExcludedEntry(entry.name)) continue;
-
-		const relativePath = path.posix.join(relativeDirectory, entry.name);
-		if (entry.isDirectory()) {
-			files.push(...(await walkLabDirectory(rootPath, relativePath)));
-		} else if (entry.isFile()) {
-			files.push(relativePath);
+		if (entry.isSymbolicLink()) {
+			throw new Error(`Symbolic links are not publishable: ${normalizedPath}/${entry.name}`);
 		}
+		const childPath = path.posix.join(normalizedPath, entry.name);
+		files.push(...(await walkPublishPath(labRoot, childPath)));
 	}
-
 	return files;
 }
 
+function assertManifest(manifest, expectedSlug) {
+	if (!manifest || typeof manifest !== 'object') throw new Error('Lab manifest must be an object.');
+	assertLabName(manifest.slug);
+	if (manifest.slug !== expectedSlug) {
+		throw new Error(`Manifest slug ${manifest.slug} does not match directory ${expectedSlug}.`);
+	}
+	if (typeof manifest.title !== 'string' || typeof manifest.description !== 'string') {
+		throw new Error(`${expectedSlug}: title and description are required.`);
+	}
+	if (
+		!manifest.parent ||
+		typeof manifest.parent.href !== 'string' ||
+		typeof manifest.parent.label !== 'string'
+	) {
+		throw new Error(`${expectedSlug}: parent href and label are required.`);
+	}
+	if (!Array.isArray(manifest.publish) || manifest.publish.length === 0) {
+		throw new Error(`${expectedSlug}: publish must be a non-empty array.`);
+	}
+	manifest.publish.forEach((publishPath) => normalizeRelativePath(publishPath, 'publish path'));
+}
+
+export function getLabSourceRoot(labName) {
+	assertLabName(labName);
+	return path.join(labsRoot, labName);
+}
+
+export async function getLabManifest(labName) {
+	assertLabName(labName);
+	const manifestPath = path.join(getLabSourceRoot(labName), 'lab.json');
+	const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+	assertManifest(manifest, labName);
+	return manifest;
+}
+
 export async function discoverLabs() {
-	const entries = await readdir(labPagesRoot, { withFileTypes: true });
+	const entries = await readdir(labsRoot, { withFileTypes: true });
 	const labs = [];
 
 	for (const entry of entries) {
 		if (!entry.isDirectory() || isExcludedEntry(entry.name)) continue;
-
-		const indexPage = path.join(labPagesRoot, entry.name, 'index.astro');
-		const sourceDirectory = path.join(publicLabsRoot, entry.name);
-		if ((await pathExists(indexPage)) && (await pathExists(sourceDirectory))) {
-			labs.push(entry.name);
-		}
+		assertLabName(entry.name);
+		if (await pathExists(path.join(labsRoot, entry.name, 'lab.json'))) labs.push(entry.name);
 	}
 
 	return labs.sort((left, right) => left.localeCompare(right, 'en'));
 }
 
 export async function collectLabArtifacts(labName) {
-	assertLabName(labName);
-	const labRoot = path.join(publicLabsRoot, labName);
-	const relativePaths = await walkLabDirectory(labRoot);
+	const manifest = await getLabManifest(labName);
+	const labRoot = getLabSourceRoot(labName);
+	const relativePaths = (
+		await Promise.all(manifest.publish.map((publishPath) => walkPublishPath(labRoot, publishPath)))
+	).flat();
+	const uniquePaths = [...new Set(relativePaths)].sort((left, right) =>
+		left.localeCompare(right, 'en'),
+	);
+
+	if (uniquePaths.length !== relativePaths.length) {
+		throw new Error(`${labName}: publish entries overlap.`);
+	}
 
 	return Promise.all(
-		relativePaths.map(async (artifactPath) => {
+		uniquePaths.map(async (artifactPath) => {
 			const absolutePath = path.join(labRoot, ...artifactPath.split('/'));
 			const fileStat = await stat(absolutePath);
 			const workspaceRelativePath = path.relative(workspaceRoot, absolutePath);
@@ -151,6 +227,7 @@ export async function collectLabArtifacts(labName) {
 
 			return {
 				path: artifactPath,
+				absolutePath,
 				modified: formatModifiedDate(modifiedDate),
 				size: fileStat.size,
 				sha256: await hashFile(absolutePath),
@@ -158,6 +235,83 @@ export async function collectLabArtifacts(labName) {
 			};
 		}),
 	);
+}
+
+export async function validateLab(labName) {
+	const manifest = await getLabManifest(labName);
+	const artifacts = await collectLabArtifacts(labName);
+	const artifactPaths = new Set(artifacts.map(({ path: artifactPath }) => artifactPath));
+	const requiredPaths = manifest.checks?.required ?? [];
+
+	for (const requiredPath of requiredPaths) {
+		const normalizedPath = normalizeRelativePath(requiredPath, 'required path');
+		if (!artifactPaths.has(normalizedPath)) {
+			throw new Error(`${labName}: required artifact is not published: ${normalizedPath}`);
+		}
+	}
+
+	for (const [csvPath, expectedRows] of Object.entries(manifest.checks?.csvRows ?? {})) {
+		const normalizedPath = normalizeRelativePath(csvPath, 'CSV path');
+		if (!artifactPaths.has(normalizedPath)) {
+			throw new Error(`${labName}: checked CSV is not published: ${normalizedPath}`);
+		}
+		if (!Number.isInteger(expectedRows) || expectedRows < 0) {
+			throw new Error(`${labName}: invalid expected row count for ${normalizedPath}.`);
+		}
+		const csvContent = await readFile(resolveLabArtifactPath(labName, normalizedPath), 'utf8');
+		const actualRows = csvContent.trimEnd().split(/\r?\n/u).length - 1;
+		if (actualRows !== expectedRows) {
+			throw new Error(
+				`${labName}: ${normalizedPath} has ${actualRows} rows; expected ${expectedRows}.`,
+			);
+		}
+	}
+
+	return { manifest, artifacts };
+}
+
+function normalizeArtifactDirectoryPath(directoryPath = '') {
+	if (directoryPath === '') return '';
+	return normalizeRelativePath(directoryPath, 'artifact directory path');
+}
+
+export function collectLabArtifactDirectories(artifacts) {
+	const directories = new Set();
+
+	for (const artifact of artifacts) {
+		const segments = artifact.path.split('/').slice(0, -1);
+		for (let depth = 1; depth <= segments.length; depth += 1) {
+			directories.add(segments.slice(0, depth).join('/'));
+		}
+	}
+
+	return [...directories].sort((left, right) => left.localeCompare(right, 'en'));
+}
+
+export function listLabDirectoryEntries(artifacts, directoryPath = '') {
+	const normalizedDirectory = normalizeArtifactDirectoryPath(directoryPath);
+	const prefix = normalizedDirectory === '' ? '' : `${normalizedDirectory}/`;
+	const entries = new Map();
+
+	for (const artifact of artifacts) {
+		if (!artifact.path.startsWith(prefix)) continue;
+		const relativePath = artifact.path.slice(prefix.length);
+		if (relativePath === '') continue;
+
+		const separatorIndex = relativePath.indexOf('/');
+		if (separatorIndex !== -1) {
+			const name = relativePath.slice(0, separatorIndex);
+			entries.set(name, { kind: 'directory', name, path: prefix + name });
+			continue;
+		}
+
+		entries.set(relativePath, { kind: 'file', name: relativePath, ...artifact });
+	}
+
+	return [...entries.values()].sort((left, right) => {
+		if (left.kind !== right.kind) return left.kind === 'directory' ? -1 : 1;
+		return left.name.localeCompare(right.name, 'en');
+	});
 }
 
 export function getLabBasePath(labName) {
@@ -169,16 +323,22 @@ export function encodeLabArtifactPath(artifactPath) {
 	return artifactPath.split('/').map(encodeURIComponent).join('/');
 }
 
+export function getLabDirectoryHref(labName, directoryPath = '') {
+	const normalizedDirectory = normalizeArtifactDirectoryPath(directoryPath);
+	const basePath = getLabBasePath(labName);
+	return normalizedDirectory === ''
+		? basePath
+		: `${basePath}view/${encodeLabArtifactPath(normalizedDirectory)}/`;
+}
+
 export function resolveLabArtifactPath(labName, artifactPath) {
-	assertLabName(labName);
-	const labRoot = path.resolve(publicLabsRoot, labName);
-	const resolvedPath = path.resolve(labRoot, ...artifactPath.split('/'));
-
-	if (!resolvedPath.startsWith(`${labRoot}${path.sep}`)) {
-		throw new Error(`Artifact path escapes lab root: ${artifactPath}`);
-	}
-
-	return resolvedPath;
+	const labRoot = getLabSourceRoot(labName);
+	const normalizedPath = normalizeRelativePath(artifactPath, 'artifact path');
+	return assertInsideRoot(
+		labRoot,
+		path.join(labRoot, ...normalizedPath.split('/')),
+		'Artifact path',
+	);
 }
 
 export async function getLabArchiveInfo(labName) {
@@ -187,9 +347,5 @@ export async function getLabArchiveInfo(labName) {
 	const archivePath = path.join(publicLabsRoot, filename);
 	const archiveStat = await stat(archivePath);
 
-	return {
-		filename,
-		size: archiveStat.size,
-		sha256: await hashFile(archivePath),
-	};
+	return { filename, size: archiveStat.size, sha256: await hashFile(archivePath) };
 }

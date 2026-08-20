@@ -6,11 +6,18 @@
 		"node": ">=22.12.0"
 	},
 	"scripts": {
-		"dev": "astro dev",
-		"labs:sync": "node scripts/build-lab-archives.mjs",
-		"labs:archive": "npm run labs:sync",
-		"prebuild": "npm run labs:sync",
+		"dev": "astro dev --background",
+		"dev:status": "astro dev status",
+		"dev:logs": "astro dev logs",
+		"dev:stop": "astro dev stop",
+		"predev": "npm run labs:publish",
+		"labs:check": "node scripts/check-labs.mjs",
+		"labs:publish": "node scripts/publish-labs.mjs",
+		"labs:sync": "npm run labs:publish",
+		"labs:archive": "npm run labs:publish",
+		"prebuild": "npm run labs:check && npm run labs:publish",
 		"build": "astro build",
+		"check": "npm run labs:check && npm run labs:publish && astro check",
 		"preview": "astro preview",
 		"astro": "astro",
 		"migrate:hexo": "node scripts/migrate-hexo.mjs"

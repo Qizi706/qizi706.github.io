@@ -18,10 +18,10 @@
 - [x] `B=1/2/4/8` 全部通过独立 Oracle、Shape 与状态隔离检查。
 - [x] M1 保存 240 条原始样本，并从 Raw CSV 生成汇总、两张曲线和 Knee 分析。
 - [x] M1 结果与证据边界已经回写实验文章。
+- [x] M2-A1 已完成 Head 轴变换的 Shape、非零坐标映射和内存共享验证。
 
 ### 当前缺口
 
-- [ ] `examples/numpy_array_semantics.py` 已覆盖六类操作，但尚未保存事前预测、实际输出、差异解释和口述验收。
 - [ ] Cache Strategy 当前只保留汇总结果；若需要逐样本复现，必须重新生成独立的 `results/cache-strategy/raw.csv`，不能与其他实验共用文件。
 - [ ] 尚未实现 MHA/GQA 与 KV 容量对照。
 - [ ] 尚未重新冻结真实 vLLM 环境。
@@ -30,12 +30,12 @@
 ### 当前唯一主任务
 
 ```text
-完成 P0 NumPy 语义记录与口述验收
-  -> 进入 M2 Shape 契约
-  -> 实现 MHA/GQA Head 映射与 KV 容量对照
+M2-A1 Query Head 轴变换（Completed）
+  -> M2-A2 Q/K/V 投影与输入契约（Current）
+  -> M2-B 无 Cache MHA Oracle
 ```
 
-P0 通过验收前不进入 M2；M2 通过验收前不开始真实 Serving 实验。
+M2-A2 通过验收前不进入 Attention 计算；M2 通过验收前不开始真实 Serving 实验。
 
 ## 1. 阶段 2 的掌握标准
 
@@ -57,6 +57,7 @@ P0 通过验收前不进入 M2；M2 通过验收前不开始真实 Serving 实�
 Question:
 Prediction:
 Time box:
+Pre-read:
 Controlled variable:
 Fixed variables:
 Action:
@@ -87,6 +88,7 @@ question
 
 - [ ] 一次只改变一个主变量。
 - [ ] 预测在运行实验之前写下。
+- [ ] 前置阅读只选择会在当天第一段代码中使用的官方文档，默认不超过 15 分钟，并记录它确认或修正了哪条预测。
 - [ ] 正确性检查在计时之前完成，不进入计时区间。
 - [ ] 输入、权重、随机种子和环境在对照组之间保持一致。
 - [ ] 保留全部原始样本，不只保存平均数或中位数。
@@ -117,89 +119,11 @@ question
 
 # Gate P0：Python/NumPy 语义热身
 
-预计时间：120 分钟。
+状态：**Completed（2026-08-19）**。
 
-目标不是学完 Python，而是能在运行前预测当前 Lab 中的对象共享、View/Copy、Shape、Stride 和分配行为。
+六个实验已保留运行前预测、实际结果、差异解释与断言；能够脱离代码解释 Binding、浅复制、基础切片、Advanced Indexing、`swapaxes`、`concatenate`、Stride 与 Buffer 分配，并把这些语义映射回 Attention/KV Cache。
 
-文件：`examples/numpy_array_semantics.py`
-
-明日记录产物：`docs/NUMPY_SEMANTICS_NOTES.md`。只在写下事前预测后创建内容，不提前生成空文件充当进度。
-
-## P0.1 已完成部分
-
-- [x] `b = a`：两个名称绑定同一个 List。
-- [x] `a.copy()`：Flat List 得到独立的浅复制容器。
-- [x] `x[:, 0:1, :]`：基础切片与原 ndarray 共享 Buffer。
-
-## P0.2 Advanced Indexing
-
-运行前先写下对 Shape、内存共享和修改传播的预测，再追加：
-
-```python
-copied = x[[0, 1]]
-copied[0, 0, 0] = 999
-
-print("advanced shape:", copied.shape)
-print("advanced shares:", np.shares_memory(x, copied))
-print("original value:", x[0, 0, 0])
-```
-
-必须回答：
-
-- [ ] `copied.shape` 是什么？
-- [ ] 为什么 Advanced Indexing 产生 Copy？
-- [ ] 修改 `copied` 为什么不会污染 `x`？
-
-## P0.3 `swapaxes`
-
-```python
-swapped = np.swapaxes(x, -1, -2)
-
-print("x shape:", x.shape)
-print("swapped shape:", swapped.shape)
-print("x strides:", x.strides)
-print("swapped strides:", swapped.strides)
-print("swap shares:", np.shares_memory(x, swapped))
-```
-
-必须回答：
-
-- [ ] Shape 为什么从 `[2, 3, 4]` 变成 `[2, 4, 3]`？
-- [ ] 数据有没有重新排列？
-- [ ] Stride 为什么改变？
-- [ ] View 没有复制数据，为什么仍可能影响访问性能？
-
-## P0.4 `concatenate`
-
-```python
-joined = np.concatenate([x, x], axis=0)
-
-print("joined shape:", joined.shape)
-print("concatenate shares:", np.shares_memory(x, joined))
-```
-
-必须回答：
-
-- [ ] 结果 Shape 是什么？
-- [ ] 为什么 `concatenate` 需要新 Buffer？
-- [ ] Dynamic KV Cache 每个 Decode Step 调用它会产生什么累计成本？
-
-## P0.5 运行
-
-```bash
-cd /home/celeb/Programming/blogs/astro-site/public/labs/kv-cache-batch
-uv run python examples/numpy_array_semantics.py
-```
-
-## P0 Acceptance
-
-- [ ] 六个实验在运行前都有明确预测。
-- [ ] 实际结果与预测逐项对照。
-- [ ] 至少解释一个预测错误；如果没有错误，主动修改一个实验制造错误假设。
-- [ ] 能脱离代码解释名称绑定、浅复制、View、Copy、Stride 与分配。
-- [ ] 能指出哪些操作会污染原数组，哪些操作会给 Benchmark 增加复制成本。
-
-通过后立即进入 M2，不继续阅读完整 Python 教程。
+完整记录见 [`docs/gates/P0.md`](gates/P0.md)，可执行例子见 [`examples/numpy_array_semantics.py`](../examples/numpy_array_semantics.py)。P0 已关闭，不再追加脱离当前主线的 Python 练习。
 
 ---
 
@@ -1152,11 +1076,11 @@ Inconclusive
 
 当前只做以下三项：
 
-1. [ ] 完成 `examples/numpy_array_semantics.py` 的 Advanced Indexing、`swapaxes`、`concatenate`。
-2. [ ] 为 `B=1/2/4/8` 增加正确性测试。
-3. [ ] 在 README 写下 M1 四条预测及其反证条件。
+1. [ ] 在 `docs/gates/M2.md` 保存固定参数下的权重宽度、Q/K/V Shape、Buffer 与坐标预测，再完成 15 分钟定向阅读。
+2. [ ] 为 Q/K/V 投影补齐 Shape、元素 Oracle 与五类非法配置测试，再实现最小接口。
+3. [ ] 运行 M2 定向测试和完整回归测试，关闭代码重做推导并记录下一步判断。
 
-三项完成后，先审查 P0 与 M1-A；不要提前实现 M2。
+三项和 A2 验收清单全部通过后，进入 M2-B；不要提前实现 Attention、KV Cache 或 GQA 映射。
 
 # 主要参考
 

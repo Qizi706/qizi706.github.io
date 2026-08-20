@@ -1,0 +1,111 @@
+{
+	"slug": "kv-cache-batch",
+	"title": "KV Cache and Batched Decode",
+	"description": "Causal Attention, KV Cache, batched decode, and MHA/GQA learning evidence",
+	"parent": {
+		"href": "/blog/build-a-complete-system-from-scratch/",
+		"label": "只有编辑器和构建工具，如何从零构建一个完整系统？"
+	},
+	"publish": [
+		"lab.json",
+		"README.md",
+		"pyproject.toml",
+		"uv.lock",
+		"src",
+		"tests",
+		"examples",
+		"docs",
+		"results"
+	],
+	"notes": [
+		"Directories open one level at a time. File names open a UTF-8 viewer.",
+		"Generated caches, virtual environments, and hidden repository files are excluded."
+	],
+	"checks": {
+		"required": [
+			"README.md",
+			"docs/PLAN.md",
+			"docs/gates/P0.md",
+			"docs/gates/M1.md",
+			"docs/gates/M2.md",
+			"src/kv_cache_lab/attention.py",
+			"src/kv_cache_lab/multi_head.py",
+			"tests/test_attention.py",
+			"tests/test_multi_head.py",
+			"results/batch-size-scan/raw.csv",
+			"results/batch-size-scan/summary.csv"
+		],
+		"csvRows": {
+			"results/batch-length-scan/raw.csv": 300,
+			"results/batch-size-scan/raw.csv": 240
+		}
+	},
+	"progress": {
+		"completed": [
+			{
+				"id": "P0",
+				"period": "2026.08.19",
+				"title": "NumPy View/Copy 与轴语义闭环",
+				"summary": "六个 Case 均保留预测、观察、判定与断言；能够区分 Binding、View、Copy、Stride 与 Buffer 分配。",
+				"featured": true
+			},
+			{
+				"id": "M1",
+				"period": "2026.08.20",
+				"title": "Batch Size 曲线",
+				"summary": "B=1/2/4/8 均通过正确性检查，保存 240 条原始样本并得到 Knee=B=8。"
+			},
+			{
+				"id": "M2-A1",
+				"period": "2026.08.20 · 120 min",
+				"title": "只完成 Query Head 轴变换",
+				"summary": "split_heads 已通过 Shape、非零坐标元素映射和内存共享三项测试；完整 9 项回归测试通过。",
+				"featured": true
+			}
+		],
+		"current": {
+			"id": "M2-A2",
+			"period": "2026.08.22 · 120 min",
+			"title": "建立 Q/K/V 投影与输入契约",
+			"objective": "让同一个 Head 拆分规则作用于 Q/K/V，并在错误 Shape 进入 reshape 前拒绝它；只完成投影、轴变换与校验，不进入 Attention 计算。",
+			"question": "当 H_q 不等于 H_kv 时，怎样证明 Q/K/V 各自的 Head 轴正确，并让非法宽度明确失败？",
+			"prediction": "固定参数应得到 Q=[2,4,5,3]、K/V=[2,2,5,3]；投影创建新 Buffer，拆 Head 只改变视图，非法配置应在 reshape 前失败。",
+			"preRead": [
+				{
+					"label": "NumPy matmul",
+					"href": "https://numpy.org/doc/stable/reference/generated/numpy.matmul.html"
+				},
+				{
+					"label": "NumPy Copies and Views",
+					"href": "https://numpy.org/doc/stable/user/basics.copies.html"
+				},
+				{
+					"label": "unittest subTest / assertRaises",
+					"href": "https://docs.python.org/3/library/unittest.html"
+				}
+			],
+			"artifact": "multi_head.py、test_multi_head.py，以及 M2 工作表中的预测、首次失败和反思记录。",
+			"acceptance": "固定参数得到 Q=[2,4,5,3]、K/V=[2,2,5,3]；元素 Oracle、非法配置和完整回归测试全部通过。",
+			"steps": [
+				"15 min：填写 Shape、Buffer 与坐标预测。",
+				"15 min：完成三处定向阅读，只记录对预测的确认或修正。",
+				"25 min：先写 Shape、元素 Oracle、非法配置三组测试，保存第一次失败。",
+				"30 min：实现最小输入校验与 project_qkv，不写 Score、Mask、Softmax 或 Cache。",
+				"15 min：只依据失败信息修正 Shape 或输入契约。",
+				"10 min：运行 A2 定向测试与完整测试套件。",
+				"10 min：关闭代码重写 Shape 推导，填写结果与下一步判断。"
+			],
+			"nextDecision": "七项 A2 门禁全部通过后，才进入 H_q=H_kv 的无 Cache MHA Oracle；任一项失败就继续修正 A2。",
+			"document": "docs/gates/M2.md"
+		},
+		"next": {
+			"id": "M2-B",
+			"title": "No-cache MHA Oracle"
+		},
+		"evidence": {
+			"tests": 9,
+			"rawSamples": 240,
+			"summary": "notes · rebuildable aggregates · two figures · Knee analysis"
+		}
+	}
+}

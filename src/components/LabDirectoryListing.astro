@@ -1,0 +1,92 @@
+---
+import {
+	encodeLabArtifactPath,
+	getLabBasePath,
+	getLabDirectoryHref,
+} from '../utils/lab-artifacts.mjs';
+
+interface DirectoryEntry {
+	kind: 'directory';
+	name: string;
+	path: string;
+}
+
+interface FileEntry {
+	kind: 'file';
+	name: string;
+	path: string;
+	modified: string;
+	size: number;
+	viewable: boolean;
+}
+
+interface Props {
+	labName: string;
+	entries: Array<DirectoryEntry | FileEntry>;
+	parentHref: string;
+	archiveHref?: string;
+	archiveFilename?: string;
+}
+
+const { labName, entries, parentHref, archiveHref, archiveFilename } = Astro.props;
+const basePath = getLabBasePath(labName);
+
+function getEntryHref(entry: DirectoryEntry | FileEntry): string {
+	if (entry.kind === 'directory') return getLabDirectoryHref(labName, entry.path);
+
+	const encodedPath = encodeLabArtifactPath(entry.path);
+	return entry.viewable ? `${basePath}view/${encodedPath}/` : `${basePath}${encodedPath}`;
+}
+---
+
+<div class="directory-listing" role="list" aria-label="Directory entries">
+	<span class="entry" role="listitem">
+		<a href={parentHref}>../</a><span></span><span></span>
+	</span>
+	{
+		archiveHref && archiveFilename && (
+			<span class="entry" role="listitem">
+				<a href={archiveHref} download={archiveFilename}>
+					[Download entire folder as {archiveFilename}]
+				</a>
+				<>
+					<span />
+					<span />
+				</>
+			</span>
+		)
+	}
+	{
+		entries.map((entry) => {
+			const label = entry.name + (entry.kind === 'directory' ? '/' : '');
+			return (
+				<span class="entry" role="listitem">
+					<a href={getEntryHref(entry)}>{label}</a>
+					<span>{entry.kind === 'file' ? entry.modified : ''}</span>
+					<span class="size">{entry.kind === 'file' ? entry.size : ''}</span>
+				</span>
+			);
+		})
+	}
+</div>
+
+<style>
+	.directory-listing {
+		max-width: 100%;
+		overflow-x: auto;
+		font-family: monospace;
+		line-height: 1.45;
+	}
+
+	.entry {
+		display: grid;
+		grid-template-columns: minmax(18rem, 1fr) 19ch 12ch;
+		gap: 1rem;
+		min-width: 48rem;
+		white-space: nowrap;
+	}
+
+	.size {
+		text-align: right;
+	}
+</style>

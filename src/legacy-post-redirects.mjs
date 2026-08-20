@@ -42,7 +42,10 @@ export const legacyPostRedirects = {
 		'vllm-response.json': 'responses/vllm_chat_completion.json',
 	}),
 	...createLabArtifactRedirects('kv-cache-batch', {
-		'LEARNING_PLAN.md': 'docs/LEARNING_PLAN.md',
+		'LEARNING_PLAN.md': 'docs/PLAN.md',
+		'docs/LEARNING_PLAN.md': 'docs/PLAN.md',
+		'docs/NUMPY_SEMANTICS_NOTES.md': 'docs/gates/P0.md',
+		'docs/M2_NOTES.md': 'docs/gates/M2.md',
 		'src/numpy_semantics.py': 'examples/numpy_array_semantics.py',
 		'src/kv_cache_batch/__init__.py': 'src/kv_cache_lab/__init__.py',
 		'src/kv_cache_batch/attention.py': 'src/kv_cache_lab/attention.py',
