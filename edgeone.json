@@ -1,84 +1,84 @@
 {
-	"headers": [
+	"rewrites": [
+		{
+			"source": "/labs/*.txt",
+			"destination": "/labs/__raw_text__/:splat.txt.txt"
+		},
 		{
 			"source": "/labs/*.c",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.c.txt"
 		},
 		{
 			"source": "/labs/*.cc",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.cc.txt"
 		},
 		{
 			"source": "/labs/*.cpp",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.cpp.txt"
 		},
 		{
 			"source": "/labs/*.csv",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.csv.txt"
 		},
 		{
 			"source": "/labs/*.h",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.h.txt"
 		},
 		{
 			"source": "/labs/*.hpp",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.hpp.txt"
 		},
 		{
 			"source": "/labs/*.js",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.js.txt"
 		},
 		{
 			"source": "/labs/*.json",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.json.txt"
 		},
 		{
 			"source": "/labs/*.lock",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.lock.txt"
 		},
 		{
 			"source": "/labs/*.log",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.log.txt"
 		},
 		{
 			"source": "/labs/*.md",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.md.txt"
 		},
 		{
 			"source": "/labs/*.mjs",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.mjs.txt"
 		},
 		{
 			"source": "/labs/*.py",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.py.txt"
 		},
 		{
 			"source": "/labs/*.sh",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.sh.txt"
 		},
 		{
 			"source": "/labs/*.svg",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.svg.txt"
 		},
 		{
 			"source": "/labs/*.toml",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.toml.txt"
 		},
 		{
 			"source": "/labs/*.ts",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
-		},
-		{
-			"source": "/labs/*.txt",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.ts.txt"
 		},
 		{
 			"source": "/labs/*.yaml",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.yaml.txt"
 		},
 		{
 			"source": "/labs/*.yml",
-			"headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+			"destination": "/labs/__raw_text__/:splat.yml.txt"
 		}
 	]
 }

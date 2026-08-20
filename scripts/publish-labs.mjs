@@ -118,6 +118,17 @@ try {
 			const targetPath = path.join(stagingRoot, labName, ...artifact.path.split('/'));
 			await mkdir(path.dirname(targetPath), { recursive: true });
 			await copyFile(artifact.absolutePath, targetPath);
+
+			if (artifact.viewable) {
+				const textMirrorPath = path.join(
+					stagingRoot,
+					'__raw_text__',
+					labName,
+					...artifact.path.split('/'),
+				);
+				await mkdir(path.dirname(textMirrorPath), { recursive: true });
+				await copyFile(artifact.absolutePath, `${textMirrorPath}.txt`);
+			}
 		}
 
 		const archiveBuffer = createArchiveBuffer(labName, stagingRoot, artifacts);
