@@ -2,7 +2,7 @@
 
 这个 Lab 用最小 NumPy 实现验证三个问题：KV Cache 是否保持 Attention 语义、缓存分配策略如何改变耗时，以及把两个独立 Sequence 放进同一个 Batch 后实际节省了什么。
 
-阶段 2 后续任务的逐步操作、命令、产物和验收条件见 [`docs/PLAN.md`](./docs/PLAN.md)。Lab 的发布边界和学习进度由 [`lab.json`](./lab.json) 统一声明。
+这是阶段 2 的中间机制 Lab，不是最终 vLLM Serving Benchmark。一个月核心路线、进阶扩展、逐步命令和验收条件见 [`docs/PLAN.md`](./docs/PLAN.md)；Lab 的发布边界和当前任务由 [`lab.json`](./lab.json) 统一声明。
 
 方法文章：[只有编辑器和构建工具，如何从零构建一个完整系统？](/blog/build-a-complete-system-from-scratch/)
 

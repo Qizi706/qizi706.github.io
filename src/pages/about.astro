@@ -6,6 +6,7 @@ import { getLabManifest } from '../utils/lab-artifacts.mjs';
 
 const kvCacheLab = await getLabManifest('kv-cache-batch');
 const phase2Progress = kvCacheLab.progress;
+const phase2Milestone = phase2Progress.milestone;
 const currentGate = phase2Progress.current;
 const completedGateSummary = phase2Progress.completed
 	.map((gate: { id: string; title: string }) => `${gate.id} ${gate.title}`)
@@ -263,8 +264,8 @@ constraint: KV Cache consumes GPU memory</code></pre>
 		</LearningStage>
 
 		<LearningStage
-			period="2026.08.12 — 2026.09.12"
-			title="阶段 2 · 单机 LLM Serving 性能与调度"
+			period={phase2Milestone.period}
+			title={phase2Milestone.title}
 			status="active"
 			open
 		>
@@ -273,11 +274,12 @@ constraint: KV Cache consumes GPU memory</code></pre>
 					class="quest-checkbox"
 					type="checkbox"
 					disabled
-					aria-label="单机 LLM Serving 性能与调度进行中"
+					aria-label="LLM 推理核心知识与 vLLM 性能实验进行中"
 				/>
-				<span>serving performance & scheduling <span class="muted">/ 32 days</span></span>
+				<span>core inference + vLLM benchmark <span class="muted">/ 32 days</span></span>
 				<span class="quest-state is-active" aria-hidden="true">[active]</span>
 			</div>
+			<p>{phase2Milestone.goal}</p>
 
 			<dl class="phase-ledger" aria-label="阶段二实验契约">
 				<div>
@@ -289,14 +291,20 @@ constraint: KV Cache consumes GPU memory</code></pre>
 					<dd>{completedGateSummary}</dd>
 				</div>
 				<div>
-					<dt>next gate</dt>
-					<dd>{phase2Progress.next.id} {phase2Progress.next.title} · then S0 serving snapshot</dd>
+					<dt>core route</dt>
+					<dd>{phase2Milestone.coreRoute}</dd>
 				</div>
 				<div>
 					<dt>evidence</dt>
 					<dd>
-						{phase2Evidence.tests} passing tests · {phase2Evidence.rawSamples} raw samples · {phase2Evidence.summary}
+						{phase2Evidence.tests} passing tests · {phase2Evidence.rawSamples} raw samples · {
+							phase2Evidence.summary
+						}
 					</dd>
+				</div>
+				<div>
+					<dt>final output</dt>
+					<dd>{phase2Milestone.finalArtifact}</dd>
 				</div>
 			</dl>
 
@@ -304,26 +312,34 @@ constraint: KV Cache consumes GPU memory</code></pre>
 				<div>
 					<h3>核心问题</h3>
 					<ol>
-						<li>单层 Self-Attention 如何完成 Q/K/V、缩放点积、因果 Mask、Softmax 与输出计算？</li>
-						<li>Decode 时哪些 K/V 可以复用，KV Cache 的计算收益、容量与 block 生命周期是什么？</li>
-						<li>Input/Output 长度分布如何改变 Prefill、Decode 与 KV Cache 占用？</li>
-						<li>Request Rate、Client Concurrency、Active Sequences 与 Token Budget 如何区分？</li>
-						<li>并发增加时，Token Throughput 为什么先提高再饱和，而尾延迟继续恶化？</li>
-						<li>
-							长 Prefill 如何干扰 Decode ITL，Continuous Batching 与 Chunked Prefill 如何缓解？
-						</li>
-						<li>客户端时序如何对应到 Scheduler 决策和 KV Block 生命周期？</li>
+						<li>Transformer 的 Prefill 与 Decode 分别执行什么？</li>
+						<li>Attention 为什么需要 KV Cache，它节省了什么又增加了什么？</li>
+						<li>Prefill 为什么计算密集，Decode 为什么容易受内存与调度影响？</li>
+						<li>Batch Size 怎样改变吞吐与延迟，为什么它在动态 Serving 中不是一个数字？</li>
+						<li>Continuous Batching 怎样提高利用率，又引入什么竞争？</li>
+						<li>Prefix Caching 复用了什么，为什么主要影响重复 Prefill？</li>
+						<li>Speculative Decoding 怎样提出和验证候选，收益取决于什么？</li>
+						<li>Chunked Prefill 为什么可能改善 Decode ITL，又会付出什么代价？</li>
+						<li>权重、激活、KV Cache、临时 Buffer 与 Runtime 开销怎样组成显存占用？</li>
+						<li>输入长度、并发与 Scheduler Budget 怎样共同决定 TTFT、TPOT 和吞吐？</li>
 					</ol>
 				</div>
 				<div>
 					<h3>证据进度</h3>
 					<ul>
-						{phase2Progress.completed.map((gate: { id: string; summary: string }) => (
-							<li>[done] {gate.id} · {gate.summary}</li>
-						))}
+						{
+							phase2Progress.completed.map((gate: { id: string; summary: string }) => (
+								<li>
+									[done] {gate.id} · {gate.summary}
+								</li>
+							))
+						}
 						<li>[active] {currentGate.id} · {currentGate.objective}</li>
-						<li>[pending] 流式 Harness、TTFT/TPOT/ITL、Queue/KV 指标与受控 Serving 实验。</li>
-						<li>[pending] Scheduler 源码纵切、配置日志、复现包与技术报告。</li>
+						<li>
+							[pending/core] S0–S4：真实 vLLM 环境、TTFT/TPOT、显存、输入长度、并发与调度预算。
+						</li>
+						<li>[pending/core] F0：结论矩阵、复现包、闭卷答辩与最终 vLLM 性能文章。</li>
+						<li>[optional] {phase2Milestone.advancedRoute}</li>
 					</ul>
 				</div>
 			</div>
@@ -332,39 +348,44 @@ constraint: KV Cache consumes GPU memory</code></pre>
 			<div class="month-plan" aria-label="阶段二学习与验收计划">
 				<article>
 					<span>08.12 — 08.18 / week 01</span>
-					<h4>Attention、KV Cache 与 Batch 曲线 · done</h4>
+					<h4>KV Cache 与 Batch 机制证据 · done</h4>
 					<p>完成 Cache 等价性、预分配、Batched Decode、P0 NumPy 语义和 M1 Batch Size Scan。</p>
-					<p class="week-gate"><b>evidence</b> 9 tests + 240 raw samples + rebuildable figures</p>
+					<p class="week-gate"><b>evidence</b> 9 tests + 300 length samples + 240 batch samples</p>
 				</article>
 				<article class="is-current">
 					<span>08.19 — 08.25 / week 02</span>
-					<h4>MHA/GQA Shape、正确性与 KV 容量 · active</h4>
+					<h4>结束 Toy 机制，冻结真实 vLLM · active</h4>
 					<p>{currentGate.id}：{currentGate.objective}</p>
-					<p class="week-gate"><b>gate</b> shape + element oracle + invalid config + KV bytes</p>
+					<p class="week-gate"><b>gate</b> M2 acceptance → S0 snapshot</p>
 				</article>
 				<article>
 					<span>08.26 — 09.01 / week 03</span>
-					<h4>Serving 环境与可观测基线 · pending</h4>
-					<p>冻结真实 vLLM 版本、模型、启动命令与能力矩阵，再建立单并发稳态基线。</p>
-					<p class="week-gate"><b>gate</b> snapshot + capability matrix + raw JSON</p>
+					<h4>稳态、显存与输入长度 · pending</h4>
+					<p>完成 S1 单并发稳态与显存组成表，再用 S2 对比短、中、长 Prompt。</p>
+					<p class="week-gate"><b>gate</b> TTFT/TPOT + memory ledger + input-length curves</p>
 				</article>
 				<article>
 					<span>09.02 — 09.08 / week 04</span>
-					<h4>负载、调度与 Prefix Reuse · pending</h4>
-					<p>依次扫描长度、并发、调度预算与混合负载，再验证公共前缀复用。</p>
-					<p class="week-gate"><b>gate</b> stream timeline + server metrics + workload matrix</p>
+					<h4>并发与调度批量 · pending</h4>
+					<p>
+						完成 S3 Client Concurrency 和 S4 Scheduler Budget，区分客户端负载、配置上限与实际
+						Batch。
+					</p>
+					<p class="week-gate"><b>gate</b> saturation point + tail latency + scheduler evidence</p>
 				</article>
 				<article class="review-window">
 					<span>09.09 — 09.12 / review</span>
-					<h4>源码追踪、异常复测与证据封装</h4>
-					<p>固定版本追踪一次实测现象，复测反常数据并补齐产物、命令与边界。</p>
-					<p class="week-gate"><b>release</b> source trace + article + lab bundle</p>
+					<h4>原始阶段产出与闭卷验收</h4>
+					<p>重建核心曲线、复测异常、完成十个知识点答辩并交付最终 vLLM 性能文章。</p>
+					<p class="week-gate">
+						<b>release</b> reproducible bundle + final article + core complete
+					</p>
 				</article>
 			</div>
 
 			<p class="scope-note">
-				<span>[scope]</span> 当前只做 {currentGate.id}：{currentGate.objective} M2
-				通过后才进入真实 Serving；Speculative Decoding 与分布式并行移出范围。
+				<span>[scope]</span> 当前只做 {currentGate.id}：{currentGate.objective} M2 通过后立即进入 S0。Speculative
+				Decoding、Prefix Caching 与 Chunked Prefill 的基本思想属于核心口述范围；S5/S6 实验、源码追踪、跨环境迁移和分布式并行不阻塞本月交付。
 			</p>
 
 			<details class="reading-list">
@@ -389,6 +410,11 @@ constraint: KV Cache consumes GPU memory</code></pre>
 									target="_blank"
 									rel="noreferrer"
 									>Orca: A Distributed Serving System for Transformer-Based Generative Models</a
+								>
+							</li>
+							<li>
+								<a href="/blog/conjecture-verification-practice/"
+									>Speculative Decoding：候选、验证与分布保持</a
 								>
 							</li>
 						</ul>
@@ -494,9 +520,10 @@ constraint: KV Cache consumes GPU memory</code></pre>
 scope: backend + hardware + model + version + workload</code></pre>
 
 			<p class="stage-gate">
-				<strong>验收标准：</strong>在固定环境与负载分布下，能用客户端流式时序和服务端 Queue /
-				Scheduler / KV 指标解释吞吐饱和与尾延迟恶化；报告保留原始产物、复现命令、反例及 Backend /
-				Hardware / Version 适用边界。
+				<strong>核心验收：</strong>闭卷解释十个推理知识点；完成 M2 与 S0–S4，在固定环境中记录 TTFT、
+				TPOT、吞吐、显存、输入长度、并发和 Scheduler
+				Budget；用客户端与服务端证据解释吞吐—延迟权衡，并完成
+				{phase2Milestone.finalArtifact}。S5、S6、R0 与 T0 属于进阶扩展，不阻塞 Core Complete。
 			</p>
 		</LearningStage>
 	</section>

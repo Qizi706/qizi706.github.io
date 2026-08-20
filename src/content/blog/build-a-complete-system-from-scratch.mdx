@@ -449,7 +449,7 @@ AI 最适合站在 Feedback 一侧：检查我的预测、制造反例、Review 
   -> 关闭代码重新推导并记录下一步
 ```
 
-之后才依次进入无 Cache MHA、Cached MHA、GQA 和 KV 容量；M2 通过后停止扩展 Toy Transformer，进入真实 vLLM 环境、负载、调度、流式请求、Prefix Reuse、源码追踪和复现交付。
+之后才依次进入无 Cache MHA、Cached MHA、GQA 和 KV 容量；M2 通过后停止扩展 Toy Transformer。阶段 2 的一个月核心交付只继续完成真实 vLLM 环境、稳态基线、输入长度、并发、调度预算和最终性能报告；Mixed Prefill/Decode、Prefix Reuse、源码追踪与跨环境迁移保留为进阶扩展，不再阻塞原定阶段产出。
 
 整条路线看起来很长，但每天面对的仍然只是一个能失败的小问题。系统的完整性来自这些小闭环能够首尾相接，不是来自某一天突然写完了所有模块。
 

@@ -1,8 +1,8 @@
-# 阶段 2 学习执行手册：从 Batch 到真实 vLLM Serving
+# 阶段 2 学习执行手册：LLM 推理核心知识与 vLLM 性能实验
 
-这份文件是阶段 2 的唯一执行清单。实验文章负责解释结果，本文件负责回答“现在具体做什么、做到什么程度才可以继续”。
+这份文件是 2026.08.12—2026.09.12 阶段 2 的唯一执行清单。目标是在一个月内理解推理系统的核心矛盾，并用真实 vLLM 实验解释调度、显存、Batching 与 KV Cache 如何共同决定吞吐和延迟。
 
-不要因为阅读完一节就勾选完成。只有对应的代码、测试、原始数据、解释与验收条件全部满足，任务才算完成。
+本文明确区分“阶段 2 核心完成”和“进阶扩展”。不要因为阅读完一节就勾选完成；也不要让源码追踪、混合负载或跨环境迁移无限推迟原定的一月交付。
 
 ## 0. 当前状态
 
@@ -14,7 +14,7 @@
 - [x] Batched 输出、K Cache、V Cache 的 Shape 通过测试。
 - [x] 保存固定 `B=2` 的 300 条 Batch Length Scan 原始计时样本。
 - [x] 能解释 Batch 摊薄 Python/NumPy 调用开销，但不消除 Attention 工作。
-- [x] M0 结果已经回写阶段 2 实验文章。
+- [x] M0 结果已经回写阶段 2 中间机制实验文章。
 - [x] `B=1/2/4/8` 全部通过独立 Oracle、Shape 与状态隔离检查。
 - [x] M1 保存 240 条原始样本，并从 Raw CSV 生成汇总、两张曲线和 Knee 分析。
 - [x] M1 结果与证据边界已经回写实验文章。
@@ -22,10 +22,12 @@
 
 ### 当前缺口
 
-- [ ] Cache Strategy 当前只保留汇总结果；若需要逐样本复现，必须重新生成独立的 `results/cache-strategy/raw.csv`，不能与其他实验共用文件。
+- [ ] Cache Strategy 的历史测量支持 H2，但当前复现状态为 `Inconclusive`：450 条逐样本数据未保留。若要重新验证，必须生成独立的 `results/cache-strategy/raw.csv`，不能与其他实验共用文件，也不能把新测量冒充原始样本。
 - [ ] 尚未实现 MHA/GQA 与 KV 容量对照。
 - [ ] 尚未重新冻结真实 vLLM 环境。
-- [ ] 尚无真实 Serving 的 Concurrency、Scheduler、Prefix Reuse 与源码证据。
+- [ ] 尚无真实 vLLM 的 TTFT、TPOT、吞吐、显存、Input Length、Client Concurrency 与 Scheduler Budget 证据。
+- [ ] 十个核心知识点已有文章说明，但还没有完成阶段末闭卷口述与实测交叉检查。
+- [ ] Mixed Prefill/Decode、Prefix Reuse、源码追踪与跨环境迁移属于进阶扩展，不计入当前核心缺口。
 
 ### 当前唯一主任务
 
@@ -35,19 +37,63 @@ M2-A1 Query Head 轴变换（Completed）
   -> M2-B 无 Cache MHA Oracle
 ```
 
-M2-A2 通过验收前不进入 Attention 计算；M2 通过验收前不开始真实 Serving 实验。
+M2-A2 通过验收前不进入 Attention 计算；M2 通过后立即进入 S0，不继续扩建 Toy Transformer。核心路线固定为：
 
-## 1. 阶段 2 的掌握标准
+```text
+M2 -> S0 -> S1 -> S2 -> S3 -> S4 -> F0
+```
 
-阶段 2 完成时，我必须同时达到五个层次：
+## 1. 原始目标与两条完成线
 
-1. **Explained**：不看文章也能解释 Batch、KV Cache、MHA/GQA、TTFT、TPOT、ITL 和 Scheduler Budget。
-2. **Implemented**：能独立修改 Attention、Batch、Cache 与实验 Harness，并处理 Shape 和状态隔离。
-3. **Measured**：能控制变量、保存原始数据、报告分位数，并区分吞吐与延迟。
-4. **Reviewed**：能用测试、内置工具、服务端 Metrics 或他人复现挑战自己的结论。
-5. **Transferred**：换一个模型、Backend 或硬件后，仍能重新预测、实验和定位差异。
+### 1.1 一个月核心目标
 
-只完成文章或代码，不等于掌握。
+核心问题不是“哪个模型跑分最高”，而是：
+
+> 为什么 LLM Serving 不是单纯“模型越快越好”，而是调度、显存、Batching 与 KV Cache 共同决定系统性能？
+
+阶段 2 的最终产出固定为：
+
+> 《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》
+
+标题中的 Batch Size 只是对外表达。实验内部必须区分 Client Concurrency、Active Sequences、`max_num_seqs`、`max_num_batched_tokens` 与每轮实际 Scheduled Sequences。
+
+### 1.2 十个核心知识点
+
+| 原始要求                      | 当前证据                                          | 阶段末还要补什么                    |
+| ----------------------------- | ------------------------------------------------- | ----------------------------------- |
+| Transformer 推理流程          | 请求链路文章已解释完整请求与 Forward 路径         | 闭卷画出 Prefill/Decode 状态转换    |
+| Attention 为什么需要 KV Cache | M0 已实现 No Cache、Dynamic 与 Preallocated Cache | 用真实 KV Usage 对照逻辑公式        |
+| Prefill 为什么计算密集        | 系统文章已解释并行处理 Prompt                     | S2 用 Input Length 与 TTFT 验证     |
+| Decode 为什么受内存和调度影响 | Toy Decode 已实现；带宽与调度机制已解释           | S3/S4 对齐 TPOT、Queue 与 Scheduler |
+| Batch Size 对吞吐和延迟的影响 | M1 已完成 `B=1/2/4/8` Toy 曲线                    | S3/S4 验证真实动态 Batch            |
+| Continuous Batching           | 系统文章已解释迭代级加入与退出                    | S3/S4 观察实际 Running/Waiting      |
+| Prefix Caching                | 系统文章解释复用对象与边界                        | 核心阶段只需闭卷解释；S6 实验为扩展 |
+| Speculative Decoding          | 已有候选生成、并行验证与分布保持说明              | 闭卷解释收益条件与拒绝成本          |
+| Chunked Prefill               | 系统文章解释拆分 Prefill 的收益与竞争             | 核心阶段只需闭卷解释；S5 实验为扩展 |
+| 显存组成                      | 已区分权重、KV、激活、Workspace 与 Runtime 开销   | S1–S4 保存可观测值和不可观测边界    |
+
+文章是 `Explained` 的证据，不自动等于掌握。F0 必须在不看文章时重新回答，并用 S0–S4 的真实产物校正概念模型。
+
+### 1.3 阶段 2 核心完成
+
+只有同时满足下面五项，才标记 **Phase 2 Core Complete**：
+
+1. **Explained**：闭卷解释上表十个核心知识点，以及 TTFT、TPOT、吞吐和显存指标。
+2. **Implemented**：M2 的 MHA/GQA、Cache 等价性和 KV 容量公式通过正确性门禁；到此停止扩展 Toy Transformer。
+3. **Measured**：完成 S0–S4，分别控制 Input Length、Client Concurrency 与 Scheduler Budget，保留每请求数据、服务端指标和内存记录。
+4. **Reviewed**：至少用内置 `bench serve`、独立复跑和原始数据重建挑战一次汇总结论。
+5. **Delivered**：完成最终 vLLM 性能文章；每条结论注明版本、模型、Backend、硬件、负载与证据边界。
+
+### 1.4 进阶扩展
+
+下面内容有价值，但不阻塞一个月核心交付：
+
+- S5：Mixed Prefill/Decode 与 Chunked Prefill 对照；
+- S6：Prefix Reuse 实验；
+- R0：固定版本 Scheduler/KV/Runner 源码追踪；
+- T0：换模型、Backend 或硬件后的迁移复跑。
+
+`Reviewed` 的外部反馈和 `Transferred` 的跨环境验证在进阶扩展中继续提高证据等级，不能反向把尚未完成的 S0–S4 写成已掌握。
 
 ## 2. 每次学习都使用同一个契约
 
@@ -99,21 +145,29 @@ question
 
 ## 3. 总路线
 
-| ID  | 任务                      | 当前状态    | 直接产物                           |
-| --- | ------------------------- | ----------- | ---------------------------------- |
-| M0  | Cache、预分配、固定 `B=2` | Completed   | 测试、300 条长度扫描样本、实验文章 |
-| P0  | Python/NumPy 语义         | Completed   | 六个可预测的小实验                 |
-| M1  | Batch Size 曲线           | Completed   | `B=1/2/4/8` 原始数据与曲线         |
-| M2  | MHA/GQA 与 KV 容量        | In progress | 正确性测试与容量表                 |
-| S0  | vLLM 环境与可观测性       | Pending     | 环境快照与 Capability Matrix       |
-| S1  | 单并发稳态基线            | Pending     | 三轮详细 Serving 结果              |
-| S2  | Input Length              | Pending     | TTFT/TPOT/E2E/KV 曲线              |
-| S3  | Client Concurrency        | Pending     | 吞吐饱和点与尾延迟                 |
-| S4  | Scheduler Budget          | Pending     | 配置上限与实际调度对照             |
-| S5  | Mixed Prefill/Decode      | Pending     | Long Prefill 与 ITL 时间线         |
-| S6  | Prefix Reuse              | Pending     | Prefix Hit 与 TTFT 对照            |
-| R0  | 固定版本源码追踪          | Pending     | 状态机、调用链与验证性复跑         |
-| F0  | 综合、复现与反馈          | Pending     | 复现包与两篇文章终稿               |
+### 核心路线：一个月内完成
+
+| ID  | 任务                      | 当前状态    | 直接产物                                  |
+| --- | ------------------------- | ----------- | ----------------------------------------- |
+| M0  | Cache、预分配、固定 `B=2` | Completed   | 测试、300 条长度扫描样本、机制实验文章    |
+| P0  | Python/NumPy 语义         | Completed   | 六个可预测的小实验                        |
+| M1  | Batch Size 曲线           | Completed   | `B=1/2/4/8` 原始数据与曲线                |
+| M2  | MHA/GQA 与 KV 容量        | In progress | 正确性测试与容量表                        |
+| S0  | vLLM 环境与可观测性       | Pending     | 环境快照与 Capability Matrix              |
+| S1  | 单并发稳态与内存基线      | Pending     | 三轮 Serving 结果与显存组成表             |
+| S2  | Input Length              | Pending     | TTFT/TPOT/E2E/KV/Memory 曲线              |
+| S3  | Client Concurrency        | Pending     | 吞吐饱和点、尾延迟与内存压力              |
+| S4  | Scheduler Budget          | Pending     | 配置上限、实际调度 Batch 与客户端指标对照 |
+| F0  | 核心综合与阶段产出        | Pending     | vLLM 性能文章、复现包、结论矩阵与闭卷答辩 |
+
+### 进阶扩展：不阻塞核心完成
+
+| ID  | 任务                    | 当前状态 | 直接产物                     |
+| --- | ----------------------- | -------- | ---------------------------- |
+| S5  | Mixed Prefill/Decode    | Optional | Long Prefill 与 ITL 时间线   |
+| S6  | Prefix Reuse            | Optional | Prefix Hit 与 TTFT 对照      |
+| R0  | 固定版本源码追踪        | Optional | 状态机、调用链与验证性复跑   |
+| T0  | 跨模型/Backend/硬件迁移 | Optional | 第二环境预测、复跑与差异解释 |
 
 ---
 
@@ -440,14 +494,14 @@ results/batch-size-scan/
 
 ### M2 子任务状态
 
-| 子任务 | 状态                    | 当前证据或缺口                                      |
-| ------ | ----------------------- | --------------------------------------------------- |
-| M2-A1  | Completed               | 3 项 Head 轴测试与完整 9 项回归测试通过             |
-| M2-A2  | Current / Not completed | 尚无 `project_qkv`、输入校验与 A2 契约测试          |
-| M2-B   | Pending                 | 等 A2 通过后实现无 Cache MHA Oracle                 |
-| M2-C   | Pending                 | 等 B 通过后实现 Cached MHA                          |
-| M2-D   | Pending                 | 等 C 通过后实现 GQA Head 映射                       |
-| M2-E   | Pending                 | 等 D 通过后验证 MHA/GQA KV 容量公式与生成对照表     |
+| 子任务 | 状态                    | 当前证据或缺口                                  |
+| ------ | ----------------------- | ----------------------------------------------- |
+| M2-A1  | Completed               | 3 项 Head 轴测试与完整 9 项回归测试通过         |
+| M2-A2  | Current / Not completed | 尚无 `project_qkv`、输入校验与 A2 契约测试      |
+| M2-B   | Pending                 | 等 A2 通过后实现无 Cache MHA Oracle             |
+| M2-C   | Pending                 | 等 B 通过后实现 Cached MHA                      |
+| M2-D   | Pending                 | 等 C 通过后实现 GQA Head 映射                   |
+| M2-E   | Pending                 | 等 D 通过后验证 MHA/GQA KV 容量公式与生成对照表 |
 
 M2 整体仍是 **In progress**。只有 M2-A1 已完成；`Current` 只表示当前应该执行 M2-A2，不表示它已经通过验收。
 
@@ -750,11 +804,26 @@ vllm bench serve \
 
 差异明显时优先检查模型编译、温度/功耗、系统负载、实际 Token 数、Fallback 和提前停止。
 
+## S1.4 建立显存组成基线
+
+不要把“总显存减去权重”直接写成 KV Cache。为每个可见内存量记录来源、采样时刻和证据等级：
+
+| 组成                    | 记录方式                                  | 结果要求                      |
+| ----------------------- | ----------------------------------------- | ----------------------------- |
+| 模型权重                | 模型配置、dtype/量化与加载日志            | 实测值优先；估算值写明公式    |
+| KV Cache                | Block 数、Block Size、KV Usage 或启动日志 | 与 M2 逻辑公式分层对照        |
+| 激活                    | Backend 指标或峰值差分                    | 不可拆分时标记 `Unobservable` |
+| 临时 Buffer / Workspace | 启动日志、Profiler 或峰值差分             | 不与激活重复计数              |
+| Runtime 保留与碎片      | 加载前后、Warm-up 前后和稳态峰值          | 说明统一内存或设备显存口径    |
+
+至少保存“服务启动前、模型加载后、Warm-up 后、稳态运行峰值”四个时刻。当前 Backend 无法拆分某一项时，保留总量与可观测边界，不用猜测填表。
+
 ## S1 Acceptance
 
 - [ ] 三轮结果达到可解释的稳定性。
 - [ ] 每个汇总值可追溯到每请求记录。
 - [ ] 指标定义与内置工具保持一致。
+- [ ] 完成权重、KV Cache、激活、临时 Buffer 与 Runtime 开销的显存组成表；不可观测项已明确标记。
 
 ---
 
@@ -776,6 +845,7 @@ max_concurrency = 1
 - [ ] TTFT、TPOT、ITL、E2E。
 - [ ] Input/Output Token Throughput。
 - [ ] 服务端 KV Usage。
+- [ ] 每组长度的稳态与峰值内存，以及它与 KV Usage 的差异。
 
 必须回答：
 
@@ -809,6 +879,7 @@ max_concurrency = 1, 2, 4, 8, 16
 - [ ] TTFT/TPOT/ITL/E2E P50/P95/P99。
 - [ ] Running/Waiting Requests。
 - [ ] KV Usage。
+- [ ] 稳态与峰值内存。
 
 预先定义饱和点：
 
@@ -849,15 +920,97 @@ Output Token Throughput 增幅 < 10%
 - [ ] 工作负载实际触及被扫描限制。
 - [ ] Waiting Requests 足够形成调度压力。
 - [ ] KV 容量没有先成为限制，或已明确记录。
+- [ ] 每个 Scheduler 配置保留实际 Scheduled Sequences/Token 数和峰值内存；无法观测时明确标记。
 - [ ] 无法证明时使用 `Inconclusive`，不写“调大参数无效”。
+
+核心路线到这里停止增加变量，直接进入 F0。下面的 S5、S6 与 R0 是进阶扩展，不是完成原始阶段 2 的前置条件。
 
 ---
 
-# Gate S5：Mixed Prefill/Decode
+# Gate F0：原始阶段产出与核心完成
+
+核心路线从 S4 直接进入 F0；不要求先完成 S5、S6 或 R0。
+
+最终目录至少包含：
+
+```text
+results/serving/
+├── environment/
+├── workloads/
+├── raw/
+├── metrics/
+├── processed/
+├── plots/
+├── anomalies.md
+└── reproduction.md
+```
+
+## F0.1 交叉检查
+
+- [ ] 使用内置 `bench serve` 对照一次自定义聚合。
+- [ ] 对最异常的一组结果独立复跑。
+- [ ] 保留失败和超时请求。
+- [ ] 从 Raw JSON/CSV 重新生成至少一张核心曲线。
+- [ ] 逐项检查显存组成表中的实测、估算与 `Unobservable` 标签。
+
+## F0.2 核心结论矩阵
+
+每条预测只能标成 `Supported`、`Refuted` 或 `Inconclusive`，并写明版本、硬件、模型、Backend 与工作负载边界。
+
+| 原始问题                                          | 必须使用的证据                                  |
+| ------------------------------------------------- | ----------------------------------------------- |
+| 输入变长怎样影响 Prefill、TTFT、TPOT 与 KV 占用？ | S2 每请求结果、KV Usage 与内存记录              |
+| 并发增加怎样改变吞吐、排队与尾延迟？              | S3 吞吐/延迟分位数与 Running/Waiting            |
+| “Batch Size”在动态 Serving 中到底指什么？         | S3/S4 的 Client Concurrency、预算与实际调度对照 |
+| 调度预算何时提高吞吐，何时只增加竞争？            | S4 配置、日志、服务端状态与客户端指标           |
+| 权重、KV、激活和临时 Buffer 怎样共同占用显存？    | S1 基线与 S2–S4 峰值内存表                      |
+| Toy Batch 结论哪些迁移到 vLLM，哪些失效？         | M1 与 S3/S4 的同概念、不同系统对照              |
+
+## F0.3 阶段产出
+
+- [ ] 系统文章只保留机制模型，并用真实 S0–S4 证据修正边界。
+- [ ] 当前《LLM 推理机制实验》继续作为 Toy Lab 中间产出，不改写成 GPU/vLLM 结果。
+- [ ] 使用真实 vLLM 数据完成《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》。
+- [ ] 最终文章包含 Question、Prediction、环境、受控变量、Raw Evidence、曲线、异常、限制和 Next Decision。
+- [ ] 文件真正产生后再添加文章与产物链接，不创建空链接充当完成进度。
+
+## F0.4 最终闭卷答辩
+
+不看文章回答：
+
+1. Transformer 推理的 Prefill 与 Decode 分别执行什么？
+2. Attention 为什么需要 KV Cache，它节省了什么又增加了什么？
+3. Prefill 为什么更容易利用并行计算？
+4. Decode 为什么更容易受内存带宽、Batching 和调度影响？
+5. Client Concurrency、Active Sequences、Scheduler Budget 与实际 Batch 有什么区别？
+6. Continuous Batching 怎样提高设备利用率，又会引入什么竞争？
+7. Prefix Caching 复用了什么，为什么主要影响重复 Prefill？
+8. Speculative Decoding 怎样提出并验证候选，收益取决于什么？
+9. Chunked Prefill 为什么可能改善 Decode ITL，又会付出什么代价？
+10. 模型权重、激活、KV Cache、临时 Buffer 与 Runtime 开销怎样组成显存占用？
+11. TTFT、TPOT、ITL、E2E 和三种 Throughput 分别测量什么？
+12. 为什么 LLM Serving 不是单纯“模型越快越好”？
+
+## F0 Acceptance
+
+- [ ] M2 与 S0–S4 的 Acceptance 全部通过。
+- [ ] 最终 vLLM 性能文章和复现目录真实存在。
+- [ ] 每个核心结论都能回到原始请求、服务端状态或明确的 `Inconclusive` 边界。
+- [ ] 闭卷答辩能够连接调度、显存、Batching、KV Cache、吞吐与延迟。
+
+满足以上四项后，阶段 2 标记为 **Core Complete**。S5、S6、R0 和 T0 尚未完成不影响这个状态。
+
+---
+
+# 进阶扩展：系统现象与源码因果
+
+只有核心路线进度允许，或 F0 已完成后，才继续下面四项。它们不能挤占 S0–S4 和最终 vLLM 性能文章。
+
+## Gate S5：Mixed Prefill/Decode
 
 问题：一个长 Prompt 到来时，是否会干扰正在 Decode 的短请求？
 
-## S5.1 先实现模拟 Async Harness
+### S5.1 先实现模拟 Async Harness
 
 使用 `asyncio.sleep()` 模拟：
 
@@ -868,23 +1021,23 @@ Output Token Throughput 增幅 < 10%
 
 必须能解释 Task、Event Loop、Semaphore，以及 Client Concurrency 为什么不是 Server Batch。
 
-## S5.2 替换为真实流式 HTTP
+### S5.2 替换为真实流式 HTTP
 
 每个请求保存 JSONL：
 
 ```json
 {
- "request_id": "...",
- "arrival_ns": 0,
- "sent_ns": 0,
- "first_token_ns": 0,
- "token_times_ns": [],
- "finish_ns": 0,
- "status": "ok"
+	"request_id": "...",
+	"arrival_ns": 0,
+	"sent_ns": 0,
+	"first_token_ns": 0,
+	"token_times_ns": [],
+	"finish_ns": 0,
+	"status": "ok"
 }
 ```
 
-## S5.3 构造混合负载
+### S5.3 构造混合负载
 
 ```text
 short: input=128, output=128
@@ -897,7 +1050,7 @@ long:  input=2048, output=32
 4. [ ] 对齐短请求 ITL 时间线。
 5. [ ] 独立重复至少三次。
 
-## S5.4 Chunked Prefill 对照
+### S5.4 Chunked Prefill 对照
 
 只有 S0 证明开关生效时才比较：
 
@@ -908,7 +1061,7 @@ Chunked Prefill on
 
 其他变量全部保持不变。
 
-## S5 Acceptance
+### S5 Acceptance
 
 - [ ] ITL 尖峰能在至少三次复跑中重现。
 - [ ] 尖峰与长请求 Arrival 对齐。
@@ -916,7 +1069,7 @@ Chunked Prefill on
 
 ---
 
-# Gate S6：Prefix Reuse
+## Gate S6：Prefix Reuse
 
 固定总 Input Length、Output Length、并发和请求数。
 
@@ -933,7 +1086,7 @@ B: shared 512-token prefix
 - [ ] 保存 TTFT 分布。
 - [ ] 保存实际输入与输出长度。
 
-## S6 Acceptance
+### S6 Acceptance
 
 - [ ] 两组总输入长度一致。
 - [ ] 实验组有 Prefix Hit 证据。
@@ -943,11 +1096,11 @@ B: shared 512-token prefix
 
 ---
 
-# Gate R0：固定版本源码追踪
+## Gate R0：固定版本源码追踪
 
 不追最新版目录，使用 S0 中实际运行的 Core 与 Plugin 版本。
 
-## R0.1 找到源码
+### R0.1 找到源码
 
 ```bash
 python -c 'import inspect, vllm; print(inspect.getfile(vllm))'
@@ -957,7 +1110,7 @@ python -c 'import inspect, vllm; print(inspect.getfile(vllm))'
 - [ ] 记录 Plugin Commit。
 - [ ] 记录实际 Package 路径。
 
-## R0.2 选择一个已复现现象
+### R0.2 选择一个已复现现象
 
 优先选择：
 
@@ -968,7 +1121,7 @@ python -c 'import inspect, vllm; print(inspect.getfile(vllm))'
 
 不要脱离实验漫游源码。
 
-## R0.3 追一条请求
+### R0.3 追一条请求
 
 ```text
 API admission
@@ -1001,7 +1154,7 @@ related metric
 - [ ] 请求完成或取消怎样影响下一轮？
 - [ ] Metal Plugin 替换或限制了哪一层？
 
-## R0.4 回到实验验证
+### R0.4 回到实验验证
 
 至少执行一个验证动作：
 
@@ -1012,7 +1165,7 @@ related metric
 
 源码阅读本身不算完成。
 
-## R0 Acceptance
+### R0 Acceptance
 
 - [ ] 源码链路能解释一个已复现指标变化。
 - [ ] 至少保留一个仍可能成立的替代解释。
@@ -1020,72 +1173,7 @@ related metric
 
 ---
 
-# Gate F0：综合、复现与阶段完成
-
-最终目录：
-
-```text
-results/serving/
-├── environment/
-├── workloads/
-├── raw/
-├── metrics/
-├── processed/
-├── plots/
-├── source-trace.md
-├── anomalies.md
-└── reproduction.md
-```
-
-## F0.1 交叉检查
-
-- [ ] 使用内置 `bench serve` 对照一次自定义聚合。
-- [ ] 对最异常的一组结果独立复跑。
-- [ ] 保留失败和超时请求。
-- [ ] 让另一个人或隔离环境复现一组核心结果。
-
-## F0.2 结论矩阵
-
-每条预测只能标成：
-
-```text
-Supported
-Refuted
-Inconclusive
-```
-
-并写明：
-
-- [ ] 版本。
-- [ ] 硬件。
-- [ ] 模型。
-- [ ] Backend。
-- [ ] 工作负载边界。
-
-## F0.3 更新两篇文章
-
-- [ ] 系统文章回写真实 Scheduler/KV/Runner 机制。
-- [ ] 实验文章回写全部数据、异常、限制和结论矩阵。
-- [ ] 所有结果链接到真实产物，不创建空链接充当进度。
-
-## F0.4 最终答辩
-
-不看文章回答：
-
-1. Batch 为什么提高吞吐却可能恶化延迟？
-2. Client Concurrency 与 Server Batch 有什么区别？
-3. KV Cache 节省了什么，又增加了什么？
-4. Dynamic Cache 为什么可能慢于 Preallocated Cache？
-5. MHA 与 GQA 的 KV 容量为什么不同？
-6. TTFT、TPOT、ITL、E2E 分别测量什么？
-7. Input Length 主要影响 Prefill 还是 Decode？
-8. Scheduler Budget 什么时候才会生效？
-9. 参数被接受为什么不等于 Backend 实际使用？
-10. Prefix Cache 为什么主要改善重复 Prefill？
-11. 如何证明 ITL 尖峰来自 Long Prefill？
-12. 如何从客户端指标追到 Scheduler 和固定版本源码？
-
-## F0.5 Transfer Gate
+## Gate T0：跨环境迁移（进阶扩展）
 
 换一个模型、Backend 或硬件，重新完成：
 
@@ -1095,20 +1183,19 @@ Inconclusive
 - [ ] 复跑一组基线和一组压力实验。
 - [ ] 用差异修正原有机制模型。
 
-完成 Transfer Gate 后，阶段 2 才达到掌握标准。
+T0 达到 `Transferred`，但不反向改变阶段 2 的一个月核心完成日期。
 
----
+# 四周核心安排
 
-# 四周建议安排
+| 时间        | 核心任务         | 可见产物                                       |
+| ----------- | ---------------- | ---------------------------------------------- |
+| 08.12–08.18 | M0、P0、M1       | Cache/Batch 实现、Raw CSV、曲线与中间机制文章  |
+| 08.19–08.25 | 完成 M2，启动 S0 | MHA/GQA 容量表、vLLM 环境与 Capability Matrix  |
+| 08.26–09.01 | S1、S2           | 单并发稳态、显存组成表、Input Length 曲线      |
+| 09.02–09.08 | S3、S4           | 并发饱和点、尾延迟、Scheduler Budget 对照      |
+| 09.09–09.12 | F0               | 结论矩阵、复现包、闭卷答辩与最终 vLLM 性能文章 |
 
-| 周      | 学习内容   | 可见产物                              |
-| ------- | ---------- | ------------------------------------- |
-| 第 1 周 | P0、M1、M2 | Batch 曲线、MHA/GQA、KV 容量表        |
-| 第 2 周 | S0、S1、S2 | 环境快照、稳态基线、Input Length 曲线 |
-| 第 3 周 | S3、S4、S5 | 饱和点、Scheduler Budget、干扰时间线  |
-| 第 4 周 | S6、R0、F0 | Prefix 对照、源码链路、两篇文章终稿   |
-
-这只是顺序建议，不是按日期强行推进。某个 Gate 未通过时留在当前 Gate，修复任务定义、测试或观测能力，不通过增加阅读量掩盖问题。
+核心路线按依赖推进，但时间不足时首先缩小每个变量的扫描范围，不能用 S5/S6/R0/T0 挤占 S0–S4。某个 Gate 未通过时降低结论强度或修复观测能力，不通过增加阅读量掩盖问题。
 
 # 现在立即执行
 
@@ -1130,3 +1217,5 @@ Inconclusive
 - [vLLM serve arguments](https://docs.vllm.ai/en/latest/cli/serve/)
 - [vLLM Metrics](https://docs.vllm.ai/en/stable/design/metrics/)
 - [vLLM Automatic Prefix Caching](https://docs.vllm.ai/en/latest/design/prefix_caching/)
+- [Accelerating Large Language Model Decoding with Speculative Sampling](https://arxiv.org/abs/2302.01318)
+- [站内投机解码机制说明](/blog/conjecture-verification-practice/)

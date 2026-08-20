@@ -59,6 +59,7 @@ const featuredPost = posts.find((post) => post.id === 'conjecture-verification-p
 const systemBuildingPost = posts.find((post) => post.id === 'build-a-complete-system-from-scratch');
 const kvCacheLab = await getLabManifest('kv-cache-batch');
 const learningProgress = kvCacheLab.progress;
+const learningMilestone = learningProgress.milestone;
 const featuredCompletedStages = learningProgress.completed.filter(
 	(stage: { featured?: boolean }) => stage.featured,
 );
@@ -185,6 +186,19 @@ const currentStage = learningProgress.current;
 
 	<section class="tomorrow-section" aria-labelledby="tomorrow-heading">
 		<h2 id="tomorrow-heading">明日学习</h2>
+		<div class="tomorrow-milestone" aria-label="当前阶段目标">
+			<p><strong>{learningMilestone.title}</strong> · {learningMilestone.goal}</p>
+			<dl>
+				<div>
+					<dt>core route</dt>
+					<dd>{learningMilestone.coreRoute}</dd>
+				</div>
+				<div>
+					<dt>final output</dt>
+					<dd>{learningMilestone.finalArtifact}</dd>
+				</div>
+			</dl>
+		</div>
 		{
 			featuredCompletedStages.map(
 				(stage: { id: string; period: string; title: string; summary: string }) => (
@@ -225,7 +239,8 @@ const currentStage = learningProgress.current;
 							currentStage.preRead.map(
 								(reference: { label: string; href: string }, index: number) => (
 									<>
-										{index > 0 ? '、' : ''}<a href={reference.href}>{reference.label}</a>
+										{index > 0 ? '、' : ''}
+										<a href={reference.href}>{reference.label}</a>
 									</>
 								),
 							)
@@ -412,6 +427,42 @@ const currentStage = learningProgress.current;
 		line-height: 1.6;
 	}
 
+	.tomorrow-milestone {
+		margin: 0 0 1rem;
+		padding: 0.85rem 1rem;
+		border: 1px solid #e2e8f0;
+		background: rgb(248 250 252 / 60%);
+	}
+
+	.tomorrow-milestone p {
+		margin: 0 0 0.7rem;
+		color: #334155;
+		font-size: 0.86rem;
+		line-height: 1.6;
+	}
+
+	.tomorrow-milestone dl {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.75rem;
+		margin: 0;
+	}
+
+	.tomorrow-milestone dt {
+		color: #64748b;
+		font-family: var(--font-mono);
+		font-size: 0.66rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.tomorrow-milestone dd {
+		margin: 0.25rem 0 0;
+		color: #334155;
+		font-size: 0.8rem;
+		line-height: 1.5;
+	}
+
 	.tomorrow-contract {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -592,6 +643,7 @@ const currentStage = learningProgress.current;
 	}
 
 	@media (max-width: 520px) {
+		.tomorrow-milestone dl,
 		.tomorrow-contract {
 			grid-template-columns: 1fr;
 		}

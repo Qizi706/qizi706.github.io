@@ -1,6 +1,6 @@
 ---
-title: 'LLM 推理性能实验：KV Cache、预分配与 Batch Size'
-description: '阶段 2 的 AI Infra 实验报告：用最小 NumPy Causal Attention 验证 KV Cache、预分配和 Batched Decode，并扫描 B=1/2/4/8 分析吞吐、延迟与收益拐点。'
+title: 'LLM 推理机制实验：KV Cache、预分配与 Batch Size'
+description: '阶段 2 的中间机制产出：用最小 NumPy Causal Attention 验证 KV Cache、预分配和 Batched Decode，并为真实 vLLM Serving 实验建立可证伪预测。'
 pubDate: '2026-08-16T20:30:00+08:00'
 updatedDate: '2026-08-21T02:04:01+08:00'
 categories:
@@ -47,7 +47,7 @@ mathjax: true
 
 <Note title="截至 2026-08-21 的进度" class="title-underline">
 
-- M0 已实现 Cache、预分配和固定 <code>B=2</code> 的 Batched Decode；当前公开归档保留 300 条 Batch Length 原始样本，但 Cache Strategy 只保留汇总值，存在逐样本证据缺口。
+- M0 已实现 Cache、预分配和固定 <code>B=2</code> 的 Batched Decode；当前公开归档保留 300 条 Batch Length 原始样本。Cache Strategy 的历史结论仍保留，但当前复现包缺少 450 条逐样本数据，因此不能独立重建。
 - M1 已完成 <code>B=1/2/4/8</code> 正确性检查、240 条原始样本、P50/P95 汇总、两张独立曲线和 Knee 判定。
 - P0 已完成 Binding、View/Copy、Advanced Indexing、<code>swapaxes</code> 与 <code>concatenate</code> 的预测、运行记录、差异解释和闭卷验收。
 - M2 正在进行：A1 的 <code>split_heads</code> 已通过 Shape、非零坐标元素映射和内存共享 3 项测试，完整 9 项回归测试通过；当前唯一任务是 A2 的 Q/K/V 投影与输入契约。
@@ -181,11 +181,11 @@ q_t @ np.swapaxes(k_cache, -1, -2)
 
 当前公开产物的可审计状态如下：
 
-| 实验                | 当前原始样本 | 可重建产物                         | 审计状态                   |
-| ------------------- | -----------: | ---------------------------------- | -------------------------- |
-| Cache Strategy      |            0 | 仅保留正文中的中位数汇总           | 存在证据缺口，不能重新聚合 |
-| Batch Length，`B=2` |          300 | 5 个 T × 2 条路径 × 30 次          | 可从 `raw.csv` 重新计算    |
-| Batch Size，`T=128` |          240 | 汇总 CSV、P50/P95 图、吞吐图、Knee | 可从 `raw.csv` 完整重建    |
+| 实验                | 当前原始样本 | 可重建产物                         | 审计状态                                  |
+| ------------------- | -----------: | ---------------------------------- | ----------------------------------------- |
+| Cache Strategy      |            0 | 仅保留正文中的历史中位数汇总       | 历史结论保留；当前复现性为 `Inconclusive` |
+| Batch Length，`B=2` |          300 | 5 个 T × 2 条路径 × 30 次          | 可从 `raw.csv` 重新计算                   |
+| Batch Size，`T=128` |          240 | 汇总 CSV、P50/P95 图、吞吐图、Knee | 可从 `raw.csv` 完整重建                   |
 
 当前 Batch Length Harness 仍按固定路径顺序执行，温度、频率或长期漂移可能形成顺序效应，因此结论关注跨长度趋势，不把某个亚毫秒差异解释成稳定的系统常数。
 
@@ -203,7 +203,14 @@ M1 的 Batch Size Scan 随机化 B 的执行顺序，并将每条 Path 的 Warm-
 
 <Note title="这一组结果的证据状态" class="title-underline">
 
-下面保留的是 M0 当时记录的 30 次中位数和机制解释。实现与正确性单测仍然存在，但对应的 450 条 Cache Strategy 原始样本已经不在当前公开归档中，所以读者无法从现有文件独立重算这些中位数。它可以作为已完成实验的历史汇总，不能当作当前复现包中证据完整的一组结果。
+下面保留的是 M0 当时记录的 30 次中位数和机制解释。实现与正确性单测仍然存在，但对应的 450 条 Cache Strategy 原始样本已经不在当前公开归档中，所以读者无法从现有文件独立重算这些中位数。
+
+| 判断维度     | 状态           | 依据                                                        |
+| ------------ | -------------- | ----------------------------------------------------------- |
+| 历史结论     | `Supported`    | 当时记录的五个长度中，Preallocated 中位数都低于 Concatenate |
+| 当前可复现性 | `Inconclusive` | 缺少逐样本 CSV，无法重新聚合、检查分布或核对原测量协议      |
+
+因此，下面的表格是**历史结果记录**，不是当前复现包中证据完整的一组测量。以后重跑产生的数据必须作为新实验保存，不能冒充原始样本。
 
 </Note>
 
@@ -223,7 +230,9 @@ M1 的 Batch Size Scan 随机化 B 的执行顺序，并将每条 Path 的 Warm-
 
 **H1 得到支持。** Cache 改变的是历史状态的复用方式，没有改变当前 Query 对有效历史 K/V 的 Attention 语义。
 
-**H2 在历史测量中得到支持，但存在复现缺口。** 五个长度上，Preallocated 的中位数都低于 Concatenate。到 <code>T=256</code> 时，耗时从 3.083 ms 降到 2.509 ms，减少约 18.6%。在重新生成独立的 <code>results/cache-strategy/raw.csv</code> 之前，这个趋势不能从当前归档重新聚合或检查分布。
+**H2 的历史结论：`Supported`。** 五个长度上，Preallocated 的中位数都低于 Concatenate。到 <code>T=256</code> 时，耗时从 3.083 ms 降到 2.509 ms，减少约 18.6%。
+
+**H2 的当前可复现性：`Inconclusive`。** 在重新生成独立的 <code>results/cache-strategy/raw.csv</code> 之前，这个趋势不能从当前归档重新聚合、检查分布或核对测量协议。新的复跑只能形成新的证据版本，不能补写成当时的原始数据。
 
 No Cache 与 Preallocated 的差距从 1.51x 扩大到 16.18x。这里不是 Cache 让 Attention 消失了，而是它不再对每个 Decode Step 的完整前缀重复构造 Q/K/V 和 Score Matrix。
 
@@ -348,17 +357,17 @@ Cache 趋势仍然存在，但具体倍数下降；因此旧的 40x 结果不能
 
 ## 8. 结果总览与证据边界
 
-| 假设                   | 状态      | 当前证据                                     | 结论边界                      |
-| ---------------------- | --------- | -------------------------------------------- | ----------------------------- |
-| H1：Cache 保持语义     | Supported | 当前单测 + 历史逐长度 Oracle                 | 单层、单 Head、CPU/NumPy      |
-| H2：预分配减少成本     | Supported | 历史中位数汇总；当前缺少 450 条逐样本数据    | 无法从公开归档重新聚合        |
-| H3：B=2 快于顺序两次   | Supported | 独立 Oracle + 当前 300 条 Batch Length 样本  | 等长、同时开始、动态 Cache    |
-| H4：中长 T 下收益收窄  | Supported | T=32 时 1.817x，T=256 时 1.362x              | 全部五个点并非严格单调        |
-| H5：Batch 收益出现拐点 | Supported | 当前 240 条样本；gain(8)=-0.21%，Knee 为 B=8 | 固定 T=128、CPU/NumPy Toy Lab |
+| 假设                   | 状态                | 当前证据                                            | 结论边界                      |
+| ---------------------- | ------------------- | --------------------------------------------------- | ----------------------------- |
+| H1：Cache 保持语义     | Supported           | 当前单测 + 历史逐长度 Oracle                        | 单层、单 Head、CPU/NumPy      |
+| H2：预分配减少成本     | 历史结论：Supported | 五个长度的历史中位数汇总；当前缺少 450 条逐样本数据 | 当前复现性：`Inconclusive`    |
+| H3：B=2 快于顺序两次   | Supported           | 独立 Oracle + 当前 300 条 Batch Length 样本         | 等长、同时开始、动态 Cache    |
+| H4：中长 T 下收益收窄  | Supported           | T=32 时 1.817x，T=256 时 1.362x                     | 全部五个点并非严格单调        |
+| H5：Batch 收益出现拐点 | Supported           | 当前 240 条样本；gain(8)=-0.21%，Knee 为 B=8        | 固定 T=128、CPU/NumPy Toy Lab |
 
 <Note title="这次实验真正证明了什么？" class="title-underline">
 
-KV Cache 用线性增长的状态换掉了更昂贵的历史重算；预分配减少了动态扩容与复制；Batched 执行摊薄了调用开销，但没有消除每个 Sequence 的 Attention 工作。固定 <code>T=128</code> 时，Positions/s 在 B=4 后进入平台并于 B=8 满足 Knee 定义。这些结论都来自当前 Toy Lab，不能直接外推成 vLLM 或 GPU 上的固定加速倍数；其中 Cache Strategy 还带有明确的原始数据缺口。
+KV Cache 用线性增长的状态换掉了更昂贵的历史重算；历史 Cache Strategy 测量显示预分配减少了动态扩容与复制，但当前复现状态仍为 `Inconclusive`；Batched 执行摊薄了调用开销，却没有消除每个 Sequence 的 Attention 工作。固定 <code>T=128</code> 时，Positions/s 在 B=4 后进入平台并于 B=8 满足 Knee 定义。这些结论都来自 CPU/NumPy Toy Lab，不能直接外推成 vLLM 或 GPU 上的固定加速倍数。
 
 </Note>
 
@@ -428,7 +437,7 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
 - [Attention 与 Cache 实现](/labs/kv-cache-batch/view/src/kv_cache_lab/attention.py/)
 - [Benchmark Harness](/labs/kv-cache-batch/view/src/kv_cache_lab/benchmark.py/)
 - [Batch Size 汇总与绘图脚本](/labs/kv-cache-batch/view/src/kv_cache_lab/summarize_batch_size.py/)
-- [M2 Head 轴与投影实现](/labs/kv-cache-batch/view/src/kv_cache_lab/multi_head.py/)
+- [M2 Head 轴实现（A1）](/labs/kv-cache-batch/view/src/kv_cache_lab/multi_head.py/)
 - [正确性测试](/labs/kv-cache-batch/view/tests/test_attention.py/)
 - [M2 Head 契约测试](/labs/kv-cache-batch/view/tests/test_multi_head.py/)
 - [Batch Size 汇总公式测试](/labs/kv-cache-batch/view/tests/test_summarize_batch_size.py/)
@@ -466,346 +475,22 @@ kv-cache-batch/
         └── knee-analysis.md
 ```
 
-## 10. 当前进度与阶段 2 后续实验
+## 10. 当前状态与下一门禁
 
-这一步已经从“知道 KV Cache 和 Batch 的定义”推进到“能够实现、验证、测量并解释异常”。后续不再以增加 Toy 代码量为目标，而是逐步把机制预测迁移到真实 vLLM。
+本文是阶段 2 的**中间机制产出**，只记录已经发生的 Toy Attention 实验、可重建证据与明确的数据缺口，不冒充最终 vLLM Benchmark。一个月内的核心路线是 M2 → S0–S4 → F0；S5、S6、R0 与 T0 属于不阻塞阶段交付的进阶扩展。完整步骤、命令、目录结构和验收条件，以[阶段 2 学习执行手册](/labs/kv-cache-batch/view/docs/PLAN.md/)为唯一来源。
 
-下面各 Gate 的完整操作步骤、命令、产物目录与勾选式验收条件，统一保存在 [阶段 2 学习执行手册](/labs/kv-cache-batch/view/docs/PLAN.md/)。本文保留实验问题、机制解释和最终结果，执行手册负责回答“现在具体做什么”。
+F0 将使用真实 vLLM 数据单独完成《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》。在那之前，本页标题保持“机制实验”，不会因为计划已经写好就升级证据等级。
 
-| ID  | 任务                      | 当前状态             | 直接产物或缺口                                 |
-| --- | ------------------------- | -------------------- | ---------------------------------------------- |
-| M0  | Cache、预分配、`B=2`      | Completed / data gap | 测试、300 条 Batch Length 样本；Cache Raw 缺失 |
-| P0  | Python/NumPy 语义闭环     | Completed            | 六类操作的预测、结果、差异解释与闭卷验收       |
-| M1  | Batch Size 曲线           | Completed            | `B=1/2/4/8` 原始样本与吞吐/延迟曲线            |
-| M2  | MHA/GQA 与 KV 容量        | In progress · A2     | A1 已通过；当前补 Q/K/V 投影与输入契约         |
-| S0  | vLLM 环境与可观测能力冻结 | Pending              | 环境快照、启动命令、Capability Matrix          |
-| S1  | 单并发稳态基线            | Pending              | `bench serve` 详细结果与服务端 Metrics         |
-| S2  | Input Length              | Pending              | TTFT/TPOT/E2E/KV 随输入长度的曲线              |
-| S3  | Client Concurrency        | Pending              | 吞吐饱和点与尾延迟代价                         |
-| S4  | Scheduler Budget          | Pending              | 配置上限与实际调度状态的对照                   |
-| S5  | Mixed Prefill/Decode      | Pending              | 长 Prefill 对 Decode ITL 的时间线              |
-| S6  | Prefix Reuse              | Pending              | 共享/随机前缀的命中率与 TTFT 对照              |
-| R0  | 固定版本源码追踪          | Pending              | 请求状态机、调用链、关键不变量                 |
-| F0  | 综合与反馈                | Pending              | 结论矩阵、复现包、两篇文章终稿                 |
+<Note title="当前只做 M2-A2" class="title-underline">
 
-后续每项任务都按同一份实验契约执行：
+**Question：** 怎样让 Q/K/V 投影共享一套明确的输入、宽度与 Head Shape 契约？
 
-```text
-Question -> Prediction -> Controlled Action -> Raw Artifact
-         -> Acceptance -> Feedback -> Next Decision
-```
+**Action：** 在现有 `split_heads` 基础上补充 Q/K/V 投影，并覆盖输入维度、Head 数、投影宽度、权重宽度和 `D_head` 不一致等失败情况。
 
-一次只改变一个主变量；预测必须写在运行之前；没有服务端证据时，不把客户端相关性写成 Scheduler 因果。
+**Acceptance：** Shape、元素 Oracle、非法配置与完整回归测试全部通过；在此之前不把 M2 标成完成，也不进入真实 Serving。
 
-当前瓶颈不是再扫描更大的 B，也不是提前实现完整 Attention，而是让 Q/K/V 共享一套可验证的投影与 Head Shape 契约。A2 的预测、15 分钟前置阅读、120 分钟执行顺序和验收清单保存在 [M2 工作表](/labs/kv-cache-batch/view/docs/gates/M2.md/)；全路线仍以独立的[阶段 2 学习执行手册](/labs/kv-cache-batch/view/docs/PLAN.md/)为准。
-
-## 11. Gate M：补完最小机制
-
-### 11.1 M1：Batch Size 曲线（已完成）
-
-**Question：** 固定 Sequence Length 后，增加 Batch 能把多少固定开销摊薄，何时开始出现收益收窄？
-
-**Prediction：** `B` 增大时总 Positions/s 先提高，但不会保持线性；Batch Wall Time 和单 Sequence 可见的完成时间可能同时增长。
-
-**Controlled Action：**
-
-- 固定 `T=128`、维度、dtype、权重、随机种子和单线程 BLAS；
-- 只扫描 `B∈{1,2,4,8}`；
-- 每个 `B` 先做正确性检查，再做 10 次 Warm-up 和 30 次计时；
-- 随机化各个 `B` 的运行顺序，减少温度和频率漂移造成的顺序效应；
-- 同时记录 Batch Wall Time、`wall_time / B`、Positions/s、P50/P95 和全部原始样本。
-
-**Artifact：** 扩展 `benchmark.py` 和测试；生成独立 CSV、汇总表、延迟曲线与吞吐曲线，不覆盖 M0 的原始数据。
-
-**Result：** 240 条原始样本完整；Positions/s 的相邻增幅为 61.27%、36.19% 和 -0.21%，按低于 10% 的定义得到 <code>Knee: B=8</code>。完整证据见 [Batch Size Knee 分析](/labs/kv-cache-batch/view/results/batch-size-scan/knee-analysis.md/)。
-
-**Acceptance：**
-
-1. 所有 `B` 的输出都与逐 Sequence Oracle 数值等价，且 Batch 间没有状态泄漏；
-2. 能指出吞吐收益是否开始收窄；如果扫描范围内没有拐点，明确写成 `Not reached`；
-3. 能区分“总吞吐提高”和“单请求更快”，不再把二者都叫做 Batch 加速。
-
-**Next Decision：** 不继续追求更大的 `B` 或更大的倍数；P0 已关闭，M2-A1 已通过，当前进入 M2-A2。
-
-### 11.2 P0：NumPy 语义闭环（已完成）
-
-[`examples/numpy_array_semantics.py`](/labs/kv-cache-batch/view/examples/numpy_array_semantics.py/) 与 [P0 记录](/labs/kv-cache-batch/view/docs/gates/P0.md/) 已覆盖 Binding、浅复制、基础切片、Advanced Indexing、<code>swapaxes</code> 和 <code>concatenate</code>。当前保留的证据包括：
-
-1. 每段代码运行前的 Shape、内存共享与修改传播预测；
-2. 实际输出与预测差异；
-3. View/Copy/Stride/Allocation 到 Attention 和 Dynamic KV Cache 的映射；
-4. 不看代码完成的闭卷口述验收。
-
-**Result：** P0 已标记为 Completed，不再追加无关 NumPy 练习；这些语义现在只在 M2 的真实 Shape 与 Buffer 问题中复用。
-
-### 11.3 M2：MHA/GQA 与 KV 容量
-
-M2-A1 已完成下面的第一条窄路径：
-
-```text
-[B,T,H*D_head]
-  -> split_heads
-  -> [B,H,T,D_head]
-  -> Shape + 非零坐标 + shares_memory
-```
-
-当前 M2-A2 只把这份契约迁移到 Q/K/V，并补齐输入不是三维、Head 数非正、投影宽度不能整除、权重输入宽度不匹配和 `D_head` 不一致五类失败。它尚不计算 Score、Mask 或 Softmax，也不能算作 MHA/GQA 已实现。
-
-把状态扩展为：
-
-```text
-Q: [B, H_q,  T, D_head]
-K: [B, H_kv, T, D_head]
-V: [B, H_kv, T, D_head]
-```
-
-**Question：** Query Head 共享 K/V Head 后，语义映射和 Cache 容量怎样变化？
-
-**Prediction：** 固定 `H_q=8` 时，GQA 的 `H_kv=2` 只需要 MHA `H_kv=8` 的四分之一逻辑 K/V 字节；它减少状态量，但不能凭这个 Toy 实验断言真实模型质量或 GPU 延迟也按四倍变化。
-
-**Controlled Action：**
-
-- 实现 MHA：`H_q=H_kv=8`；
-- 实现 GQA：`H_q=8, H_kv=2`；
-- 显式检查 `H_q % H_kv == 0`，按 `query_head // group_size` 映射到 KV Head；
-- 构造各 Head 数据不同的用例，防止错误映射被相同输入掩盖；
-- 对 MHA/GQA 分别检查 No Cache 与 Cache 的逐位置等价性；
-- 记录 `K.nbytes + V.nbytes`，与下式逐项对照：
-
-$$
-S_{KV}=2\times B\times H_{kv}\times T\times D_{head}\times\text{dtype bytes}.
-$$
-
-**Artifact：** Multi-Head/GQA 实现、映射测试、容量 CSV 和 MHA/GQA 对照表。
-
-**Acceptance：** 正确性、非法 Head 配置、Batch 隔离和容量公式四类测试全部通过；实测字节数精确匹配公式。
-
-**Current Decision：** 先通过 A2 的 Shape、元素 Oracle、非法配置与完整回归门禁，再进入 `H_q=H_kv` 的无 Cache MHA Oracle。
-
-<Note title="Toy Lab 的停止线" class="title-underline">
-
-M2 完成后停止为 NumPy 项目增加完整 MLP、Transformer Layer、Tokenizer 或 Sampling。它们会扩大实现，却不会让当前系统产生请求排队、动态 Batch 或 KV Block 压力。下一项能力必须在真实 Serving 中学习。
+**Next Decision：** M2 的 MHA/GQA 映射、Cache 等价性和 KV 容量公式全部通过后，再进入 S0，冻结真实 vLLM 版本、启动命令与可观测能力。
 
 </Note>
 
-## 12. Gate O：先让真实系统可复现、可观测
-
-### 12.1 S0：环境与 Capability Matrix
-
-阶段 1 曾经在 Apple M5 Pro、Qwen3 4B、vLLM Core 与 Metal Plugin 上完成服务启动，但那份快照不能自动代表本轮环境。开始性能实验前要重新冻结：
-
-- 日期、硬件、OS、Python；
-- vLLM Core 与 Metal Plugin 的版本或 Commit；
-- 模型仓库、Revision、量化方式与 `config.json`；
-- 完整服务启动命令和环境变量；
-- 启动日志中的 Model Runner、KV Budget、Block 数和 Fallback；
-- `vllm bench serve --help` 的实际输出；
-- `/health`、`/v1/models`、`/metrics` 的可用性。
-
-Capability Matrix 至少检查：
-
-| 能力                     | 检查方法                        | 结果写法                        |
-| ------------------------ | ------------------------------- | ------------------------------- |
-| `bench serve` 详细结果   | 查看本机 `--help` 并跑 1 个请求 | Supported / Unsupported         |
-| `max_num_seqs`           | 启动参数 + 日志                 | Implemented / Ignored / Unknown |
-| `max_num_batched_tokens` | 启动参数 + 日志                 | Implemented / Ignored / Unknown |
-| Chunked Prefill          | 参数、日志与对照运行            | Supported / Unsupported         |
-| Prefix Caching           | 参数、日志与命中指标            | Supported / Unsupported         |
-| Prometheus Metrics       | 请求 `/metrics` 并保存原文      | 列出实际存在的指标名            |
-
-**Acceptance：** 其他人只看快照就能重新启动相同服务；能力不存在时标记为 `Unsupported`，没有指标时标记为“不可观测”，不能根据最新文档推断当前 Metal Backend 已经实现。
-
-### 12.2 S1：建立稳态基线和数据管线
-
-先使用 vLLM 自带的 [`bench serve`](https://docs.vllm.ai/en/latest/cli/bench/serve/) 作为客户端指标基线。只有内置工具缺少到达时间、流式 token 时间戳或混合负载能力时，才增加薄的自定义采集器，并用一组相同请求对照两者的聚合结果。
-
-下面是实验模板，不是未经检查就复制执行的固定命令；参数名必须先与 S0 保存的本机 `--help` 对照：
-
-```bash
-vllm bench serve \
-  --backend openai-chat \
-  --base-url http://127.0.0.1:8000 \
-  --endpoint /v1/chat/completions \
-  --model qwen3-4b-local \
-  --dataset-name random \
-  --input-len 128 \
-  --output-len 64 \
-  --num-prompts 64 \
-  --request-rate inf \
-  --max-concurrency 1 \
-  --num-warmups 8 \
-  --seed 42 \
-  --save-result \
-  --save-detailed \
-  --percentile-metrics ttft,tpot,itl,e2el \
-  --metric-percentiles 50,95,99 \
-  --plot-timeline \
-  --result-dir results/serving/s1-baseline
-```
-
-运行过程中按固定间隔保存 [`/metrics`](https://docs.vllm.ai/en/stable/design/metrics/) 原文，并确认本机实际暴露哪些 Running/Waiting、KV Usage、Prefix Hit、TTFT、ITL 和 E2E 指标。
-
-**Acceptance：** 相同配置至少独立运行 3 轮，保留每请求结果而不只保留平均数；如果 P50、P95 或吞吐的轮间变化明显，先解释噪声来源，再进入变量扫描。
-
-## 13. Gate E：受控 Serving 实验
-
-### 13.1 S2：只改变 Input Length
-
-**Question：** 没有 Prefix Reuse 时，Prompt 变长怎样改变 TTFT、Decode 节奏和 KV 占用？
-
-**Prediction：** Input Length 增大时 TTFT 和初始 KV Usage 上升；TPOT 也可能因每步读取更长历史而上升，但具体趋势必须实测。
-
-**Protocol：** 固定 Output Length 为 64、Client Concurrency 为 1、Scheduler 配置与随机种子，只扫描 `input_len∈{128,512,2048}`。使用随机且不共享早期前缀的 Prompt；保存实际 token 数，防止字符长度冒充 token 长度。
-
-**Artifact：** 每请求 TTFT/TPOT/ITL/E2E、Prompt/Output Token 数、服务端 KV Usage 时间线、3 轮原始结果和汇总曲线。
-
-**Acceptance：** 每条曲线能回到单请求记录；如果 Backend 没有 KV 指标，只能报告客户端趋势，KV 因果标记为 `Inconclusive`。
-
-### 13.2 S3：只改变 Client Concurrency
-
-**Question：** 更多未完成请求怎样把系统从低利用率推向饱和？
-
-**Prediction：** Output Token Throughput 先增长后趋缓；越过饱和点后，P95/P99 TTFT、TPOT 或 E2E 仍可能继续恶化。
-
-**Protocol：** 固定 Input/Output Length、请求总数、到达模式、模型和 Scheduler 配置，只扫描 `max_concurrency∈{1,2,4,8,16}`。记录 Request Throughput 与 Input/Output Token Throughput，不用单一“吞吐”混写三者。
-
-**Artifact：** 吞吐—并发曲线、TTFT/TPOT/E2E 的 P50/P95/P99、Running/Waiting 和 KV Usage 时间线。
-
-**Acceptance：** 预先把“饱和拐点”定义为：并发提高一级后，Output Token Throughput 增幅低于 10%，同时至少一个 P95 延迟指标恶化超过 20%。如果扫描范围内不满足，就写 `Not reached`，不要选最大并发充当拐点。
-
-### 13.3 S4：分开扫描 Scheduler Budget
-
-**Question：** 配置的调度上限是否真的约束了每轮执行，还是工作负载根本没有填满它？
-
-**Prediction：** 增大 `max_num_seqs` 或 `max_num_batched_tokens` 只有在 Waiting Requests 足够、KV 容量允许且 Backend 真正实现参数时才可能提高吞吐。
-
-**Protocol：**
-
-1. 选用 S3 中能稳定产生 Waiting Requests 的负载；
-2. 从 [`Engine Arguments`](https://docs.vllm.ai/en/latest/configuration/engine_args/) 和本机日志记录默认值；
-3. 固定 Token Budget，只扫描 `max_num_seqs`；
-4. 恢复 `max_num_seqs`，再单独扫描 `max_num_batched_tokens`；
-5. 每个服务端配置都重启服务并保存完整命令，客户端负载不变。
-
-**Artifact：** “配置上限—实际 Running/Waiting/KV—客户端指标”对照表和每次启动日志。
-
-**Acceptance：** 能证明实验负载触及了被扫描的约束；若参数被 Backend 忽略、没有可观测指标或负载未填满预算，结果必须是 `Inconclusive`，而不是“调大参数无效”。
-
-### 13.4 S5：Mixed Prefill/Decode 与 Chunked Prefill
-
-**Question：** 一个长 Prompt 的 Prefill 到达时，正在 Decode 的短请求会不会出现 ITL 尖峰？
-
-**Prediction：** 长 Prefill 与 Decode 竞争执行预算时，短请求的 ITL 时间线会出现可对齐的异常；若当前 Backend 支持并实际启用 Chunked Prefill，尖峰可能减弱或被拆散。
-
-**Protocol：**
-
-- 让一组 `input=128, output=128` 的短请求持续 Decode；
-- 在稳定区间注入一个 `input=2048, output=32` 的长请求；
-- 客户端与服务端统一时钟基准，保存每个流式 token 和长请求到达的时间；
-- 先观察默认配置；Capability Matrix 确认支持后，才进行 Chunked Prefill on/off 对照；
-- 除该开关外不改变其他负载和 Scheduler 参数。
-
-**Artifact：** 一张对齐 Long Prefill Arrival、短请求 ITL、Running/Waiting、Token Budget 与 KV Usage 的时间线，以及至少 3 次复跑。
-
-**Acceptance：** 尖峰必须能在复跑中重现并与长请求到达对齐；只有开关被确认生效时，才能把两组差异归因到 Chunked Prefill。
-
-### 13.5 S6：Prefix Reuse
-
-**Question：** 在总输入长度相同的情况下，共享前缀能否降低重复 Prefill 工作？
-
-**Prediction：** 共享足够长的早期前缀并发生 Cache Hit 时，TTFT 应低于随机前缀；Output 阶段不应被描述成相同幅度的优化。
-
-**Protocol：** 固定总 Input/Output Length、请求数、并发和 Scheduler 参数，对比“共享 512-token 前缀”和“前 512 token 随机化”两组请求。若本机 `bench serve --help` 提供 `--random-prefix-len`，优先用它生成固定前缀；否则保存两组自定义 JSONL。每组使用独立的 Warm-up/Cache 状态，保存实际 Prompt Token；只有 Capability Matrix 确认 Prefix Caching 和命中指标可用时才做因果比较。
-
-**Artifact：** Prefix Query/Hit 指标、TTFT 分布、两组原始请求以及 Cache 状态准备步骤。
-
-**Acceptance：** 总长度和输出长度匹配，命中指标证明实验组发生复用；只有 TTFT 改善却没有命中证据时，结论停留在相关性。
-
-<Note title="实验顺序不能交换的原因" class="title-underline">
-
-S2 先隔离输入长度，S3 再制造并发饱和，S4 才能验证调度上限；S5 和 S6 会主动改变请求之间的干扰或复用关系，因此放在基线之后。否则每组结果都同时改变多个机制，无法知道是哪一个变量起作用。
-
-</Note>
-
-## 14. Gate R：用源码关闭因果链
-
-### 14.1 R0：固定实际版本，不追最新版目录
-
-源码阅读从 S0 记录的 vLLM Core 与 Metal Plugin 版本出发。官方 [Architecture Overview](https://docs.vllm.ai/en/latest/design/arch_overview/)只作为地图，不能用最新版文件路径代替本机实际执行代码。
-
-选择 S3 的饱和运行或 S5 的 Mixed Workload，沿着一条真实请求追踪：
-
-```text
-API request admission
-  -> request / sequence state
-  -> scheduler token budget and selection
-  -> KV cache lookup / allocate / grow / free
-  -> model runner execution
-  -> output, finish or cancel
-```
-
-**必须回答的问题：**
-
-1. 请求在什么条件下从 Waiting 进入 Running？
-2. Prefill 与 Decode token 怎样消耗同一轮预算？
-3. KV Block 在何处分配、追加、复用和释放？
-4. `max_num_seqs` 与 `max_num_batched_tokens` 在什么分支被读取？
-5. 一次完成或取消怎样改变下一轮可运行集合？
-6. Metal Plugin 在哪一层替换或限制 Core 的 Model Runner、Kernel 或指标？
-
-**Artifact：** 固定 Commit、入口函数、关键调用链、请求状态机、四条以上不变量，以及源码位置和实测时间线的对应表。只摘录必要片段，其余使用文件与行号链接。
-
-**Acceptance：** 能用源码解释一个已经复现的指标变化，同时列出至少一个仍然成立的替代解释。源码阅读本身不算完成，必须回到实验做一次验证性改动或复跑。
-
-## 15. F0：综合、反馈与阶段完成门槛
-
-### 15.1 统一产物结构
-
-后续 Serving 产物建议独立于当前 NumPy 结果保存：
-
-```text
-results/serving/
-├── environment.json
-├── server-command.txt
-├── capabilities.md
-├── workloads/
-├── raw/
-│   ├── bench/
-│   └── metrics/
-├── processed/
-│   └── summary.csv
-├── plots/
-├── source-trace.md
-└── anomalies.md
-```
-
-文件真正产生后，再把它加入 Phase 2 Lab Index 的白名单和文章链接；不提前创建空链接充当进度。
-
-### 15.2 最终结论矩阵
-
-阶段 2 结束时，用一张矩阵逐项回写：
-
-| 预测                     | Toy Evidence | Serving Evidence | Source Evidence     | Verdict |
-| ------------------------ | ------------ | ---------------- | ------------------- | ------- |
-| Batch 能摊薄固定开销     | M0/M1        | S3               | R0 Scheduler/Runner | 待实验  |
-| 更多并发最终牺牲延迟     | 无在线证据   | S3               | R0 Queue/Schedule   | 待实验  |
-| Prompt 变长增加 TTFT/KV  | M0 容量公式  | S2               | R0 KV 生命周期      | 待实验  |
-| 调度预算只有被填满才有效 | 无           | S4               | R0 Budget 分支      | 待实验  |
-| 长 Prefill 会干扰 Decode | 无           | S5               | R0 Prefill 调度     | 待实验  |
-| 前缀命中减少重复 Prefill | 无           | S6               | R0 Prefix Cache     | 待实验  |
-
-每个 Verdict 只能是 `Supported`、`Refuted` 或 `Inconclusive`，并带适用的版本、硬件、模型和工作负载边界。
-
-### 15.3 反馈与停止条件
-
-- 用内置 `bench serve` 对照一次自定义聚合，检查 TTFT/TPOT 定义；
-- 对最意外的一组结果进行独立复跑，并保留失败请求；
-- 让第二个人仅使用产物目录复现一组核心结果，或至少执行一次隔离环境复跑；
-- 回写系统文章中的机制模型和本实验文章中的结果矩阵；
-- 记录至少一个 Toy 预测在真实系统中不成立或需要附加条件的地方。
-
-<Note title="阶段 2 的完成定义" class="title-underline">
-
-当我能够从一个客户端延迟或吞吐拐点，沿着 Metrics、Scheduler、KV Cache 一直追到固定版本源码，并用受控复跑排除主要替代解释时，阶段 2 才算完成。完成不要求所有预测都成立，但要求失败也能留下可复现证据和下一步判断。
-
-</Note>
+当前任务的预测、前置阅读和逐项验收见 [M2 工作表](/labs/kv-cache-batch/view/docs/gates/M2.md/)。后续 Gate 只有在真实产物产生后才回写本文；没有数据时使用 `Inconclusive` 或 `Pending`，不把计划写成结果。

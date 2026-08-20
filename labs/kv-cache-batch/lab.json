@@ -41,7 +41,66 @@
 		}
 	},
 	"progress": {
+		"milestone": {
+			"period": "2026.08.12 — 2026.09.12",
+			"title": "阶段 2 · LLM 推理核心知识与 vLLM 性能实验",
+			"goal": "理解推理系统的核心矛盾，并用真实 vLLM 实验解释调度、显存、Batching 与 KV Cache 如何共同决定吞吐和延迟。",
+			"coreRoute": "M2 → S0 → S1 → S2 → S3 → S4 → F0",
+			"finalArtifact": "《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》",
+			"advancedRoute": "S5 Mixed Prefill/Decode · S6 Prefix Reuse · R0 源码追踪 · T0 跨环境迁移"
+		},
+		"preview": {
+			"path": "/learning/phase-2/",
+			"articles": [
+				{
+					"id": "llm-inference-optimization-system-view",
+					"role": "机制模型：解释 KV Cache、Prefill、Decode、Batching 与调度之间的关系",
+					"status": "draft"
+				},
+				{
+					"id": "vllm-inference-performance-lab",
+					"role": "中间证据：记录 Toy Attention 实验、可复现结果与证据边界",
+					"status": "draft"
+				},
+				{
+					"id": "python-for-llm-inference",
+					"role": "前置能力：补齐完成推理实验需要的最小 Python/NumPy 语义",
+					"status": "published"
+				},
+				{
+					"id": "build-a-complete-system-from-scratch",
+					"role": "方法论：把阶段任务组织成可验证、可重构、可交付的完整项目",
+					"status": "published"
+				}
+			],
+			"experiments": [
+				{
+					"id": "M0",
+					"title": "KV Cache、预分配与固定 B=2 Length Scan",
+					"summary": "保存 300 条长度扫描样本；Cache 路径均通过 Full Recompute Oracle。Cache Strategy 的历史结论保留，但缺少逐样本复现数据的部分继续标为 Inconclusive。",
+					"href": "/labs/kv-cache-batch/view/results/batch-length-scan/"
+				},
+				{
+					"id": "P0",
+					"title": "NumPy View/Copy 与轴语义",
+					"summary": "六个小实验保留预测、实际结果、差异解释和断言，并映射回 Attention/KV Cache。",
+					"href": "/labs/kv-cache-batch/view/docs/gates/P0.md/"
+				},
+				{
+					"id": "M1",
+					"title": "B=1/2/4/8 Batch Size Scan",
+					"summary": "保存 240 条原始样本，从 Raw CSV 重建汇总与两张曲线，按预设阈值得到 Knee=B=8。",
+					"href": "/labs/kv-cache-batch/view/results/batch-size-scan/"
+				}
+			]
+		},
 		"completed": [
+			{
+				"id": "M0",
+				"period": "2026.08.12 — 2026.08.18",
+				"title": "KV Cache、预分配与固定 Batch 机制闭环",
+				"summary": "No Cache、Dynamic Cache、Preallocated Cache 与固定 B=2 Batched Decode 均通过 Oracle，并保存 300 条 Length Scan 样本。"
+			},
 			{
 				"id": "P0",
 				"period": "2026.08.19",
@@ -104,8 +163,8 @@
 		},
 		"evidence": {
 			"tests": 9,
-			"rawSamples": 240,
-			"summary": "notes · rebuildable aggregates · two figures · Knee analysis"
+			"rawSamples": 540,
+			"summary": "300 length-scan + 240 batch-size samples · rebuildable aggregates · two figures · Knee analysis"
 		}
 	}
 }
