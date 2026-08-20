@@ -438,9 +438,40 @@ results/batch-size-scan/
 
 目标不是实现完整 Transformer，而是掌握真实模型中 Query Head、KV Head 与 Cache 容量的关系。
 
-## M2-A：固定 Shape 契约
+### M2 子任务状态
 
-新增：
+| 子任务 | 状态                    | 当前证据或缺口                                      |
+| ------ | ----------------------- | --------------------------------------------------- |
+| M2-A1  | Completed               | 3 项 Head 轴测试与完整 9 项回归测试通过             |
+| M2-A2  | Current / Not completed | 尚无 `project_qkv`、输入校验与 A2 契约测试          |
+| M2-B   | Pending                 | 等 A2 通过后实现无 Cache MHA Oracle                 |
+| M2-C   | Pending                 | 等 B 通过后实现 Cached MHA                          |
+| M2-D   | Pending                 | 等 C 通过后实现 GQA Head 映射                       |
+| M2-E   | Pending                 | 等 D 通过后验证 MHA/GQA KV 容量公式与生成对照表     |
+
+M2 整体仍是 **In progress**。只有 M2-A1 已完成；`Current` 只表示当前应该执行 M2-A2，不表示它已经通过验收。
+
+## M2-A1：Query Head 轴变换
+
+状态：**Completed（2026-08-20 学习窗口，2026-08-21 提交证据）**。
+
+已实现 `split_heads(projected, num_heads)`，将 `[B, T, H × D_head]` 变成 `[B, H, T, D_head]`。实际测试使用 `B=2, T=4, H=5, D_head=3`，避免所有维度相等掩盖轴错误。
+
+- [x] 为 `B/H/T/D_head` 写明轴语义。
+- [x] Shape 测试通过。
+- [x] 非零坐标元素映射 Oracle 通过。
+- [x] `split_heads` 结果与输入共享数据 Buffer。
+- [x] A1 定向测试与完整 9 项回归测试通过。
+
+预测、首次失败、修正规则与闭卷验收保存在 [`docs/gates/M2.md`](gates/M2.md)。A1 已关闭，不再把后续 Q/K/V 投影计入 A1 完成状态。
+
+## M2-A2：Q/K/V 投影与输入契约
+
+状态：**Current / Not completed**。
+
+当前代码还没有 `project_qkv`，`split_heads` 也尚未检查输入维度、Head 数与整除关系；当前三项 `test_multi_head.py` 只证明 A1。因此下列 Shape 是本轮目标，不是已完成结果：
+
+计划新增或修改：
 
 ```text
 src/kv_cache_lab/multi_head.py
@@ -462,20 +493,27 @@ V: [B, H_kv, T, D_head]
 B=2, T=5, D_model=7, H_q=4, H_kv=2, D_head=3
 ```
 
-- [ ] 每个 Axis 都写明语义。
-- [ ] 不使用所有维度都相等的输入掩盖 Axis 错误。
+- [ ] 运行前的权重 Shape、Q/K/V Shape、Buffer 与非零坐标预测已保存。
+- [ ] 三处定向阅读各留下了一句对预测的确认或修正。
+- [ ] `project_qkv` 已实现，并得到 `Q=[2,4,5,3]`、`K/V=[2,2,5,3]`。
+- [ ] 至少两个非零坐标的独立元素 Oracle 通过。
+- [ ] 输入维度、Head 数、整除关系、权重宽度与 `D_head` 五类非法配置明确失败。
+- [ ] A1 测试与完整回归测试保持通过。
+- [ ] 运行后结果、首次失败、修正规则与下一步判断已回写 [`docs/gates/M2.md`](gates/M2.md)。
+
+七项全部通过后，M2-A2 才能改为 `Completed` 并进入 M2-B。
 
 ## M2-B：实现无 Cache MHA Oracle
 
+前置条件：M2-A2 已提供通过 Shape、元素与非法配置测试的 Q/K/V。这里不重复把投影计入 M2-B。
+
 顺序：
 
-1. [ ] 投影 Q/K/V。
-2. [ ] 把 Head 维放到 Sequence 前。
-3. [ ] 每个 Head 独立计算 Causal Score。
-4. [ ] 添加 Causal Mask。
-5. [ ] 沿历史 Token Axis 做 Softmax。
-6. [ ] 与 V 相乘。
-7. [ ] 必要时合并 Head。
+1. [ ] 每个 Head 独立计算 Causal Score。
+2. [ ] 添加 Causal Mask。
+3. [ ] 沿历史 Token Axis 做 Softmax。
+4. [ ] 与 V 相乘。
+5. [ ] 必要时合并 Head。
 
 先只实现 `H_q=H_kv`。
 
