@@ -350,7 +350,7 @@ Python 默认不会在运行时验证这些注解。当前 `pyproject.toml` 中�
 ```text
 kv-cache-batch/
 ├── pyproject.toml
-├── src/kv_cache_batch/
+├── src/kv_cache_lab/
 │   ├── __init__.py
 │   ├── attention.py
 │   └── benchmark.py
@@ -358,14 +358,17 @@ kv-cache-batch/
     └── test_attention.py
 ```
 
-- `kv_cache_batch` 是 Package；
+- `kv-cache-batch` 是项目发行名和主 CLI 名，`kv_cache_lab` 是内部 Python Package；不同名称可以避免在目录树里混淆项目根目录与源码包；
 - `attention.py` 和 `benchmark.py` 是 Module；
-- `from kv_cache_batch.attention import ...` 使用绝对导入；
+- `from kv_cache_lab.attention import ...` 使用绝对导入；
 - `pyproject.toml` 的 `[project.scripts]` 把命令行名称绑定到 `benchmark:main`。
 
 ```toml
 [project.scripts]
-kv-cache-batch = "kv_cache_batch.benchmark:main"
+kv-cache-batch = "kv_cache_lab.benchmark:main"
+
+[tool.uv.build-backend]
+module-name = "kv_cache_lab"
 ```
 
 下面的守卫表示“直接运行这个 Module 时调用 `main`，被 Import 时不调用”：

@@ -8,12 +8,16 @@ requires-python = ">=3.14"
 dependencies = ["numpy>=2.5.2"]
 
 [project.scripts]
-kv-cache-batch = "kv_cache_batch.benchmark:main"
-kv-cache-batch-summary = "kv_cache_batch.summarize_batch_size:main"
+kv-cache-batch = "kv_cache_lab.benchmark:main"
+kv-cache-batch-summary = "kv_cache_lab.summarize_batch_size:main"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "kv_cache_lab"
+
 [tool.pyright]
 venvPath = "."
 venv = ".venv"

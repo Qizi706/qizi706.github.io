@@ -9,7 +9,7 @@ from typing import Literal
 
 import numpy as np
 
-from kv_cache_batch.attention import (
+from kv_cache_lab.attention import (
     batched_cached_attention,
     cached_attention,
     cached_attention_preallocated,

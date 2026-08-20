@@ -1,6 +1,6 @@
 import unittest
 
-from kv_cache_batch.summarize_batch_size import (
+from kv_cache_lab.summarize_batch_size import (
     BatchSummary,
     RawTiming,
     find_knee,

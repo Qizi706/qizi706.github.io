@@ -13,7 +13,7 @@ import { pygmentsDefaultTheme } from './src/themes/pygments-default.mjs';
 // https://astro.build/config
 export default defineConfig({
   site: 'https://zqwiki.cn',
-  trailingSlash: 'always',
+  trailingSlash: 'ignore',
   redirects: legacyPostRedirects,
   integrations: [
     mdx(),

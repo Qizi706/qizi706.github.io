@@ -23,7 +23,7 @@ kv-cache-batch/
 │   └── LEARNING_PLAN.md   # 阶段 2 的逐步执行与验收手册
 ├── examples/
 │   └── numpy_array_semantics.py # NumPy View、Copy、Stride 与分配练习
-├── src/kv_cache_batch/
+├── src/kv_cache_lab/
 │   ├── attention.py       # Attention、KV Cache 与 Batched Decode 实现
 │   ├── benchmark.py       # 正确性门禁、计时和原始 CSV 输出
 │   └── summarize_batch_size.py # Batch Size 汇总、曲线和 Knee 分析
@@ -43,9 +43,9 @@ kv-cache-batch/
 
 实现入口：
 
-- [`attention.py`](./src/kv_cache_batch/attention.py)
-- [`benchmark.py`](./src/kv_cache_batch/benchmark.py)
-- [`summarize_batch_size.py`](./src/kv_cache_batch/summarize_batch_size.py)
+- [`attention.py`](./src/kv_cache_lab/attention.py)
+- [`benchmark.py`](./src/kv_cache_lab/benchmark.py)
+- [`summarize_batch_size.py`](./src/kv_cache_lab/summarize_batch_size.py)
 - [`test_attention.py`](./tests/test_attention.py)
 - [`test_summarize_batch_size.py`](./tests/test_summarize_batch_size.py)
 - [`batch-length-scan/raw.csv`](./results/batch-length-scan/raw.csv)

@@ -2,6 +2,6 @@
 
 
 def main() -> None:
-    from kv_cache_batch.benchmark import main as run_benchmark
+    from kv_cache_lab.benchmark import main as run_benchmark
 
     run_benchmark()

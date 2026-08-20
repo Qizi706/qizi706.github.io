@@ -96,18 +96,18 @@ pyproject.toml
 ```text
 kv-cache-batch/
 ├── pyproject.toml
-├── src/kv_cache_batch/attention.py
+├── src/kv_cache_lab/attention.py
 └── tests/test_attention.py
 ```
 
 从空目录得到它，不需要项目向导：
 
 ```bash
-mkdir -p kv-cache-batch/src/kv_cache_batch kv-cache-batch/tests
+mkdir -p kv-cache-batch/src/kv_cache_lab kv-cache-batch/tests
 cd kv-cache-batch
 
 $EDITOR pyproject.toml
-$EDITOR src/kv_cache_batch/attention.py
+$EDITOR src/kv_cache_lab/attention.py
 $EDITOR tests/test_attention.py
 
 uv sync
@@ -180,7 +180,7 @@ Cache 正确以后，我要比较 No Cache、Dynamic Cache 和 Preallocated Cach
 如果把这些都塞进 `attention.py`，机制实现和实验流程会因为不同原因变化：前者因为算法变化，后者因为实验协议变化。于是项目第一次自然分开：
 
 ```text
-src/kv_cache_batch/
+src/kv_cache_lab/
 ├── attention.py      # 机制：Attention 与 KV Cache 怎样工作
 └── benchmark.py      # 实验：怎样构造输入、预热、计时并写出样本
 ```
@@ -221,7 +221,7 @@ summarize_batch_size.py   读取事实，生成解释材料
 这时才准备增加：
 
 ```text
-src/kv_cache_batch/multi_head.py
+src/kv_cache_lab/multi_head.py
 tests/test_multi_head.py
 ```
 

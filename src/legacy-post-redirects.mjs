@@ -19,17 +19,17 @@ export const legacyPostRedirects = {
 	'/labs/llm-inference-request-lifecycle/[...path]': '/labs/serving-baseline/view/[...path]',
 	'/labs/attention-kv-caceh/': '/labs/kv-cache-batch/',
 	'/labs/attention-kv-caceh/view/src/attention_kv_caceh/__init__.py/':
-		'/labs/kv-cache-batch/view/src/kv_cache_batch/__init__.py/',
+		'/labs/kv-cache-batch/view/src/kv_cache_lab/__init__.py/',
 	'/labs/attention-kv-caceh/view/src/attention_kv_caceh/attention.py/':
-		'/labs/kv-cache-batch/view/src/kv_cache_batch/attention.py/',
+		'/labs/kv-cache-batch/view/src/kv_cache_lab/attention.py/',
 	'/labs/attention-kv-caceh/view/src/attention_kv_caceh/benchmark.py/':
-		'/labs/kv-cache-batch/view/src/kv_cache_batch/benchmark.py/',
+		'/labs/kv-cache-batch/view/src/kv_cache_lab/benchmark.py/',
 	'/labs/attention-kv-caceh/src/attention_kv_caceh/__init__.py/':
-		'/labs/kv-cache-batch/view/src/kv_cache_batch/__init__.py/',
+		'/labs/kv-cache-batch/view/src/kv_cache_lab/__init__.py/',
 	'/labs/attention-kv-caceh/src/attention_kv_caceh/attention.py/':
-		'/labs/kv-cache-batch/view/src/kv_cache_batch/attention.py/',
+		'/labs/kv-cache-batch/view/src/kv_cache_lab/attention.py/',
 	'/labs/attention-kv-caceh/src/attention_kv_caceh/benchmark.py/':
-		'/labs/kv-cache-batch/view/src/kv_cache_batch/benchmark.py/',
+		'/labs/kv-cache-batch/view/src/kv_cache_lab/benchmark.py/',
 	'/labs/attention-kv-caceh/view/[...path]': '/labs/kv-cache-batch/view/[...path]',
 	'/labs/attention-kv-caceh/[...path]': '/labs/kv-cache-batch/view/[...path]',
 	...createLabArtifactRedirects('serving-baseline', {
@@ -44,7 +44,11 @@ export const legacyPostRedirects = {
 	...createLabArtifactRedirects('kv-cache-batch', {
 		'LEARNING_PLAN.md': 'docs/LEARNING_PLAN.md',
 		'src/numpy_semantics.py': 'examples/numpy_array_semantics.py',
-		'src/kv_cache_batch/summarize.py': 'src/kv_cache_batch/summarize_batch_size.py',
+		'src/kv_cache_batch/__init__.py': 'src/kv_cache_lab/__init__.py',
+		'src/kv_cache_batch/attention.py': 'src/kv_cache_lab/attention.py',
+		'src/kv_cache_batch/benchmark.py': 'src/kv_cache_lab/benchmark.py',
+		'src/kv_cache_batch/summarize.py': 'src/kv_cache_lab/summarize_batch_size.py',
+		'src/kv_cache_batch/summarize_batch_size.py': 'src/kv_cache_lab/summarize_batch_size.py',
 		'tests/test_summarize.py': 'tests/test_summarize_batch_size.py',
 		'results/benchmark.csv': 'results/batch-length-scan/raw.csv',
 		'results/m1-batch-size/raw.csv': 'results/batch-size-scan/raw.csv',

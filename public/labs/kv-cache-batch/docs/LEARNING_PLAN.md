@@ -519,7 +519,7 @@ results/batch-size-scan/
 新增：
 
 ```text
-src/kv_cache_batch/multi_head.py
+src/kv_cache_lab/multi_head.py
 tests/test_multi_head.py
 ```
 

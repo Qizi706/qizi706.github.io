@@ -63,7 +63,7 @@ q[1, 2, 3, 1] 应等于 projected[__, __, __]
 
 ### 2. 只实现这个接口
 
-在 `src/kv_cache_batch/multi_head.py` 中实现：
+在 `src/kv_cache_lab/multi_head.py` 中实现：
 
 ```python
 def split_heads(projected: np.ndarray, num_heads: int) -> np.ndarray:
