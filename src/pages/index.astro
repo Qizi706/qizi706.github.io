@@ -4,6 +4,7 @@ import FormattedDate from '../components/FormattedDate.astro';
 import LearningStage from '../components/LearningStage.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 import PageLayout from '../layouts/PageLayout.astro';
+import { getLabManifest } from '../utils/lab-artifacts.mjs';
 import { getCategoryUrl, getPostUrl } from '../utils/posts';
 
 const allPosts = await getCollection('blog');
@@ -56,6 +57,12 @@ const categories = [...categorySummaries.values()].sort(
 );
 const featuredPost = posts.find((post) => post.id === 'conjecture-verification-practice');
 const systemBuildingPost = posts.find((post) => post.id === 'build-a-complete-system-from-scratch');
+const kvCacheLab = await getLabManifest('kv-cache-batch');
+const learningProgress = kvCacheLab.progress;
+const featuredCompletedStages = learningProgress.completed.filter(
+	(stage: { featured?: boolean }) => stage.featured,
+);
+const currentStage = learningProgress.current;
 ---
 
 <PageLayout title={SITE_TITLE} description={SITE_DESCRIPTION} mainClass="home-page">
@@ -178,72 +185,73 @@ const systemBuildingPost = posts.find((post) => post.id === 'build-a-complete-sy
 
 	<section class="tomorrow-section" aria-labelledby="tomorrow-heading">
 		<h2 id="tomorrow-heading">明日学习</h2>
-		<LearningStage period="2026.08.19" title="P0 · NumPy View/Copy 与轴语义闭环" status="done">
-			<p class="tomorrow-objective">
-				<strong>完成依据：</strong>六个 Case 均保留预测、观察、判定与断言；已能区分
-				Binding、View、Copy、Stride 和 Buffer 分配，并完成 Attention/KV Cache 映射与闭卷口述。
-			</p>
-		</LearningStage>
+		{
+			featuredCompletedStages.map(
+				(stage: { id: string; period: string; title: string; summary: string }) => (
+					<LearningStage period={stage.period} title={`${stage.id} · ${stage.title}`} status="done">
+						<p class="tomorrow-objective">
+							<strong>完成依据：</strong>
+							{stage.summary}
+						</p>
+					</LearningStage>
+				),
+			)
+		}
 
 		<LearningStage
-			period="2026.08.20 · 120 min"
-			title="M2-A1 · 只完成 Query Head 轴变换"
+			period={currentStage.period}
+			title={`${currentStage.id} · ${currentStage.title}`}
 			status="active"
 			open
 		>
 			<p class="tomorrow-objective">
-				<strong>目标：</strong>不一次实现完整 Q/K/V；只把已经投影好的 Query 从
-				<code>[B,T,H×D_head]</code> 变换为 <code>[B,H,T,D_head]</code>，建立“轴语义 → Shape 变换 →
-				元素 Oracle → 测试”的最小闭环。
+				<strong>唯一目标：</strong>
+				{currentStage.objective}
 			</p>
 
 			<dl class="tomorrow-contract" aria-label="明日学习契约">
 				<div>
 					<dt>question</dt>
-					<dd>
-						怎样证明 Head 维被正确拆出并移动到 Sequence 前，而不是只得到一个碰巧正确的 Shape？
-					</dd>
+					<dd>{currentStage.question}</dd>
 				</div>
 				<div>
 					<dt>prediction</dt>
+					<dd>{currentStage.prediction}</dd>
+				</div>
+				<div>
+					<dt>pre-read · 15 min</dt>
 					<dd>
-						拆分最后一维后仍需交换 Head 与 Sequence；目标元素 <code>q[b,h,t,d]</code> 应对应扁平投影中的
-						<code>q_flat[b,t,h×D_head+d]</code>。
+						只读{
+							currentStage.preRead.map(
+								(reference: { label: string; href: string }, index: number) => (
+									<>
+										{index > 0 ? '、' : ''}<a href={reference.href}>{reference.label}</a>
+									</>
+								),
+							)
+						}；每处只记一句对预测的确认或修正。
 					</dd>
 				</div>
 				<div>
 					<dt>artifact</dt>
 					<dd>
-						填写 <code>docs/M2_NOTES.md</code>；独立实现一个 <code>split_heads</code> 函数和 Shape、元素映射两个
-						测试。
+						{currentStage.artifact}{' '}
+						<a href={`/labs/kv-cache-batch/view/${currentStage.document}/`}>打开工作表</a>
 					</dd>
 				</div>
 				<div>
 					<dt>gate</dt>
-					<dd>两个测试通过；能手算一个坐标的映射，并在关闭代码后重新写出变换步骤。</dd>
+					<dd>{currentStage.acceptance}</dd>
 				</div>
 			</dl>
 
 			<ol class="tomorrow-steps">
-				<li>
-					<b>15 min</b>：只追踪现有 <code>attention.py</code> 中投影与 <code>swapaxes</code> 的输入输出
-					Shape，不阅读多头 Attention 完整实现。
-				</li>
-				<li>
-					<b>20 min</b>：在工作表中写下每一步 Shape、一个具体元素的坐标映射，以及 View/Copy 预测。
-				</li>
-				<li>
-					<b>25 min</b>：只实现 <code>split_heads(projected, num_heads)</code
-					>，禁止同时写权重投影、K/V 或 Attention。
-				</li>
-				<li><b>25 min</b>：先写 Shape 测试，再写一个坐标的元素映射测试。</li>
-				<li><b>20 min</b>：只根据失败信息修正实现；卡住时按工作表中的求助阶梯逐级获取提示。</li>
-				<li><b>15 min</b>：关闭代码重新写出变换，并记录错误发生在哪一层。</li>
+				{currentStage.steps.map((step: string) => <li>{step}</li>)}
 			</ol>
 
 			<p class="tomorrow-decision">
-				<strong>下一步判断：</strong>只有能从空白处重建 Query 变换时，才进入 M2-A2，把同一规则迁移到
-				K/V 并增加参数校验；明日不进入 M2-B。
+				<strong>下一步判断：</strong>
+				{currentStage.nextDecision}
 			</p>
 		</LearningStage>
 	</section>
