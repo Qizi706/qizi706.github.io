@@ -8,15 +8,15 @@
 
 ```text
 Question: 怎样把扁平的 Head 特征拆成显式 Head 轴，并证明轴顺序正确？
-Prediction:
+Prediction: 变换后 Shape 与预期相同、单个元素位置对应、share memory
 Time box: 120 min
 Action: 实现 split_heads(projected, num_heads)
-Artifact: 一个函数、两个测试、本工作表中的预测与反思
+Artifact: 预测基本正确，我对 python 的基本语法还是不够熟悉，现在对 MHA、从零构建一个程序有了一定的认识
 Acceptance: Shape 和元素映射测试通过，关闭代码后能重新写出变换
 Feedback source: unittest 失败信息与手算元素 Oracle
-Result:
-What changed:
-Next decision:
+Result: 3 个 M2-A1 测试通过，完整 9 个测试通过
+What changed: 修正了 Shape/坐标理解，并发现 Python 局部变量遮蔽问题
+Next decision: M2-A1 通过，进入 M2-A2
 ```
 
 ### 1. 运行前预测
@@ -33,33 +33,33 @@ D_head = 3
 先填写，不运行 NumPy：
 
 ```text
-projected 输入 Shape = [__, __, __]
-拆分 Head 后 Shape   = [__, __, __, __]
-移动 Head 轴后 Shape = [__, __, __, __]
+projected 输入 Shape = [2, 5, 12]
+拆分 Head 后 Shape   = [2, 5, 4, 3]
+移动 Head 轴后 Shape = [2, 4, 5, 3]
 ```
 
 为每个轴写一句语义：
 
 ```text
-B:
-H:
-T:
-D_head:
+B: batch 数量
+H: head 数量
+T: Sequence 长度
+D_head: 每个 head 的维度
 ```
 
 选择一个坐标，例如 `b=1, h=2, t=3, d=1`，手算它在扁平投影最后一维中的索引：
 
 ```text
-flat_index = ____________________
-q[1, 2, 3, 1] 应等于 projected[__, __, __]
+flat_index = h * D_head + d = 7
+q[1, 2, 3, 1] 应等于 projected[1, 3, 7]
 ```
 
 预测下面两步是否创建新数据 Buffer，并写出理由：
 
-| 操作                  | View / Copy 预测 | 理由 | 实际结果 |
-| --------------------- | ---------------- | ---- | -------- |
-| 拆分最后一维          |                  |      |          |
-| 交换 Head 与 Sequence |                  |      |          |
+| 操作                  | View / Copy 预测 | 理由                                               | 实际结果 |
+| --------------------- | ---------------- | -------------------------------------------------- | -------- |
+| 拆分最后一维          | View             | 实际物理布局没变                                   |          |
+| 交换 Head 与 Sequence | View             | 创建了一个新的对象，改变 Stride，但是 share memory |          |
 
 ### 2. 只实现这个接口
 
@@ -114,12 +114,17 @@ uv run python -m unittest discover -s tests -p 'test_multi_head.py' -v
 ### 5. 运行后记录
 
 ```text
-实际 Shape:
-元素映射是否成立:
-内存共享观察:
-第一次失败信息:
-错误属于哪一层: 轴语义 / Shape 推导 / NumPy API / 测试设计
-修正后的规则:
+实际 Shape: (2, 5, 4, 3)
+元素映射是否成立: 成立
+内存共享观察: 内存共享
+第一次失败信息: 我把接受返回值的变量名设置为函数同名 split_heads，python 的类型不像 cpp 那样严格，因此报错：
+Traceback (most recent call last):
+  File "/home/celeb/Programming/blogs/astro-site/public/labs/kv-cache-batch/tests/test_multi_head.py", line 29, in test_split_heads_shape_match_oracle
+    split_heads = split_heads(self.x, H)
+                  ^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'split_heads' where it is not associated with a value
+错误属于哪一层: 测试设计
+修正后的规则: 修改了一下变量名
 ```
 
 ### 6. A1 验收
