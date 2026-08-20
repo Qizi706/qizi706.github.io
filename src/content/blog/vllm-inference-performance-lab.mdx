@@ -2,7 +2,7 @@
 title: 'LLM 推理性能实验：KV Cache、预分配与 Batch Size'
 description: '阶段 2 的 AI Infra 实验报告：用最小 NumPy Causal Attention 验证 KV Cache、预分配和 Batched Decode，并扫描 B=1/2/4/8 分析吞吐、延迟与收益拐点。'
 pubDate: '2026-08-16T20:30:00+08:00'
-updatedDate: '2026-08-18T02:45:00+08:00'
+updatedDate: '2026-08-21T02:04:01+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -45,12 +45,12 @@ mathjax: true
 
 </Note>
 
-<Note title="截至 2026-08-18 的进度" class="title-underline">
+<Note title="截至 2026-08-21 的进度" class="title-underline">
 
 - M0 已实现 Cache、预分配和固定 <code>B=2</code> 的 Batched Decode；当前公开归档保留 300 条 Batch Length 原始样本，但 Cache Strategy 只保留汇总值，存在逐样本证据缺口。
 - M1 已完成 <code>B=1/2/4/8</code> 正确性检查、240 条原始样本、P50/P95 汇总、两张独立曲线和 Knee 判定。
-- Python/NumPy 语义练习代码已经覆盖 Binding、View/Copy、Advanced Indexing、<code>swapaxes</code> 与 <code>concatenate</code>，但还没有保存事前预测和运行后反思，因此 P0 仍是 In progress。
-- M2 的 MHA/GQA 与 KV 容量实现尚未开始；当前下一步是先关闭 P0 验收，再进入 Head 维度与容量实验。
+- P0 已完成 Binding、View/Copy、Advanced Indexing、<code>swapaxes</code> 与 <code>concatenate</code> 的预测、运行记录、差异解释和闭卷验收。
+- M2 正在进行：A1 的 <code>split_heads</code> 已通过 Shape、非零坐标元素映射和内存共享 3 项测试，完整 9 项回归测试通过；当前唯一任务是 A2 的 Q/K/V 投影与输入契约。
 
 </Note>
 
@@ -385,7 +385,7 @@ KV Cache 用线性增长的状态换掉了更昂贵的历史重算；预分配�
 <CoreCard title="运行正确性测试与 Benchmark" class="title-underline">
 
 ```bash
-cd public/labs/kv-cache-batch
+cd labs/kv-cache-batch
 uv sync
 
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
@@ -428,8 +428,11 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
 - [Attention 与 Cache 实现](/labs/kv-cache-batch/view/src/kv_cache_lab/attention.py/)
 - [Benchmark Harness](/labs/kv-cache-batch/view/src/kv_cache_lab/benchmark.py/)
 - [Batch Size 汇总与绘图脚本](/labs/kv-cache-batch/view/src/kv_cache_lab/summarize_batch_size.py/)
+- [M2 Head 轴与投影实现](/labs/kv-cache-batch/view/src/kv_cache_lab/multi_head.py/)
 - [正确性测试](/labs/kv-cache-batch/view/tests/test_attention.py/)
+- [M2 Head 契约测试](/labs/kv-cache-batch/view/tests/test_multi_head.py/)
 - [Batch Size 汇总公式测试](/labs/kv-cache-batch/view/tests/test_summarize_batch_size.py/)
+- [M2 学习工作表](/labs/kv-cache-batch/view/docs/gates/M2.md/)
 - [Batch Length Scan 的 300 条原始样本](/labs/kv-cache-batch/view/results/batch-length-scan/raw.csv/)
 - [Batch Size Scan 的 240 条原始样本](/labs/kv-cache-batch/view/results/batch-size-scan/raw.csv/)
 - [Batch Size 汇总表](/labs/kv-cache-batch/view/results/batch-size-scan/summary.csv/)
@@ -437,16 +440,20 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
 
 ```text
 kv-cache-batch/
+├── lab.json
 ├── docs/
-│   └── LEARNING_PLAN.md
+│   ├── PLAN.md
+│   └── gates/{P0,M1,M2}.md
 ├── examples/
 │   └── numpy_array_semantics.py
 ├── src/kv_cache_lab/
 │   ├── attention.py
 │   ├── benchmark.py
+│   ├── multi_head.py
 │   └── summarize_batch_size.py
 ├── tests/
 │   ├── test_attention.py
+│   ├── test_multi_head.py
 │   └── test_summarize_batch_size.py
 └── results/
     ├── batch-length-scan/
@@ -463,14 +470,14 @@ kv-cache-batch/
 
 这一步已经从“知道 KV Cache 和 Batch 的定义”推进到“能够实现、验证、测量并解释异常”。后续不再以增加 Toy 代码量为目标，而是逐步把机制预测迁移到真实 vLLM。
 
-下面各 Gate 的完整操作步骤、命令、产物目录与勾选式验收条件，统一保存在 [阶段 2 学习执行手册](/labs/kv-cache-batch/view/docs/LEARNING_PLAN.md/)。本文保留实验问题、机制解释和最终结果，执行手册负责回答“现在具体做什么”。
+下面各 Gate 的完整操作步骤、命令、产物目录与勾选式验收条件，统一保存在 [阶段 2 学习执行手册](/labs/kv-cache-batch/view/docs/PLAN.md/)。本文保留实验问题、机制解释和最终结果，执行手册负责回答“现在具体做什么”。
 
 | ID  | 任务                      | 当前状态             | 直接产物或缺口                                 |
 | --- | ------------------------- | -------------------- | ---------------------------------------------- |
 | M0  | Cache、预分配、`B=2`      | Completed / data gap | 测试、300 条 Batch Length 样本；Cache Raw 缺失 |
-| P0  | Python/NumPy 语义闭环     | Close now            | 代码已写；缺事前预测、结果对照和反思           |
+| P0  | Python/NumPy 语义闭环     | Completed            | 六类操作的预测、结果、差异解释与闭卷验收       |
 | M1  | Batch Size 曲线           | Completed            | `B=1/2/4/8` 原始样本与吞吐/延迟曲线            |
-| M2  | MHA/GQA 与 KV 容量        | Next after P0        | 正确性测试、容量对照表                         |
+| M2  | MHA/GQA 与 KV 容量        | In progress · A2     | A1 已通过；当前补 Q/K/V 投影与输入契约         |
 | S0  | vLLM 环境与可观测能力冻结 | Pending              | 环境快照、启动命令、Capability Matrix          |
 | S1  | 单并发稳态基线            | Pending              | `bench serve` 详细结果与服务端 Metrics         |
 | S2  | Input Length              | Pending              | TTFT/TPOT/E2E/KV 随输入长度的曲线              |
@@ -490,7 +497,7 @@ Question -> Prediction -> Controlled Action -> Raw Artifact
 
 一次只改变一个主变量；预测必须写在运行之前；没有服务端证据时，不把客户端相关性写成 Scheduler 因果。
 
-当前瓶颈不是再扫描更大的 B，而是把已经写出的 NumPy 语义练习变成可审查的学习证据。完成 P0 的事前预测、实际输出、差异解释和验收记录后，再进入 M2；详细操作继续以独立的[阶段 2 学习执行手册](/labs/kv-cache-batch/view/docs/LEARNING_PLAN.md/)为准。
+当前瓶颈不是再扫描更大的 B，也不是提前实现完整 Attention，而是让 Q/K/V 共享一套可验证的投影与 Head Shape 契约。A2 的预测、15 分钟前置阅读、120 分钟执行顺序和验收清单保存在 [M2 工作表](/labs/kv-cache-batch/view/docs/gates/M2.md/)；全路线仍以独立的[阶段 2 学习执行手册](/labs/kv-cache-batch/view/docs/PLAN.md/)为准。
 
 ## 11. Gate M：补完最小机制
 
@@ -518,20 +525,31 @@ Question -> Prediction -> Controlled Action -> Raw Artifact
 2. 能指出吞吐收益是否开始收窄；如果扫描范围内没有拐点，明确写成 `Not reached`；
 3. 能区分“总吞吐提高”和“单请求更快”，不再把二者都叫做 Batch 加速。
 
-**Next Decision：** 不继续追求更大的 `B` 或更大的倍数；先关闭 P0 的记录缺口，再进入 Head 维与 KV 容量。
+**Next Decision：** 不继续追求更大的 `B` 或更大的倍数；P0 已关闭，M2-A1 已通过，当前进入 M2-A2。
 
-### 11.2 P0：关闭 NumPy 语义记录缺口
+### 11.2 P0：NumPy 语义闭环（已完成）
 
-当前 [`examples/numpy_array_semantics.py`](/labs/kv-cache-batch/view/examples/numpy_array_semantics.py/) 已经包含 Binding、浅复制、基础切片、Advanced Indexing、<code>swapaxes</code> 和 <code>concatenate</code>。缺少的不是更多示例代码，而是以下可审查记录：
+[`examples/numpy_array_semantics.py`](/labs/kv-cache-batch/view/examples/numpy_array_semantics.py/) 与 [P0 记录](/labs/kv-cache-batch/view/docs/gates/P0.md/) 已覆盖 Binding、浅复制、基础切片、Advanced Indexing、<code>swapaxes</code> 和 <code>concatenate</code>。当前保留的证据包括：
 
-1. 运行前写出每段代码的 Shape、是否共享内存和修改是否传播；
-2. 保存实际输出，并逐项标记预测是否成立；
-3. 至少解释一个预测错误，或主动构造一个错误假设再用输出推翻；
-4. 把 View/Copy/Stride/Allocation 分别映射回 Attention 和 Dynamic KV Cache。
+1. 每段代码运行前的 Shape、内存共享与修改传播预测；
+2. 实际输出与预测差异；
+3. View/Copy/Stride/Allocation 到 Attention 和 Dynamic KV Cache 的映射；
+4. 不看代码完成的闭卷口述验收。
 
-**Acceptance：** 不看代码也能说明哪些操作只改变 View、哪些会分配新 Buffer，以及它们为什么会影响 Benchmark；记录完成后把 P0 标记为 Completed。
+**Result：** P0 已标记为 Completed，不再追加无关 NumPy 练习；这些语义现在只在 M2 的真实 Shape 与 Buffer 问题中复用。
 
 ### 11.3 M2：MHA/GQA 与 KV 容量
+
+M2-A1 已完成下面的第一条窄路径：
+
+```text
+[B,T,H*D_head]
+  -> split_heads
+  -> [B,H,T,D_head]
+  -> Shape + 非零坐标 + shares_memory
+```
+
+当前 M2-A2 只把这份契约迁移到 Q/K/V，并补齐输入不是三维、Head 数非正、投影宽度不能整除、权重输入宽度不匹配和 `D_head` 不一致五类失败。它尚不计算 Score、Mask 或 Softmax，也不能算作 MHA/GQA 已实现。
 
 把状态扩展为：
 
@@ -561,6 +579,8 @@ $$
 **Artifact：** Multi-Head/GQA 实现、映射测试、容量 CSV 和 MHA/GQA 对照表。
 
 **Acceptance：** 正确性、非法 Head 配置、Batch 隔离和容量公式四类测试全部通过；实测字节数精确匹配公式。
+
+**Current Decision：** 先通过 A2 的 Shape、元素 Oracle、非法配置与完整回归门禁，再进入 `H_q=H_kv` 的无 Cache MHA Oracle。
 
 <Note title="Toy Lab 的停止线" class="title-underline">
 

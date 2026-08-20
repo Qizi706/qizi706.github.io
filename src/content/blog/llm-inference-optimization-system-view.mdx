@@ -2,7 +2,7 @@
 title: 'LLM 推理优化的系统视角：从 KV Cache 到调度'
 description: '阶段 2 的 AI Infra 学习记录：从 Prefill、Decode 与 KV Cache 出发，理解计算、带宽、容量和调度如何共同决定 LLM Serving 的吞吐与延迟。'
 pubDate: '2026-08-13T20:00:00+08:00'
-updatedDate: '2026-08-17T20:00:00+08:00'
+updatedDate: '2026-08-21T02:04:01+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -278,7 +278,7 @@ $$
 
 <Note title="机制验证不是 Serving Benchmark" class="title-underline">
 
-当前实现只有 CPU、NumPy、单 Head、等长 Sequence、`B∈{1,2}` 和单层 Attention。这里的 Batch 只是固定形状的 Batched NumPy 执行，不包含请求到达、不同长度、动态加入/退出或 Token Budget，因此还不能回答 Multi-Head/GQA、GPU Kernel、Continuous Batching、PagedAttention 或真实 Scheduler 的性能问题。
+当前 Attention 实现仍只有 CPU、NumPy、单 Head、等长 Sequence、`B∈{1,2,4,8}` 和单层计算；M2-A1 只额外验证了 Head 轴变换，还不是完整 Multi-Head Attention。这里的 Batch 只是固定形状的 Batched NumPy 执行，不包含请求到达、不同长度、动态加入/退出或 Token Budget，因此还不能回答 MHA/GQA 性能、GPU Kernel、Continuous Batching、PagedAttention 或真实 Scheduler 的问题。
 
 </Note>
 
@@ -493,7 +493,7 @@ request rate / client concurrency
 
 ### 8.1 当前已经跨过哪一道门？
 
-现在已经不只是“读过 KV Cache 和 Batch”：我实现了 No Cache、Dynamic Cache、Preallocated Cache 与固定形状的 Batched Decode，用数值 Oracle 约束正确性，保留了原始计时样本，还定位并修正了 BLAS 线程造成的异常结果。
+现在已经不只是“读过 KV Cache 和 Batch”：我实现了 No Cache、Dynamic Cache、Preallocated Cache 与固定形状的 Batched Decode，用数值 Oracle 约束正确性，保留了原始计时样本，还定位并修正了 BLAS 线程造成的异常结果。P0 的 NumPy 语义练习与 M1 的 Batch Size 曲线已经完成；M2-A1 也用 Shape、元素映射和内存共享测试固定了 Head 轴变换。
 
 这意味着最小机制学习已经形成一次完整闭环：
 
@@ -506,7 +506,7 @@ request rate / client concurrency
   -> 修正结论边界
 ```
 
-当前真正的能力缺口，是把这套方法迁移到一个**会排队、会饱和、会消耗 KV 容量，并由 Scheduler 动态形成 Batch** 的系统。继续给 NumPy Toy 增加完整 Transformer、MLP 或采样器，新增代码很多，却不会直接回答这个缺口。
+当前第一处能力缺口是完成 M2：先把 Head 契约迁移到 Q/K/V，再验证 MHA/GQA 映射与 KV 容量。M2 通过后的能力缺口，才是把这套方法迁移到一个**会排队、会饱和、会消耗 KV 容量，并由 Scheduler 动态形成 Batch** 的系统。继续给 NumPy Toy 增加完整 Transformer、MLP 或采样器，新增代码很多，却不会直接回答这些缺口。
 
 ### 8.2 为什么要按这个顺序推进？
 
@@ -543,8 +543,8 @@ Gate 是依赖，不只是日历进度。前一道门没有通过时，应修复
 
 ## Week 1：补完机制
 
-- 扫描 `B∈{1,2,4,8}`，区分总耗时、单 Sequence 延迟与 Positions/s
-- 实现 MHA/GQA，验证 Query Head 到 KV Head 的映射与 KV 字节数
+- 已完成 `B∈{1,2,4,8}` 扫描，区分总耗时、单 Sequence 摊销成本与 Positions/s
+- 当前完成 Q/K/V Shape 与输入契约，再实现 MHA/GQA 映射并验证 KV 字节数
 - 到此停止扩建 Toy Attention
 
 ## Week 2：冻结真实系统

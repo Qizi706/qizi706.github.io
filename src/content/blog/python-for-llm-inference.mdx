@@ -2,7 +2,7 @@
 title: '给 C++ 使用者的 Python 复健：为 LLM 推理实验补齐最小基础'
 description: '面向当前 AI Infra 学习任务的 Python 最小知识集：从对象绑定、类型注解和工程结构，到 NumPy Shape、view/copy、broadcasting、Benchmark 与 asyncio。'
 pubDate: '2026-08-17T22:30:00+08:00'
-updatedDate: '2026-08-17T22:30:00+08:00'
+updatedDate: '2026-08-21T02:04:01+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -383,7 +383,7 @@ if __name__ == "__main__":
 <CoreCard title="当前实验项目的基本命令" class="title-underline">
 
 ```bash
-cd public/labs/kv-cache-batch
+cd labs/kv-cache-batch
 uv sync
 
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
@@ -801,6 +801,8 @@ finish_ns       stream finishes or fails
 
 ### 9.1 P0：对象与 ndarray 语义
 
+**Status：Completed。** 六类实验的预测、实际结果、差异解释和闭卷口述已经保存在 [P0 记录](/labs/kv-cache-batch/view/docs/gates/P0.md/)；后续不再为“复习 Python”增加脱离主线的练习。
+
 **Question：** 哪些操作共享状态，哪些操作复制数据？
 
 **Action：** 为 `list` 赋值、浅复制、NumPy Slice、Advanced Indexing、`swapaxes` 和 `concatenate` 分别写一个 5 行以内的小实验。
@@ -809,7 +811,7 @@ finish_ns       stream finishes or fails
 
 **Acceptance：** 在运行前就能预测六个实验的结果，并解释一次预测错误。
 
-### 9.2 P1：完成当前 M1 Batch Size 扫描
+### 9.2 M1：Batch Size 扫描（已完成）
 
 **Question：** 固定 `T=128` 时，`B=1/2/4/8` 怎样改变 Wall Time、每 Sequence 成本与 Positions/s？
 
@@ -818,7 +820,7 @@ finish_ns       stream finishes or fails
 1. 为 Benchmark 增加 Batch Size 列表；
 2. 每个 B 与逐 Sequence Oracle 对照；
 3. 固定 Dtype、Seed 与 BLAS Thread；
-4. 每组 3 次 Warm-up、30 次正式计时；
+4. 每组 10 次 Warm-up、30 次正式计时；
 5. 保存原始 CSV，汇总 P50/P95。
 
 **Acceptance：**
@@ -826,94 +828,68 @@ finish_ns       stream finishes or fails
 - 所有 B 通过数值与 Shape 检查；
 - 能解释吞吐提高为什么不等于单请求更快；
 - 如果没有饱和拐点，结论写成 `Not reached`；
-- 结果回写[阶段 2 实验文章](/blog/vllm-inference-performance-lab/)。
+- 结果写入可复查的 [Batch Size Scan 证据目录](/labs/kv-cache-batch/view/results/batch-size-scan/)。
 
-### 9.3 P2：实现最小 Async Concurrency Harness
+**Result：** 240 条原始样本与两张曲线可重建；`B=8` 首次满足相邻吞吐增幅低于 10% 的 Knee 定义。
 
-**Question：** 16 个请求、Concurrency 4 与服务端实际 Batch 有什么区别？
+### 9.3 M2：Q/K/V Shape 与输入契约（进行中）
 
-**Action：** 先使用 `asyncio.sleep` 模拟流式请求，记录 Arrival、Admission、First Token、每个 Token 与 Finish；再替换成真实 HTTP Stream。
+**Question：** 当 `H_q != H_kv` 时，同一个 Head 拆分规则怎样约束 Q/K/V，并在错误 Shape 进入 `reshape` 前拒绝它？
 
-**Artifact：** 每请求 JSONL 和一张 Client Queue / TTFT / ITL 时间线。
+**Action：** A1 已完成 `split_heads`；A2 先写 Shape、元素 Oracle 和五类非法配置测试，再实现 Q/K/V 投影与最小校验。
 
-**Acceptance：** 能证明 Semaphore 限制的是客户端同时执行请求数，而不是 vLLM 每轮 Sequence Batch。
+**Artifact：** `multi_head.py`、`test_multi_head.py` 与 [M2 工作表](/labs/kv-cache-batch/view/docs/gates/M2.md/)。
+
+**Acceptance：** `Q=[2,4,5,3]`、`K/V=[2,2,5,3]` 的 Shape 与非零坐标 Oracle 通过；五类非法配置抛出 `ValueError`；A1 与完整回归无退化。
 
 ## 10. 按今天的进度，下一次学习怎样安排？
 
-今天已经完成的不是“看过 Batch 定义”，而是下面这条证据链：
+当前已经完成的不是“看过 NumPy 和 Batch 定义”，而是下面这条证据链：
 
 ```text
-两个独立 Sequence
-  -> 组织成 [B, T, D]
-  -> 与逐 Sequence Oracle 对照
-  -> 测量 Sequential 与 Batched Wall Time
-  -> 观察到 1.35x～1.69x 的受限收益
-  -> 能解释 Batch 摊薄调用开销，但不消除 Attention 工作
+P0：预测并验证 View / Copy / Stride / Buffer
+  -> M1：B=1/2/4/8 正确性 + 240 条原始样本 + Knee=B=8
+  -> M2-A1：split_heads 的 Shape + 元素映射 + 内存共享
+  -> 完整 9 项回归测试通过
 ```
 
-所以下一次学习只推进一个问题：**固定 `T=128` 时，Batch Size 从 1 增加到 8，吞吐和完成时间分别怎样变化？**
+所以下一次学习只推进一个问题：**怎样让 Q/K/V 共用一套明确的投影与 Head Shape 契约，并让非法参数在 `reshape` 前失败？**
 
-### 10.1 20 分钟：Python / NumPy 热身
+### 10.1 15 分钟：先预测
 
-不要继续阅读整章教程。直接写六个小实验，先预测再运行：
-
-1. `b = a` 修改是否传播；
-2. `a.copy()` 修改是否传播；
-3. `x[:, 0:1, :]` 是否与 `x` 共享内存；
-4. `x[[0, 1]]` 是否与 `x` 共享内存；
-5. `swapaxes` 后 Shape 和 Stride 如何变化；
-6. `concatenate` 是否重新分配数据。
-
-**产出：** 在个人实验记录里保留一张 `prediction / actual / explanation` 表。六项中如果有预测错误，优先解释错误，不需要追求一次全对。
-
-### 10.2 60 分钟：把固定 `B=2` 改造成 Batch Size 扫描
-
-只修改 `benchmark.py` 的实验控制层，不改 Attention 算法：
-
-```python
-BATCH_SIZES = (1, 2, 4, 8)
-SEQUENCE_LENGTH = 128
-```
-
-对每个 `B`：
-
-1. 构造一次 `[B, T, D_model]` 输入；
-2. 用逐 Sequence 路径生成 Oracle；
-3. 检查输出和 K/V Cache Shape；
-4. Warm-up 3 次，正式计时 30 次；
-5. 保存全部原始样本，不只打印中位数。
-
-先写下预测：Positions/s 会先提高，但 Batch Wall Time 也可能增加；如果 `B=8` 仍未出现收益收窄，就把拐点结论写成 `Not reached`。
-
-### 10.3 35 分钟：把一个耗时拆成三个指标
-
-每个 `B` 至少计算：
+关闭 A1 代码，固定：
 
 ```text
-batch_wall_ms       = batched execution wall time
-per_sequence_ms     = batch_wall_ms / B
-positions_per_s     = B * T / (batch_wall_ms / 1000)
+B=2, T=5, D_model=7, H_q=4, H_kv=2, D_head=3
 ```
 
-同时报告 P50 和 P95。回答三个不同问题：
+在 [M2 工作表](/labs/kv-cache-batch/view/docs/gates/M2.md/) 中填写 X、权重和 Q/K/V 的 Shape，预测投影与拆 Head 的 Buffer 关系，再手算 Q、K 各一个非零坐标。
 
-- Batch Wall Time 是否随 `B` 增长？
-- 每 Sequence 的摊销成本是否下降？
-- 总 Positions/s 是否仍近似线性增长？
+### 10.2 15 分钟：只读当天会用到的文档
 
-不要把 `batch_wall_ms / B` 写成真实在线请求延迟；当前等长 Sequence 同时进入和同时结束，还没有 Queue、Arrival 或 Continuous Batching。
+阅读范围固定，不展开教程：
 
-### 10.4 35 分钟：更新阶段 2 证据
+- NumPy [`matmul`](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html)：只看 N 维 Shape 规则与不匹配错误；
+- NumPy [Copies and Views](https://numpy.org/doc/stable/user/basics.copies.html)：只看 View、Copy 与 `reshape`；
+- Python [`unittest`](https://docs.python.org/3/library/unittest.html)：只看 `subTest` 与 `assertRaises`。
 
-把命令、环境、原始 CSV、汇总表和一张曲线回写到[阶段 2 实验文章](/blog/vllm-inference-performance-lab/)。结论必须分别写：
+每份材料只留一句“它确认或修正了哪条预测”。预测必须在阅读前保存，15 分钟到点后立即进入测试。
 
-- **Observed：** 数据实际显示了什么；
-- **Explanation：** Python/NumPy 固定开销、数组分配和矩阵工作怎样共同影响曲线；
-- **Boundary：** CPU Toy Lab 不能证明哪些 vLLM/GPU 行为。
+### 10.3 25 分钟：先写失败测试
+
+只增加三组证据：Q/K/V Shape、至少两个非零坐标的独立元素 Oracle，以及覆盖五类非法输入的表驱动测试。先保存缺少实现时的第一次失败，不把待测函数自己的输出当作 Oracle。
+
+### 10.4 45 分钟：实现并修正最小契约
+
+用前 30 分钟实现 `split_heads` 校验与 `project_qkv`，后 15 分钟只依据失败信息修正 Shape 或输入边界。禁止加入 Score、Causal Mask、Softmax、KV Cache 和 GQA Head 映射。
+
+### 10.5 20 分钟：回归与闭卷重建
+
+先运行 M2 定向测试和完整测试套件；最后关闭代码，重新推导权重宽度与 Q/K/V Shape，并填写 Result、What changed 与 Next decision。
 
 <CoreCard title="本次停止条件" class="title-underline">
 
-所有 `B=1/2/4/8` 通过 Oracle 和 Shape 检查；CSV 中每条路径、每个 B 都有 30 条样本；能够用不同句子解释 Batch Wall Time、每 Sequence 摊销成本和总吞吐。满足后就停止继续打磨 NumPy Benchmark，进入 MHA/GQA 的 KV Shape 与容量实验。
+Shape、元素 Oracle、五类非法配置、A1 与完整回归全部通过，并能关闭代码重做 Shape 推导。满足后进入 `H_q=H_kv` 的无 Cache MHA Oracle；任一项失败就继续修正 A2，不用更多阅读量掩盖失败。
 
 </CoreCard>
 
@@ -934,7 +910,7 @@ positions_per_s     = B * T / (batch_wall_ms / 1000)
 
 <Note title="真正的复健方式" class="title-underline">
 
-不要先花一周看完 Python 教程，再回来做实验。正确顺序是：读完一小节，立即在 `kv-cache-batch` 中找到对应代码，先预测行为，再修改、测试和解释。完成 P1 后，Python 基础已经从“重新看过”变成了当前 AI Infra 主线中的可审查能力。
+不要先花一周看完 Python 教程，再回来做实验。正确顺序是：先保存预测，只读当天第一段代码会用到的小节，然后立即修改、测试和解释。P0 与 M1 已把 Python 基础变成可审查能力；当前 A2 用矩阵 Shape、输入校验和失败测试继续复用它，而不是重新开始一轮教程。
 
 </Note>
 
