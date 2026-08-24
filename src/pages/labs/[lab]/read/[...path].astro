@@ -1,0 +1,57 @@
+---
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createMarkdownProcessor, parseFrontmatter } from '@astrojs/markdown-remark';
+import MitLabMarkdown from '../../../../layouts/MitLabMarkdown.astro';
+import rehypeLabArtifactLinks from '../../../../plugins/rehype-lab-artifact-links.mjs';
+import {
+	collectLabArtifacts,
+	discoverLabs,
+	resolveLabArtifactPath,
+} from '../../../../utils/lab-artifacts.mjs';
+
+export async function getStaticPaths() {
+	const paths = [];
+	for (const labName of await discoverLabs()) {
+		const artifacts = await collectLabArtifacts(labName);
+		paths.push(
+			...artifacts
+				.filter((artifact) => path.posix.extname(artifact.path).toLowerCase() === '.md')
+				.map((artifact) => ({
+					params: { lab: labName, path: artifact.path.slice(0, -'.md'.length) },
+					props: { labName, artifactPath: artifact.path },
+				})),
+		);
+	}
+	return paths;
+}
+
+interface Props {
+	labName: string;
+	artifactPath: string;
+}
+
+const { labName, artifactPath } = Astro.props;
+const sourcePath = resolveLabArtifactPath(labName, artifactPath);
+const source = await readFile(sourcePath, 'utf8');
+const { content, frontmatter } = parseFrontmatter(source, { frontmatter: 'remove' });
+const renderer = await createMarkdownProcessor({
+	gfm: true,
+	smartypants: false,
+	syntaxHighlight: false,
+	rehypePlugins: [[rehypeLabArtifactLinks, { labName, artifactPath }]],
+});
+const rendered = await renderer.render(content, {
+	fileURL: pathToFileURL(sourcePath),
+	frontmatter,
+});
+const title =
+	(typeof frontmatter.title === 'string' && frontmatter.title) ||
+	rendered.metadata.headings.find((heading) => heading.depth === 1)?.text ||
+	path.posix.basename(artifactPath, '.md');
+---
+
+<MitLabMarkdown {title}>
+	<Fragment set:html={rendered.code} />
+</MitLabMarkdown>

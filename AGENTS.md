@@ -1,12 +1,12 @@
 ## Development
 
-When starting the dev server, use background mode:
+Start the dev server in foreground mode:
 
 ```
-astro dev --background
+npm run dev
 ```
 
-Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
+Stop the server with `Ctrl-C` in the same terminal.
 
 ## Documentation
 

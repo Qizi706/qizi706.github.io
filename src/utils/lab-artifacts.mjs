@@ -345,6 +345,15 @@ export function getLabArtifactRawHref(labName, artifactPath) {
 	return getLabBasePath(labName) + encodeLabArtifactPath(normalizedPath);
 }
 
+export function getLabMarkdownHref(labName, artifactPath) {
+	const normalizedPath = normalizeRelativePath(artifactPath, 'artifact path');
+	if (path.posix.extname(normalizedPath).toLowerCase() !== '.md') {
+		throw new Error(`Markdown artifact must use the .md extension: ${artifactPath}`);
+	}
+	const documentPath = normalizedPath.slice(0, -'.md'.length);
+	return `${getLabBasePath(labName)}read/${encodeLabArtifactPath(documentPath)}/`;
+}
+
 export function getLabDirectoryHref(labName, directoryPath = '') {
 	const normalizedDirectory = normalizeArtifactDirectoryPath(directoryPath);
 	const basePath = getLabBasePath(labName);
