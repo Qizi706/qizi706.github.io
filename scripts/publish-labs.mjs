@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, rename, rm, utimes, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
 	collectLabArtifactDirectories,
@@ -16,6 +16,7 @@ const expectedPublicLabsRoot = path.resolve(publicRoot, 'labs');
 const siteOrigin = 'https://zqwiki.cn';
 const nameColumnWidth = 51;
 const sizeColumnWidth = 20;
+const reproducibleArchiveTimestamp = new Date(0);
 if (path.resolve(publicLabsRoot) !== expectedPublicLabsRoot) {
 	throw new Error(`Refusing to replace unexpected publication root: ${publicLabsRoot}`);
 }
@@ -78,15 +79,17 @@ function createArchiveBuffer(labName, stagingRoot, artifacts) {
 			'--file=-',
 			'--directory',
 			stagingRoot,
-			'--sort=name',
-			'--mtime=UTC 1970-01-01',
 			'--owner=0',
 			'--group=0',
 			'--numeric-owner',
 			'--format=ustar',
 			...archiveEntries,
 		],
-		{ encoding: null, maxBuffer: 128 * 1024 * 1024 },
+		{
+			encoding: null,
+			env: { ...process.env, COPYFILE_DISABLE: '1' },
+			maxBuffer: 128 * 1024 * 1024,
+		},
 	);
 	if (tarResult.status !== 0) {
 		throw new Error(`Failed to archive ${labName}: ${tarResult.stderr?.toString()}`);
@@ -114,10 +117,12 @@ try {
 
 	for (const labName of labs) {
 		const { manifest, artifacts } = await validateLab(labName);
+		const stagedArtifacts = [];
 		for (const artifact of artifacts) {
 			const targetPath = path.join(stagingRoot, labName, ...artifact.path.split('/'));
 			await mkdir(path.dirname(targetPath), { recursive: true });
 			await copyFile(artifact.absolutePath, targetPath);
+			stagedArtifacts.push({ artifact, targetPath });
 
 			if (artifact.viewable) {
 				const textMirrorPath = path.join(
@@ -131,7 +136,20 @@ try {
 			}
 		}
 
+		// collectLabArtifacts() returns paths in a stable order. Normalizing the
+		// staged mtimes makes the archive reproducible without GNU-only tar flags.
+		await Promise.all(
+			stagedArtifacts.map(({ targetPath }) =>
+				utimes(targetPath, reproducibleArchiveTimestamp, reproducibleArchiveTimestamp),
+			),
+		);
 		const archiveBuffer = createArchiveBuffer(labName, stagingRoot, artifacts);
+		await Promise.all(
+			stagedArtifacts.map(({ artifact, targetPath }) => {
+				const modifiedDate = new Date(artifact.modifiedTimestamp);
+				return utimes(targetPath, modifiedDate, modifiedDate);
+			}),
+		);
 		await writeFile(path.join(stagingRoot, `${labName}.tar.gz`), archiveBuffer);
 		await writeLabDirectoryIndexes(stagingRoot, labName, artifacts);
 		const latestArtifact = artifacts.reduce((latest, artifact) =>

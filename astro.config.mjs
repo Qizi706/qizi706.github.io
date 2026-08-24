@@ -7,6 +7,7 @@ import { defineConfig, fontProviders } from 'astro/config';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
 import kvCacheLab from './labs/kv-cache-batch/lab.json';
+import labDevServer from './src/integrations/lab-dev-server.mjs';
 import rehypeCallouts from './src/plugins/rehype-callouts.mjs';
 import { legacyPostRedirects } from './src/legacy-post-redirects.mjs';
 import { pygmentsDefaultTheme } from './src/themes/pygments-default.mjs';
@@ -23,6 +24,7 @@ export default defineConfig({
 	redirects: legacyPostRedirects,
 	integrations: [
 		mdx(),
+		labDevServer(),
 		sitemap({
 			filter: (page) => {
 				const pathname = new URL(page).pathname;
