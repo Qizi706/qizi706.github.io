@@ -15,6 +15,7 @@
 	--frame-border: #e5e7eb;
 	--content-width: 768px;
 	--shell-width: 1024px;
+	--card-radius: 0.375rem;
 	--font-heading: var(--font-merienda);
 	--font-body: 'Kalam', 'Sans Serif', sans-serif;
 	--font-sans: sans-serif;
@@ -355,7 +356,7 @@ hr {
 	padding: 0.7rem 0.9rem;
 	border: 1px solid color-mix(in srgb, var(--callout-color) 35%, transparent);
 	border-left: 3px solid var(--callout-color);
-	border-radius: 5px;
+	border-radius: var(--card-radius);
 	background: color-mix(in srgb, var(--callout-color) 7%, white);
 }
 
@@ -402,7 +403,7 @@ hr {
 	margin: 0.5rem 1rem 0.25rem;
 	padding: 0.5rem 1rem;
 	border: 1px solid rgb(148 163 184);
-	border-radius: 0.375rem;
+	border-radius: var(--card-radius);
 	box-shadow:
 		0 4px 6px -1px rgba(0, 0, 0, 0.1),
 		0 2px 4px -2px rgba(0, 0, 0, 0.1);
@@ -571,7 +572,7 @@ hr {
 	flex-direction: column;
 	padding: 0.5rem 1rem;
 	border: 1px solid rgb(148 163 184);
-	border-radius: 0.375rem;
+	border-radius: var(--card-radius);
 	box-shadow:
 		0 4px 6px -1px rgba(0, 0, 0, 0.1),
 		0 2px 4px -2px rgba(0, 0, 0, 0.1);
