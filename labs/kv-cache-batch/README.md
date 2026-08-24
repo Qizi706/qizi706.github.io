@@ -202,18 +202,18 @@ Batch Size Scan 使用 3 次 Warm-up 时，首个运行组合的前 5 次与后 
 
 ## 下一步
 
-P0 与 M1 已完成：NumPy 语义记录通过验收，Batch Size 的原始样本、汇总、两张独立曲线和 Knee 判断都可从 `raw.csv` 重建。M2-A1 也已完成：`split_heads` 通过 3 项定向测试，完整 9 项回归测试通过。
+P0 与 M1 已完成：NumPy 语义记录通过验收，Batch Size 的原始样本、汇总、两张独立曲线和 Knee 判断都可从 `raw.csv` 重建。M2-A1 与 M2-A2 也已完成：`split_heads` 和 `project_qkv` 已通过 Shape、元素映射、内存共享与输入契约测试；A2 定向 6 项、完整 12 项回归测试通过，并完成闭卷 Shape 推导。
 
-当前唯一任务是 **M2-A2**：把同一个 Head 拆分契约迁移到 Q/K/V，并在错误 Shape 进入 `reshape` 前拒绝它。具体预测、120 分钟顺序和验收清单见 [`docs/gates/M2.md`](docs/gates/M2.md)。
+当前唯一任务是 **M2-B**：先固定 `H_q=H_kv`，对已经拆成 `[B,H,T,D_head]` 的 Q/K/V 实现无 Cache Scaled Dot-Product Causal Attention。具体预测、120 分钟顺序和验收清单见 [`docs/gates/M2.md`](docs/gates/M2.md)。
 
 **预测：**
 
 ```text
-A2-H1：固定 B=2、T=5、D_model=7、H_q=4、H_kv=2、D_head=3，
-       Q Shape 为 [2,4,5,3]，K/V Shape 为 [2,2,5,3]。
-A2-H2：矩阵投影创建新 Buffer，split_heads 结果与各自投影结果共享内存。
-A2-H3：输入维度、Head 数、投影宽度或 D_head 契约不成立时，
-       实现在 reshape 前抛出 ValueError。
+B-H1：固定 B=2、H=3、T=4、D_head=5，
+      Score/Weight Shape 为 [2,3,4,4]，逐 Head Output Shape 为 [2,3,4,5]。
+B-H2：修改位置 i 之后的 K/V，不会改变位置 i 及之前的输出。
+B-H3：修改一个 Head 或一个 Batch 的输入，只会改变对应切片；
+      Softmax 只沿最后一个历史 Token Axis 归一化。
 ```
 
-A2 通过前不实现 Score、Causal Mask、Softmax、KV Cache 或 GQA Head 映射；通过后进入 `H_q=H_kv` 的无 Cache MHA Oracle。
+M2-B 只实现 Score、Causal Mask、Softmax 和逐 Head `Weight @ V`；本轮不合并 Head，不实现 KV Cache、GQA Head 映射或 Output Projection。B 通过后进入 M2-C Cached MHA。

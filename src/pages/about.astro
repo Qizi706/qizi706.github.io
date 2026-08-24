@@ -18,7 +18,7 @@ const phase2Evidence = phase2Progress.evidence;
 	title="Systems & AI Infrastructure"
 	description="系统软件项目、可复现实验、AI Infrastructure 学习路线与 AI 协作原则"
 	pubDate={new Date('2026-08-06')}
-	updatedDate={new Date('2026-08-21')}
+	updatedDate={new Date('2026-08-25')}
 	hideTitleDivider
 >
 	<section class="profile-brief" aria-label="技术方向与工作方法">
@@ -354,24 +354,24 @@ constraint: KV Cache consumes GPU memory</code></pre>
 				</article>
 				<article class="is-current">
 					<span>08.19 — 08.25 / week 02</span>
-					<h4>结束 Toy 机制，冻结真实 vLLM · active</h4>
+					<h4>完成 A1/A2，启动无 Cache MHA · active</h4>
 					<p>{currentGate.id}：{currentGate.objective}</p>
 					<p class="week-gate"><b>gate</b> M2 acceptance → S0 snapshot</p>
 				</article>
 				<article>
 					<span>08.26 — 09.01 / week 03</span>
-					<h4>稳态、显存与输入长度 · pending</h4>
-					<p>完成 S1 单并发稳态与显存组成表，再用 S2 对比短、中、长 Prompt。</p>
-					<p class="week-gate"><b>gate</b> TTFT/TPOT + memory ledger + input-length curves</p>
+					<h4>关闭 M2，冻结真实 vLLM · pending</h4>
+					<p>完成 MHA/GQA 与 KV 容量表，再完成 S0 环境快照和 S1 单并发稳态基线。</p>
+					<p class="week-gate"><b>gate</b> M2 capacity table + S0 snapshot + S1 baseline</p>
 				</article>
 				<article>
 					<span>09.02 — 09.08 / week 04</span>
-					<h4>并发与调度批量 · pending</h4>
+					<h4>输入长度、并发与调度批量 · pending</h4>
 					<p>
-						完成 S3 Client Concurrency 和 S4 Scheduler Budget，区分客户端负载、配置上限与实际
-						Batch。
+						完成 S2 Input Length、S3 Client Concurrency 和 S4 Scheduler
+						Budget，区分客户端负载、配置上限与实际 Batch。
 					</p>
-					<p class="week-gate"><b>gate</b> saturation point + tail latency + scheduler evidence</p>
+					<p class="week-gate"><b>gate</b> input curves + saturation point + scheduler evidence</p>
 				</article>
 				<article class="review-window">
 					<span>09.09 — 09.12 / review</span>

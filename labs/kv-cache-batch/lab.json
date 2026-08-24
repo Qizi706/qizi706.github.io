@@ -120,51 +120,58 @@
 				"title": "只完成 Query Head 轴变换",
 				"summary": "split_heads 已通过 Shape、非零坐标元素映射和内存共享三项测试；完整 9 项回归测试通过。",
 				"featured": true
+			},
+			{
+				"id": "M2-A2",
+				"period": "2026.08.22 — 2026.08.25",
+				"title": "Q/K/V 投影与输入契约",
+				"summary": "project_qkv 已通过 Shape、两个非零坐标 Oracle 和五类非法配置测试；A2 定向 6 项与完整 12 项回归测试通过，并完成闭卷 Shape 推导。",
+				"featured": true
 			}
 		],
 		"current": {
-			"id": "M2-A2",
-			"period": "2026.08.22 · 120 min",
-			"title": "建立 Q/K/V 投影与输入契约",
-			"objective": "让同一个 Head 拆分规则作用于 Q/K/V，并在错误 Shape 进入 reshape 前拒绝它；只完成投影、轴变换与校验，不进入 Attention 计算。",
-			"question": "当 H_q 不等于 H_kv 时，怎样证明 Q/K/V 各自的 Head 轴正确，并让非法宽度明确失败？",
-			"prediction": "固定参数应得到 Q=[2,4,5,3]、K/V=[2,2,5,3]；投影创建新 Buffer，拆 Head 只改变视图，非法配置应在 reshape 前失败。",
+			"id": "M2-B",
+			"period": "2026.08.25 · 120 min",
+			"title": "无 Cache MHA Oracle",
+			"objective": "在 H_q=H_kv 条件下，让每个 Batch、每个 Head 独立完成 Scaled Dot-Product Causal Attention，并用独立 Oracle 证明 Score 轴、Mask、Softmax 轴和输出元素都正确。",
+			"question": "给定 Q/K/V=[B,H,T,D_head]，怎样证明批量矩阵乘法没有混合 Batch 或 Head，并且每个位置只能对历史 Token 归一化？",
+			"prediction": "固定 B=2、H=3、T=4、D_head=5 时，Score/Weight=[2,3,4,4]、逐 Head 输出=[2,3,4,5]；修改未来 Token、其他 Head 或其他 Batch 不应污染目标位置。",
 			"preRead": [
 				{
-					"label": "NumPy matmul",
+					"label": "NumPy matmul stacked matrices",
 					"href": "https://numpy.org/doc/stable/reference/generated/numpy.matmul.html"
 				},
 				{
-					"label": "NumPy Copies and Views",
-					"href": "https://numpy.org/doc/stable/user/basics.copies.html"
+					"label": "NumPy swapaxes",
+					"href": "https://numpy.org/doc/stable/reference/generated/numpy.swapaxes.html"
 				},
 				{
-					"label": "unittest subTest / assertRaises",
-					"href": "https://docs.python.org/3/library/unittest.html"
+					"label": "NumPy triu",
+					"href": "https://numpy.org/doc/stable/reference/generated/numpy.triu.html"
 				}
 			],
-			"artifact": "multi_head.py、test_multi_head.py，以及 M2 工作表中的预测、首次失败和反思记录。",
-			"acceptance": "固定参数得到 Q=[2,4,5,3]、K/V=[2,2,5,3]；元素 Oracle、非法配置和完整回归测试全部通过。",
+			"artifact": "multi_head.py、test_multi_head.py，以及 M2 工作表中的 Shape 推导、独立标量 Oracle、首次失败和闭卷解释。",
+			"acceptance": "Score、Weight 与逐 Head 输出 Shape 正确；至少两个非零坐标匹配独立标量 Oracle；因果性、Batch/Head 隔离、输入契约与完整回归全部通过；关闭代码后能解释缩放与 Softmax 轴。",
 			"steps": [
-				"15 min：填写 Shape、Buffer 与坐标预测。",
-				"15 min：完成三处定向阅读，只记录对预测的确认或修正。",
-				"25 min：先写 Shape、元素 Oracle、非法配置三组测试，保存第一次失败。",
-				"30 min：实现最小输入校验与 project_qkv，不写 Score、Mask、Softmax 或 Cache。",
-				"15 min：只依据失败信息修正 Shape 或输入契约。",
-				"10 min：运行 A2 定向测试与完整测试套件。",
-				"10 min：关闭代码重写 Shape 推导，填写结果与下一步判断。"
+				"10 min：关闭实现，填写 Q@K^T、Mask、Softmax 与 Output 的 Shape/轴预测。",
+				"15 min：只读 matmul、swapaxes 与 triu 的相关段落，各留一句确认或修正。",
+				"30 min：先写独立标量 Oracle、Future Token、Head/Batch 隔离和非法 Shape 测试，保存第一次失败。",
+				"30 min：实现无 Cache MHA 核心，只返回逐 Head Output 与 Weight，不合并 Head。",
+				"15 min：只依据失败信息修正 Score、Mask 或 Softmax Axis。",
+				"10 min：运行 M2-B 定向测试与完整回归测试。",
+				"10 min：关闭代码重做坐标推导，并解释为什么除以 sqrt(D_head)。"
 			],
-			"nextDecision": "七项 A2 门禁全部通过后，才进入 H_q=H_kv 的无 Cache MHA Oracle；任一项失败就继续修正 A2。",
+			"nextDecision": "M2-B 全部门禁通过后进入 M2-C Cached MHA；任一项失败就继续修正 B，不提前实现 Cache、GQA Head 映射或 Output Projection。",
 			"document": "docs/gates/M2.md"
 		},
 		"next": {
-			"id": "M2-B",
-			"title": "No-cache MHA Oracle"
+			"id": "M2-C",
+			"title": "Cached MHA"
 		},
 		"evidence": {
-			"tests": 9,
+			"tests": 12,
 			"rawSamples": 540,
-			"summary": "300 length-scan + 240 batch-size samples · rebuildable aggregates · two figures · Knee analysis"
+			"summary": "A2 projection contracts · 300 length-scan + 240 batch-size samples · rebuildable aggregates · two figures · Knee analysis"
 		}
 	}
 }

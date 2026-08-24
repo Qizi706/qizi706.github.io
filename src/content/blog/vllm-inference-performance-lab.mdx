@@ -2,7 +2,7 @@
 title: 'LLM 推理机制实验：KV Cache、预分配与 Batch Size'
 description: '阶段 2 的中间机制产出：用最小 NumPy Causal Attention 验证 KV Cache、预分配和 Batched Decode，并为真实 vLLM Serving 实验建立可证伪预测。'
 pubDate: '2026-08-16T20:30:00+08:00'
-updatedDate: '2026-08-21T02:04:01+08:00'
+updatedDate: '2026-08-25T04:03:46+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -45,12 +45,12 @@ mathjax: true
 
 </Note>
 
-<Note title="截至 2026-08-21 的进度" class="title-underline">
+<Note title="截至 2026-08-25 的进度" class="title-underline">
 
 - M0 已实现 Cache、预分配和固定 <code>B=2</code> 的 Batched Decode；当前公开归档保留 300 条 Batch Length 原始样本。Cache Strategy 的历史结论仍保留，但当前复现包缺少 450 条逐样本数据，因此不能独立重建。
 - M1 已完成 <code>B=1/2/4/8</code> 正确性检查、240 条原始样本、P50/P95 汇总、两张独立曲线和 Knee 判定。
 - P0 已完成 Binding、View/Copy、Advanced Indexing、<code>swapaxes</code> 与 <code>concatenate</code> 的预测、运行记录、差异解释和闭卷验收。
-- M2 正在进行：A1 的 <code>split_heads</code> 已通过 Shape、非零坐标元素映射和内存共享 3 项测试，完整 9 项回归测试通过；当前唯一任务是 A2 的 Q/K/V 投影与输入契约。
+- M2 正在进行：A1/A2 已完成 Head 拆分、Q/K/V 投影、两个非零坐标 Oracle、五类非法配置与闭卷 Shape 推导，A2 定向 6 项和完整 12 项回归测试通过；当前唯一任务是 B 的无 Cache MHA Oracle。
 
 </Note>
 
@@ -481,16 +481,16 @@ kv-cache-batch/
 
 F0 将使用真实 vLLM 数据单独完成《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》。在那之前，本页标题保持“机制实验”，不会因为计划已经写好就升级证据等级。
 
-<Note title="当前只做 M2-A2" class="title-underline">
+<Note title="当前只做 M2-B" class="title-underline">
 
-**Question：** 怎样让 Q/K/V 投影共享一套明确的输入、宽度与 Head Shape 契约？
+**Question：** Q/K/V 已经是 `[B,H,T,D_head]` 时，怎样证明 Score、Mask、Softmax 和 `Weight @ V` 没有混合 Batch、Head 或 Future Token？
 
-**Action：** 在现有 `split_heads` 基础上补充 Q/K/V 投影，并覆盖输入维度、Head 数、投影宽度、权重宽度和 `D_head` 不一致等失败情况。
+**Action：** 固定 `H_q=H_kv`，先写独立标量 Oracle、Future Token 与 Head/Batch 隔离测试，再实现无 Cache MHA；本轮不加入 Cache、GQA 映射、Head 合并或 Output Projection。
 
-**Acceptance：** Shape、元素 Oracle、非法配置与完整回归测试全部通过；在此之前不把 M2 标成完成，也不进入真实 Serving。
+**Acceptance：** Score/Weight 与逐 Head Output Shape、两个非零坐标 Oracle、因果性、归一化、隔离性、非法 Shape 和完整回归全部通过；在此之前不进入 M2-C。
 
 **Next Decision：** M2 的 MHA/GQA 映射、Cache 等价性和 KV 容量公式全部通过后，再进入 S0，冻结真实 vLLM 版本、启动命令与可观测能力。
 
 </Note>
 
-当前任务的预测、前置阅读和逐项验收见 [M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md)。后续 Gate 只有在真实产物产生后才回写本文；没有数据时使用 `Inconclusive` 或 `Pending`，不把计划写成结果。
+M2-B 的预测、前置阅读和逐项验收见 [M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md)。后续 Gate 只有在真实产物产生后才回写本文；没有数据时使用 `Inconclusive` 或 `Pending`，不把计划写成结果。

@@ -2,7 +2,7 @@
 title: '只有编辑器和构建工具，如何从零构建一个完整系统？'
 description: '以正在生长的 KV Cache 与 Serving Lab 为例：从一条可观察行为开始，经过测试、失败、自动化、重构和交接，让完整、可读的项目自然长出来。'
 pubDate: '2026-08-19T23:20:00+08:00'
-updatedDate: '2026-08-21T02:04:01+08:00'
+updatedDate: '2026-08-25T04:03:46+08:00'
 categories:
   - '随笔'
 tags:
@@ -216,16 +216,16 @@ summarize_batch_size.py   读取事实，生成解释材料
 
 ### 5.3 第三次压力：单 Head 模型解释不了真实 KV 容量
 
-当前项目正在推进 M2。已有的 `attention.py` 仍是单 Head，但 M2-A1 已经把 Head 轴从扁平特征中可靠地拆出：`split_heads` 通过了 Shape、非零坐标元素映射和内存共享测试，完整 9 项回归测试也保持通过。
+当前项目正在推进 M2。已有的 `attention.py` 仍是单 Head；M2-A1 已经把 Head 轴从扁平特征中可靠地拆出，M2-A2 又把这套规则迁移到 Q/K/V，并增加输入契约。A2 定向 6 项、完整 12 项回归测试和闭卷 Shape 推导均已通过。
 
-这时才准备增加：
+这时项目才增加：
 
 ```text
 src/kv_cache_lab/multi_head.py
 tests/test_multi_head.py
 ```
 
-这一步仍然不是完整 Attention，只是一个轴变换：
+第一步仍然不是完整 Attention，只是一个轴变换：
 
 ```python
 def split_heads(projected: np.ndarray, num_heads: int) -> np.ndarray:
@@ -234,7 +234,7 @@ def split_heads(projected: np.ndarray, num_heads: int) -> np.ndarray:
 
 为什么如此小？因为 `[B, T, H × D_head] -> [B, H, T, D_head]` 有两个不同的失败方式：Shape 可以正确，Head 和 Sequence 的元素位置却仍然放反。最小的 Shape 测试加一个非零坐标的元素映射测试，恰好能暴露这两个问题。
 
-现在 Head 轴已经有 A1 的测试保护，当前 M2-A2 才把同一规则迁移到 Q/K/V，并在 `reshape` 前检查输入维度、Head 整除关系和一致的 `D_head`。通过后才依次进入无 Cache MHA、Cached MHA、GQA 映射和容量公式。模块的名字和边界由已经理解的机制决定，而不是由想象中的最终 Transformer 决定。
+Head 轴有了 A1 的测试保护后，M2-A2 把同一规则迁移到 Q/K/V，并在 `reshape` 前检查输入维度、Head 整除关系和一致的 `D_head`。当前 M2-B 才开始在 `H_q=H_kv` 下实现无 Cache MHA；之后依次进入 Cached MHA、GQA 映射和容量公式。模块的名字和边界由已经理解的机制决定，而不是由想象中的最终 Transformer 决定。
 
 ### 5.4 第四次压力：Toy 实验回答不了真实服务问题
 
@@ -381,7 +381,7 @@ q[b, h, t, d]
 
 ### 第一遍：跟着一条窄路径做出来
 
-只阅读当前步骤所需的最小材料，写下运行前预测，然后实现一条能被测试的路径。[M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md) 已经保存 A1 的 `split_heads` 证据；当前 A2 只增加 Q/K/V 投影、Shape/元素 Oracle 和非法配置测试，不顺手完成整个 Multi-Head Attention。
+只阅读当前步骤所需的最小材料，写下运行前预测，然后实现一条能被测试的路径。[M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md) 已经保存 A1/A2 的 Head 轴与 Q/K/V 投影证据；当前 B 只增加无 Cache Score、Mask、Softmax、逐 Head Output 和隔离性测试，不顺手完成 Cached MHA 或 GQA。
 
 这一遍练的是“把知识变成行为”。
 
@@ -401,26 +401,27 @@ q[b, h, t, d]
 
 ```text
 Question:
-  同一个 Head 规则怎样约束 Q/K/V，并在错误 Shape 进入 reshape 前拒绝它？
+  Q/K/V 已是 [B,H,T,D_head] 时，怎样证明 Score、Mask、Softmax
+  没有混合 Batch、Head 或 Future Token？
 
 Prediction:
-  Q=[2,4,5,3]，K/V=[2,2,5,3]
-  投影创建新 Buffer，拆 Head 保持共享
+  B=2,H=3,T=4,D_head=5 时，Score/Weight=[2,3,4,4]
+  逐 Head Output=[2,3,4,5]，Future Token 不改变历史输出
 
 Pre-read:
-  matmul Shape + Copies/Views + subTest/assertRaises（15 min）
+  matmul stacked matrices + swapaxes + triu（15 min）
 
 Action:
-  先写 Shape、元素与非法配置测试；再实现 project_qkv
+  先写独立标量 Oracle、Causal 与隔离性测试；再实现无 Cache MHA
 
 Feedback:
-  unittest 的第一个失败 + 手算坐标 + 完整回归
+  unittest 的第一个失败 + 手算 Score/Output 坐标 + 完整回归
 
 Artifact:
   multi_head.py、test_multi_head.py、docs/gates/M2.md
 
 Transfer:
-  关闭代码后重做推导；下一轮进入 H_q=H_kv 的 MHA Oracle
+  关闭代码后重做推导；下一轮进入 Cached MHA
 ```
 
 </CodeCard>
@@ -436,20 +437,21 @@ AI 最适合站在 Feedback 一侧：检查我的预测、制造反例、Review 
 - 已保存 M1 的 240 条 Batch Size 原始样本，并能重建汇总与曲线；
 - 已完成 P0 的 NumPy View/Copy、Stride 与轴语义练习；
 - 已完成 M2-A1 的 Query Head 轴变换，3 项定向测试与完整 9 项回归测试通过。
+- 已完成 M2-A2 的 Q/K/V 投影与输入契约，A2 定向 6 项、完整 12 项回归与闭卷 Shape 推导通过。
 
 还不能证明的是 MHA/GQA、真实 vLLM 的排队与调度、流式 TTFT/ITL、Prefix Reuse 和源码因果。这些仍是后续工作，不能因为路线图写得完整就当作系统已经完成。
 
-当前唯一动作是 M2-A2：
+当前唯一动作是 M2-B：
 
 ```text
-填写 Q/K/V 权重宽度、Shape、Buffer 与坐标预测
-  -> 先写 Shape、元素 Oracle 与非法配置测试
-  -> 实现 split_heads 校验与 project_qkv
+填写 Score、Weight、Output Shape、Softmax Axis 与隔离性预测
+  -> 先写标量 Oracle、Future Token 与 Head/Batch 隔离测试
+  -> 实现 H_q=H_kv 的无 Cache MHA
   -> 运行定向测试和完整回归
-  -> 关闭代码重新推导并记录下一步
+  -> 关闭代码重新推导并解释缩放与归一化轴
 ```
 
-之后才依次进入无 Cache MHA、Cached MHA、GQA 和 KV 容量；M2 通过后停止扩展 Toy Transformer。阶段 2 的一个月核心交付只继续完成真实 vLLM 环境、稳态基线、输入长度、并发、调度预算和最终性能报告；Mixed Prefill/Decode、Prefix Reuse、源码追踪与跨环境迁移保留为进阶扩展，不再阻塞原定阶段产出。
+之后才依次进入 Cached MHA、GQA 和 KV 容量；M2 通过后停止扩展 Toy Transformer。阶段 2 的一个月核心交付只继续完成真实 vLLM 环境、稳态基线、输入长度、并发、调度预算和最终性能报告；Mixed Prefill/Decode、Prefix Reuse、源码追踪与跨环境迁移保留为进阶扩展，不再阻塞原定阶段产出。
 
 整条路线看起来很长，但每天面对的仍然只是一个能失败的小问题。系统的完整性来自这些小闭环能够首尾相接，不是来自某一天突然写完了所有模块。
 

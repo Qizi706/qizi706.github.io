@@ -2,7 +2,7 @@
 title: 'LLM 推理优化的系统视角：从 KV Cache 到调度'
 description: '阶段 2 的 AI Infra 学习记录：从 Prefill、Decode 与 KV Cache 出发，理解计算、带宽、容量和调度如何共同决定 LLM Serving 的吞吐与延迟。'
 pubDate: '2026-08-13T20:00:00+08:00'
-updatedDate: '2026-08-21T02:04:01+08:00'
+updatedDate: '2026-08-25T04:03:46+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -574,10 +574,11 @@ F0 的阶段产出固定为《vLLM 推理性能实验：并发、Batch Size 与�
 - P0 已完成 NumPy View/Copy、Stride 与 Buffer 分配的语义闭环
 - M1 已完成 `B=1/2/4/8` 扫描、240 条原始样本、曲线与 Knee 分析
 - M2-A1 已用 Shape、元素映射和内存共享测试固定 Head 轴变换
+- M2-A2 已完成 Q/K/V 投影、两个非零坐标 Oracle、五类非法配置和闭卷 Shape 推导；完整 12 项回归测试通过
 
 ## 当前任务
 
-M2-A2：让 Q/K/V 共享一套可验证的投影与 Head Shape 契约。当前不提前实现 Score、Mask、Softmax，也不开始真实 Serving 实验。
+M2-B：先固定 `H_q=H_kv`，为四维 Q/K/V 建立无 Cache MHA Oracle。当前只验证 Score、Causal Mask、Softmax、`Weight @ V`、Future Token 不可见和 Batch/Head 隔离，不提前实现 Cache、GQA 映射或真实 Serving 实验。
 
 ## 下一决策
 
@@ -585,7 +586,7 @@ M2-A2：让 Q/K/V 共享一套可验证的投影与 Head Shape 契约。当前�
 
 </SlideCard>
 
-A2 的预测、前置阅读、执行顺序与验收清单见 [M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md)。未完成的 Gate 一律保持 `In progress` 或 `Pending`；理论预测不能代替原始数据、服务端指标或固定版本源码。
+M2-B 的预测、前置阅读、执行顺序与验收清单见 [M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md)。未完成的 Gate 一律保持 `In progress` 或 `Pending`；理论预测不能代替原始数据、服务端指标或固定版本源码。
 
 ## 9. 重新回答最初的问题
 

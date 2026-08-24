@@ -19,6 +19,7 @@
 - [x] M1 保存 240 条原始样本，并从 Raw CSV 生成汇总、两张曲线和 Knee 分析。
 - [x] M1 结果与证据边界已经回写实验文章。
 - [x] M2-A1 已完成 Head 轴变换的 Shape、非零坐标映射和内存共享验证。
+- [x] M2-A2 已完成 Q/K/V 投影、两个非零坐标 Oracle、五类非法配置与闭卷 Shape 推导。
 
 ### 当前缺口
 
@@ -33,11 +34,12 @@
 
 ```text
 M2-A1 Query Head 轴变换（Completed）
-  -> M2-A2 Q/K/V 投影与输入契约（Current）
-  -> M2-B 无 Cache MHA Oracle
+  -> M2-A2 Q/K/V 投影与输入契约（Completed）
+  -> M2-B 无 Cache MHA Oracle（Current）
+  -> M2-C Cached MHA
 ```
 
-M2-A2 通过验收前不进入 Attention 计算；M2 通过后立即进入 S0，不继续扩建 Toy Transformer。核心路线固定为：
+M2-B 通过验收前不进入 KV Cache 或 GQA 映射；M2 通过后立即进入 S0，不继续扩建 Toy Transformer。核心路线固定为：
 
 ```text
 M2 -> S0 -> S1 -> S2 -> S3 -> S4 -> F0
@@ -488,22 +490,22 @@ results/batch-size-scan/
 
 # Gate M2：MHA/GQA 与 KV 容量
 
-预计三至四次学习。
+按 A1、A2、B、C、D、E 六个小 Gate 推进；A1 与 A2 已完成，当前只执行 B。
 
 目标不是实现完整 Transformer，而是掌握真实模型中 Query Head、KV Head 与 Cache 容量的关系。
 
 ### M2 子任务状态
 
-| 子任务 | 状态                    | 当前证据或缺口                                  |
-| ------ | ----------------------- | ----------------------------------------------- |
-| M2-A1  | Completed               | 3 项 Head 轴测试与完整 9 项回归测试通过         |
-| M2-A2  | Current / Not completed | 尚无 `project_qkv`、输入校验与 A2 契约测试      |
-| M2-B   | Pending                 | 等 A2 通过后实现无 Cache MHA Oracle             |
-| M2-C   | Pending                 | 等 B 通过后实现 Cached MHA                      |
-| M2-D   | Pending                 | 等 C 通过后实现 GQA Head 映射                   |
-| M2-E   | Pending                 | 等 D 通过后验证 MHA/GQA KV 容量公式与生成对照表 |
+| 子任务 | 状态      | 当前证据或缺口                                     |
+| ------ | --------- | -------------------------------------------------- |
+| M2-A1  | Completed | 3 项 Head 轴测试与当时完整 9 项回归测试通过        |
+| M2-A2  | Completed | A2 定向 6 项、完整 12 项回归与闭卷 Shape 推导通过  |
+| M2-B   | Current   | 待实现 `H_q=H_kv` 的无 Cache MHA 与独立标量 Oracle |
+| M2-C   | Pending   | 等 B 通过后实现 Cached MHA                         |
+| M2-D   | Pending   | 等 C 通过后实现 GQA Head 映射                      |
+| M2-E   | Pending   | 等 D 通过后验证 MHA/GQA KV 容量公式与生成对照表    |
 
-M2 整体仍是 **In progress**。只有 M2-A1 已完成；`Current` 只表示当前应该执行 M2-A2，不表示它已经通过验收。
+M2 整体仍是 **In progress**。M2-A1 与 M2-A2 已完成；`Current` 只表示当前应该执行 M2-B，不表示整个 M2 已经通过验收。
 
 ## M2-A1：Query Head 轴变换
 
@@ -521,9 +523,9 @@ M2 整体仍是 **In progress**。只有 M2-A1 已完成；`Current` 只表示�
 
 ## M2-A2：Q/K/V 投影与输入契约
 
-状态：**Current / Not completed**。
+状态：**Completed（2026-08-25）**。
 
-当前代码还没有 `project_qkv`，`split_heads` 也尚未检查输入维度、Head 数与整除关系；当前三项 `test_multi_head.py` 只证明 A1。因此下列 Shape 是本轮目标，不是已完成结果：
+`project_qkv` 已实现 Q/K/V 投影与 Head 拆分，`split_heads` 会在 `reshape` 前检查输入维度、Head 数与整除关系。A2 使用互不相等的关键维度，避免 Shape 偶然相等掩盖轴错误。
 
 计划新增或修改：
 
@@ -547,36 +549,53 @@ V: [B, H_kv, T, D_head]
 B=2, T=5, D_model=7, H_q=4, H_kv=2, D_head=3
 ```
 
-- [ ] 运行前的权重 Shape、Q/K/V Shape、Buffer 与非零坐标预测已保存。
-- [ ] 三处定向阅读各留下了一句对预测的确认或修正。
-- [ ] `project_qkv` 已实现，并得到 `Q=[2,4,5,3]`、`K/V=[2,2,5,3]`。
-- [ ] 至少两个非零坐标的独立元素 Oracle 通过。
-- [ ] 输入维度、Head 数、整除关系、权重宽度与 `D_head` 五类非法配置明确失败。
-- [ ] A1 测试与完整回归测试保持通过。
-- [ ] 运行后结果、首次失败、修正规则与下一步判断已回写 [`docs/gates/M2.md`](gates/M2.md)。
+- [x] 运行前的权重 Shape、Q/K/V Shape、Buffer 与非零坐标预测已保存。
+- [x] 三处定向阅读各留下了一句对预测的确认或修正。
+- [x] `project_qkv` 已实现，并得到 `Q=[2,4,5,3]`、`K/V=[2,2,5,3]`。
+- [x] 至少两个非零坐标的独立元素 Oracle 通过。
+- [x] 输入维度、Head 数、整除关系、权重宽度与 `D_head` 五类非法配置明确失败。
+- [x] A1 测试与完整 12 项回归测试保持通过。
+- [x] 运行后结果、首次失败、修正规则与闭卷推导已回写 [`docs/gates/M2.md`](gates/M2.md)。
 
-七项全部通过后，M2-A2 才能改为 `Completed` 并进入 M2-B。
+A2 七项门禁已经关闭。历史预测与第一次非法配置失败继续保留，不因通过验收而改写。
 
 ## M2-B：实现无 Cache MHA Oracle
 
-前置条件：M2-A2 已提供通过 Shape、元素与非法配置测试的 Q/K/V。这里不重复把投影计入 M2-B。
+状态：**Current**。
+
+前置条件已满足：M2-A2 已提供通过 Shape、元素与非法配置测试的 Q/K/V。这里不重复测试投影，也不提前实现 Cache、GQA Head 映射、Head 合并或 Output Projection。
+
+固定参数：
+
+```text
+B=2, H_q=H_kv=3, T=4, D_head=5
+Q/K/V:       [2,3,4,5]
+Score/Weight: [2,3,4,4]
+Output:       [2,3,4,5]
+```
 
 顺序：
 
-1. [ ] 每个 Head 独立计算 Causal Score。
-2. [ ] 添加 Causal Mask。
-3. [ ] 沿历史 Token Axis 做 Softmax。
-4. [ ] 与 V 相乘。
-5. [ ] 必要时合并 Head。
+1. [ ] 用 `Q @ swapaxes(K, -1, -2) / sqrt(D_head)` 独立计算每个 Batch/Head 的 Score。
+2. [ ] 添加上三角 Causal Mask，让 Future Token 权重为零。
+3. [ ] 只沿最后一个历史 Token Axis 做稳定 Softmax。
+4. [ ] 用 `Weight @ V` 得到逐 Head Output。
+5. [ ] 返回逐 Head Output 与 Weight；本 Gate 不合并 Head。
 
 先只实现 `H_q=H_kv`。
 
 测试：
 
-- [ ] 每个 Head 使用自己的 K/V。
-- [ ] 不同 Batch 不共享状态。
-- [ ] Future Token 不可见。
-- [ ] 修改一个 Head 的数据不会污染其他 Head。
+- [ ] Score、Weight 与 Output Shape 正确。
+- [ ] 至少两个非零坐标匹配不调用待测函数的独立标量 Oracle。
+- [ ] 每行 Weight 在最后一维和为 1，且 Future Token 权重为 0。
+- [ ] 修改 Future Token 不改变当前位置及之前的输出。
+- [ ] 修改一个 Head 或一个 Batch 不污染其他切片。
+- [ ] Q/K/V 不是四维或关键轴不匹配时，在矩阵乘法前抛出 `ValueError`。
+- [ ] A2 与完整回归测试保持通过。
+- [ ] 关闭代码后能重新推导 Score、Weight、Output Shape，并解释缩放与 Softmax Axis。
+
+预测、120 分钟执行顺序与运行记录填写在 [`docs/gates/M2.md`](gates/M2.md)。全部通过后进入 M2-C；任一项失败时只修正 M2-B。
 
 ## M2-C：实现 Cached MHA
 
@@ -1190,9 +1209,9 @@ T0 达到 `Transferred`，但不反向改变阶段 2 的一个月核心完成日
 | 时间        | 核心任务         | 可见产物                                       |
 | ----------- | ---------------- | ---------------------------------------------- |
 | 08.12–08.18 | M0、P0、M1       | Cache/Batch 实现、Raw CSV、曲线与中间机制文章  |
-| 08.19–08.25 | 完成 M2，启动 S0 | MHA/GQA 容量表、vLLM 环境与 Capability Matrix  |
-| 08.26–09.01 | S1、S2           | 单并发稳态、显存组成表、Input Length 曲线      |
-| 09.02–09.08 | S3、S4           | 并发饱和点、尾延迟、Scheduler Budget 对照      |
+| 08.19–08.25 | M2-A1/A2，启动 B | Head 轴、Q/K/V 投影契约与无 Cache MHA 工作表   |
+| 08.26–09.01 | 完成 M2、S0、S1  | MHA/GQA 容量表、环境快照与单并发稳态基线       |
+| 09.02–09.08 | S2、S3、S4       | 输入长度、并发饱和点与 Scheduler Budget 对照   |
 | 09.09–09.12 | F0               | 结论矩阵、复现包、闭卷答辩与最终 vLLM 性能文章 |
 
 核心路线按依赖推进，但时间不足时首先缩小每个变量的扫描范围，不能用 S5/S6/R0/T0 挤占 S0–S4。某个 Gate 未通过时降低结论强度或修复观测能力，不通过增加阅读量掩盖问题。
@@ -1201,11 +1220,11 @@ T0 达到 `Transferred`，但不反向改变阶段 2 的一个月核心完成日
 
 当前只做以下三项：
 
-1. [ ] 在 `docs/gates/M2.md` 保存固定参数下的权重宽度、Q/K/V Shape、Buffer 与坐标预测，再完成 15 分钟定向阅读。
-2. [ ] 为 Q/K/V 投影补齐 Shape、元素 Oracle 与五类非法配置测试，再实现最小接口。
-3. [ ] 运行 M2 定向测试和完整回归测试，关闭代码重做推导并记录下一步判断。
+1. [ ] 在 `docs/gates/M2.md` 保存固定参数下的 Score、Weight、Output Shape、Softmax Axis 与隔离性预测，再完成 15 分钟定向阅读。
+2. [ ] 先写独立标量 Oracle、Future Token、Head/Batch 隔离和非法 Shape 测试，再实现无 Cache MHA 最小接口。
+3. [ ] 运行 M2-B 定向测试和完整回归测试，关闭代码重做坐标推导并解释 `sqrt(D_head)` 与 Softmax Axis。
 
-三项和 A2 验收清单全部通过后，进入 M2-B；不要提前实现 Attention、KV Cache 或 GQA 映射。
+M2-B 验收清单全部通过后进入 M2-C；不要提前实现 KV Cache、GQA 映射、Head 合并或 Output Projection。
 
 # 主要参考
 
