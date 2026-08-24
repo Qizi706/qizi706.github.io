@@ -66,7 +66,7 @@ const description =
 		<div class="release-note" role="note">
 			<strong>[灰度共学]</strong>
 			<span>共学页面会随学习进度变化，不出现在主页、文章归档、RSS 或 sitemap。</span>
-			<span>未完成的文章草稿仅在本地开发环境通过 <code>/draft</code> 预览。</span>
+			<span>未完成的文章草稿仅通过未收录的 <code>/draft</code> 路由预览。</span>
 		</div>
 	</header>
 
@@ -238,7 +238,9 @@ const description =
 					))}
 				</ul>
 			) : (
-				<p class="draft-local-notice">文章草稿仅在本地开发环境展示。</p>
+				<p class="draft-local-notice">
+					文章草稿不在此处展示，可通过未收录的 <a href="/draft/">草稿预览</a>访问。
+				</p>
 			)
 		}
 

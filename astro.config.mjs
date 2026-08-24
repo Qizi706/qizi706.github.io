@@ -17,6 +17,16 @@ const normalizePathname = (pathname) => pathname.replace(/\/$/, '');
 const phase2Preview = kvCacheLab.progress.preview;
 const unlistedPathnames = new Set([phase2Preview.path].map(normalizePathname));
 
+/** @param {string} pathname */
+const isUnlistedPathname = (pathname) => {
+	const normalizedPathname = normalizePathname(pathname);
+	return (
+		normalizedPathname === '/draft' ||
+		normalizedPathname.startsWith('/draft/') ||
+		unlistedPathnames.has(normalizedPathname)
+	);
+};
+
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://zqwiki.cn',
@@ -28,10 +38,7 @@ export default defineConfig({
 		sitemap({
 			filter: (page) => {
 				const pathname = new URL(page).pathname;
-				return (
-					!Object.hasOwn(legacyPostRedirects, pathname) &&
-					!unlistedPathnames.has(normalizePathname(pathname))
-				);
+				return !Object.hasOwn(legacyPostRedirects, pathname) && !isUnlistedPathname(pathname);
 			},
 		}),
 	],

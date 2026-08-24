@@ -19,8 +19,6 @@ interface DraftPostProps {
 type Props = DraftIndexProps | DraftPostProps;
 
 export async function getStaticPaths() {
-	if (!import.meta.env.DEV) return [];
-
 	const posts = (await getCollection('blog'))
 		.filter((post) => post.data.draft)
 		.sort(
@@ -42,23 +40,23 @@ export async function getStaticPaths() {
 }
 
 const page: Props = Astro.props;
-const description = `仅供本地开发环境使用的草稿预览，共 ${page.kind === 'index' ? page.posts.length : 1} 篇。`;
+const description = `不进入正式文章归档的草稿预览，共 ${page.kind === 'index' ? page.posts.length : 1} 篇。`;
 ---
 
 {
 	page.kind === 'post' ? (
 		<BlogArticle post={page.post} />
 	) : (
-		<PageLayout title="本地草稿" {description} mainClass="draft-index" noindex>
+		<PageLayout title="草稿预览" {description} mainClass="draft-index" noindex>
 			<header class="page-heading">
 				<div>
 					<p class="path">~/draft</p>
-					<h1>本地草稿</h1>
+					<h1>草稿预览</h1>
 				</div>
-				<span class="draft-badge">DEV ONLY · {page.posts.length}</span>
+				<span class="draft-badge">UNLISTED · {page.posts.length}</span>
 			</header>
 			<p class="notice">
-				这里的页面只由本地开发服务器生成；生产构建不会包含 <code>/draft</code> 路由。
+				这里的文章可通过直达链接预览，但不会进入正式文章归档、RSS 或 sitemap；这不是权限控制。
 			</p>
 			{page.posts.length > 0 ? (
 				<ul class="post-list">
