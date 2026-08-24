@@ -14,14 +14,7 @@ import { pygmentsDefaultTheme } from './src/themes/pygments-default.mjs';
 /** @param {string} pathname */
 const normalizePathname = (pathname) => pathname.replace(/\/$/, '');
 const phase2Preview = kvCacheLab.progress.preview;
-const unlistedPathnames = new Set(
-	[
-		phase2Preview.path,
-		...phase2Preview.articles
-			.filter((article) => article.status === 'draft')
-			.map((article) => `/blog/${article.id}/`),
-	].map(normalizePathname),
-);
+const unlistedPathnames = new Set([phase2Preview.path].map(normalizePathname));
 
 // https://astro.build/config
 export default defineConfig({

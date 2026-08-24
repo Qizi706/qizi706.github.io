@@ -10,7 +10,7 @@ import {
 	getLabManifest,
 	listLabDirectoryEntries,
 } from '../../utils/lab-artifacts.mjs';
-import { getPostUrl } from '../../utils/posts';
+import { getDraftPostUrl, getPostUrl } from '../../utils/posts';
 
 interface PhaseArticle {
 	id: string;
@@ -65,8 +65,8 @@ const description =
 		</p>
 		<div class="release-note" role="note">
 			<strong>[灰度共学]</strong>
-			<span>页面和草稿会随学习进度变化，不出现在主页、文章归档、RSS 或 sitemap。</span>
-			<span>这不是权限控制：拿到链接的人都可以访问和转发。</span>
+			<span>共学页面会随学习进度变化，不出现在主页、文章归档、RSS 或 sitemap。</span>
+			<span>未完成的文章草稿仅在本地开发环境通过 <code>/draft</code> 预览。</span>
 		</div>
 	</header>
 
@@ -220,23 +220,27 @@ const description =
 			<h2>文章：先读机制，再读证据</h2>
 		</div>
 
-		<h3 class="group-title">灰度草稿</h3>
-		<ul class="article-list">
-			{
-				draftArticles.map(({ article, post }) => (
-					<li>
-						<div>
-							<span class="status draft">DRAFT · LINK ONLY</span>
-							<a href={getPostUrl(post)}>{post.data.title}</a>
-						</div>
-						<p>{article.role}</p>
-						<small>
-							更新于 <FormattedDate date={post.data.updatedDate ?? post.data.pubDate} />
-						</small>
-					</li>
-				))
-			}
-		</ul>
+		<h3 class="group-title">本地草稿</h3>
+		{
+			import.meta.env.DEV ? (
+				<ul class="article-list">
+					{draftArticles.map(({ article, post }) => (
+						<li>
+							<div>
+								<span class="status draft">DRAFT · DEV ONLY</span>
+								<a href={getDraftPostUrl(post)}>{post.data.title}</a>
+							</div>
+							<p>{article.role}</p>
+							<small>
+								更新于 <FormattedDate date={post.data.updatedDate ?? post.data.pubDate} />
+							</small>
+						</li>
+					))}
+				</ul>
+			) : (
+				<p class="draft-local-notice">文章草稿仅在本地开发环境展示。</p>
+			)
+		}
 
 		<h3 class="group-title">已发布文章</h3>
 		<ul class="article-list">

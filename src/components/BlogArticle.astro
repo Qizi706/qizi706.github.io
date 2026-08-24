@@ -1,0 +1,18 @@
+---
+import { type CollectionEntry, render } from 'astro:content';
+import BlogPost from '../layouts/BlogPost.astro';
+import CoreCard from './CoreCard.astro';
+import Note from './Note.astro';
+import SlideCard from './SlideCard.astro';
+
+interface Props {
+	post: CollectionEntry<'blog'>;
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+---
+
+<BlogPost {...post.data}>
+	<Content components={{ SlideCard, CoreCard, CodeCard: CoreCard, Note }} />
+</BlogPost>

@@ -47,7 +47,9 @@ mathjax: false
 继续写正文。
 ```
 
-建议在写作期间保持 `draft: true`，完成后改成 `false`。草稿不会出现在文章列表中，也不会生成公开文章页面。
+建议在写作期间保持 `draft: true`，完成后改成 `false`。本地运行开发服务器后，可从
+`/draft/` 查看草稿列表，并通过 `/draft/<slug>/` 预览正文。生产构建不会生成这些路由，
+草稿也不会出现在文章列表、RSS 或 sitemap 中。
 
 ## Frontmatter 字段
 

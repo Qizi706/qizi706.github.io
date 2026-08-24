@@ -5,7 +5,7 @@ import LearningStage from '../components/LearningStage.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 import PageLayout from '../layouts/PageLayout.astro';
 import { getLabManifest } from '../utils/lab-artifacts.mjs';
-import { getCategoryUrl, getPostUrl } from '../utils/posts';
+import { getCategoryUrl, getDraftPostUrl, getPostUrl } from '../utils/posts';
 
 const allPosts = await getCollection('blog');
 const posts = allPosts
@@ -122,7 +122,9 @@ const currentStage = learningProgress.current;
 		import.meta.env.DEV && draftPosts.length > 0 && (
 			<section class="draft-section" aria-labelledby="draft-heading">
 				<div class="draft-heading">
-					<h2 id="draft-heading">本地草稿</h2>
+					<h2 id="draft-heading">
+						<a href="/draft/">本地草稿</a>
+					</h2>
 					<span class="draft-badge">DEV ONLY · {draftPosts.length}</span>
 				</div>
 				<p class="draft-description">
@@ -134,7 +136,7 @@ const currentStage = learningProgress.current;
 
 						return (
 							<li>
-								<a href={getPostUrl(post)}>{post.data.title}</a>
+								<a href={getDraftPostUrl(post)}>{post.data.title}</a>
 								<small>
 									{post.data.categories.join(' / ') || '未分类'} · 更新于{' '}
 									<FormattedDate date={lastModified} />

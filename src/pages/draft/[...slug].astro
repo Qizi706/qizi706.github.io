@@ -1,0 +1,183 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { getCollection } from 'astro:content';
+import BlogArticle from '../../components/BlogArticle.astro';
+import FormattedDate from '../../components/FormattedDate.astro';
+import PageLayout from '../../layouts/PageLayout.astro';
+import { getDraftPostUrl } from '../../utils/posts';
+
+interface DraftIndexProps {
+	kind: 'index';
+	posts: CollectionEntry<'blog'>[];
+}
+
+interface DraftPostProps {
+	kind: 'post';
+	post: CollectionEntry<'blog'>;
+}
+
+type Props = DraftIndexProps | DraftPostProps;
+
+export async function getStaticPaths() {
+	if (!import.meta.env.DEV) return [];
+
+	const posts = (await getCollection('blog'))
+		.filter((post) => post.data.draft)
+		.sort(
+			(a, b) =>
+				(b.data.updatedDate ?? b.data.pubDate).valueOf() -
+				(a.data.updatedDate ?? a.data.pubDate).valueOf(),
+		);
+
+	return [
+		{
+			params: { slug: undefined },
+			props: { kind: 'index' as const, posts },
+		},
+		...posts.map((post) => ({
+			params: { slug: post.id },
+			props: { kind: 'post' as const, post },
+		})),
+	];
+}
+
+const page: Props = Astro.props;
+const description = `仅供本地开发环境使用的草稿预览，共 ${page.kind === 'index' ? page.posts.length : 1} 篇。`;
+---
+
+{
+	page.kind === 'post' ? (
+		<BlogArticle post={page.post} />
+	) : (
+		<PageLayout title="本地草稿" {description} mainClass="draft-index" noindex>
+			<header class="page-heading">
+				<div>
+					<p class="path">~/draft</p>
+					<h1>本地草稿</h1>
+				</div>
+				<span class="draft-badge">DEV ONLY · {page.posts.length}</span>
+			</header>
+			<p class="notice">
+				这里的页面只由本地开发服务器生成；生产构建不会包含 <code>/draft</code> 路由。
+			</p>
+			{page.posts.length > 0 ? (
+				<ul class="post-list">
+					{page.posts.map((post) => (
+						<li>
+							<article>
+								<a class="post-title" href={getDraftPostUrl(post)}>
+									<h2>{post.data.title}</h2>
+								</a>
+								<p class="description">{post.data.description}</p>
+								<p class="meta">
+									{post.data.categories.join(' / ') || '未分类'} · 更新于{' '}
+									<FormattedDate date={post.data.updatedDate ?? post.data.pubDate} />
+								</p>
+							</article>
+						</li>
+					))}
+				</ul>
+			) : (
+				<p class="empty">
+					当前没有标记为 <code>draft: true</code> 的文章。
+				</p>
+			)}
+		</PageLayout>
+	)
+}
+
+<style>
+	:global(.page-frame.draft-index) {
+		max-width: var(--content-width);
+	}
+
+	.page-heading {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 1rem;
+		padding-bottom: 1rem;
+		border-bottom: 1px solid rgb(var(--gray-light));
+	}
+
+	.path {
+		margin: 0 0 0.3rem;
+		color: var(--accent);
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+	}
+
+	.page-heading h1 {
+		margin: 0;
+	}
+
+	.draft-badge {
+		flex: none;
+		padding: 0.1rem 0.4rem;
+		border: 1px solid #cbd5e1;
+		border-radius: 2px;
+		color: #64748b;
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+		letter-spacing: 0.04em;
+	}
+
+	.notice,
+	.empty {
+		margin: 0 0 1rem;
+		color: rgb(var(--gray));
+		font-size: 0.85rem;
+	}
+
+	.post-list {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.post-list li {
+		padding: 1rem 0;
+		border-top: 1px dashed rgb(var(--gray-light));
+	}
+
+	.post-list li:last-child {
+		border-bottom: 1px dashed rgb(var(--gray-light));
+	}
+
+	.post-title {
+		color: rgb(var(--black));
+	}
+
+	.post-title:hover {
+		color: var(--accent);
+	}
+
+	.post-title h2 {
+		margin: 0;
+		font-size: 1.05rem;
+		line-height: 1.45;
+	}
+
+	.description {
+		margin: 0.3rem 0 0;
+		color: rgb(var(--gray));
+		font-size: 0.875rem;
+		line-height: 1.55;
+	}
+
+	.meta {
+		margin: 0.35rem 0 0;
+		color: #64748b;
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+	}
+
+	@media (max-width: 520px) {
+		.page-heading {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 0.6rem;
+		}
+	}
+</style>

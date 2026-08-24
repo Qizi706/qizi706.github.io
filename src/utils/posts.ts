@@ -6,6 +6,10 @@ export function getPostUrl(post: BlogPost): string {
 	return `/blog/${post.id}/`;
 }
 
+export function getDraftPostUrl(post: BlogPost): string {
+	return `/draft/${post.id}/`;
+}
+
 export function getCategorySlug(category: string): string {
 	return (
 		category
