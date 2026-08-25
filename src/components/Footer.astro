@@ -9,9 +9,8 @@
 
 <style>
 	.site-footer {
-		margin-top: auto;
-		background: #f5f5f5;
-		color: #525252;
+		background-color: rgb(245 245 245);
+		color: rgb(82 82 82);
 		font-family: var(--font-heading);
 		font-size: 16px;
 		line-height: 1.5;
@@ -20,7 +19,7 @@
 
 	.footer-inner {
 		padding: 1.5rem;
-		background: #e5e5e5;
+		background-color: rgb(229 229 229);
 		text-align: center;
 	}
 
@@ -30,6 +29,24 @@
 	}
 
 	.footer-inner a:hover {
+		color: inherit;
 		text-decoration: none;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		.site-footer {
+			background-color: rgb(82 82 82);
+			color: rgb(229 229 229);
+		}
+
+		.footer-inner {
+			background-color: rgb(64 64 64);
+		}
+	}
+
+	@media (min-width: 1024px) {
+		.site-footer {
+			text-align: left;
+		}
 	}
 </style>
