@@ -4,7 +4,7 @@
 	"description": "从 KV Cache、Batched Decode 到 MHA/GQA 的 NumPy 实验包；当前任务为 M2-B",
 	"parent": {
 		"href": "/learning/phase-2/",
-		"label": "阶段 2 共学入口"
+		"label": "阶段 2 课程入口"
 	},
 	"publish": [
 		"lab.json",
@@ -51,7 +51,7 @@
 			"period": "2026.08.12 — 2026.09.12",
 			"title": "阶段 2 · LLM 推理核心知识与 vLLM 性能实验",
 			"goal": "理解推理系统的核心矛盾，并用真实 vLLM 实验解释调度、显存、Batching 与 KV Cache 如何共同决定吞吐和延迟。",
-			"coreRoute": "M2 → S0 → S1 → S2 → S3 → S4 → F0",
+			"coreRoute": "P0 → M0 → M1 → M2 → S0 → S1 → S2 → S3 → S4 → F0",
 			"finalArtifact": "《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》",
 			"advancedRoute": "S5 Mixed Prefill/Decode · S6 Prefix Reuse · R0 源码追踪 · T0 跨环境迁移"
 		},
@@ -67,7 +67,7 @@
 				{
 					"label": "它位于哪里",
 					"title": "阶段 2 总路线与验收",
-					"description": "只在查看 M2 到 F0 的依赖、阶段范围、验收和停止条件时使用。",
+					"description": "只在审计 P0 到 F0 的详细依赖、实验协议、阶段验收和停止条件时使用。",
 					"path": "docs/PLAN.md"
 				},
 				{

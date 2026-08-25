@@ -1,6 +1,4 @@
 ---
-import SurfaceCard from './SurfaceCard.astro';
-
 interface Reference {
 	label: string;
 	href: string;
@@ -24,134 +22,107 @@ interface Props {
 	task: Task;
 	documentHref: string;
 	anchorId?: string;
-	eyebrow?: string;
 }
 
-const { task, documentHref, anchorId = 'current', eyebrow = '01 / CURRENT' } = Astro.props;
+const { task, documentHref, anchorId = 'current' } = Astro.props;
 ---
 
-<SurfaceCard as="section" id={anchorId} class="learning-task-panel" padding="none">
-	<header class="learning-task-panel__heading">
-		<p>{eyebrow}</p>
+<section id={anchorId} class="learning-task-panel">
+	<header>
 		<h2>现在跟做：{task.id} · {task.title}</h2>
 	</header>
 
-	<div class="learning-task-panel__summary">
-		<p><strong>时间：</strong>{task.period}</p>
-		<p><strong>唯一目标：</strong>{task.objective}</p>
-		<p><strong>问题：</strong>{task.question}</p>
-		<p><strong>运行前预测：</strong>{task.prediction}</p>
-	</div>
+	<dl class="learning-task-panel__summary">
+		<dt>时间</dt><dd>{task.period}</dd>
+		<dt>唯一目标</dt><dd>{task.objective}</dd>
+		<dt>问题</dt><dd>{task.question}</dd>
+		<dt>运行前预测</dt><dd>{task.prediction}</dd>
+		<dt>Artifact</dt><dd>{task.artifact}</dd>
+		<dt>Acceptance</dt><dd>{task.acceptance}</dd>
+	</dl>
 
-	<div class="learning-task-panel__grid">
-		<SurfaceCard class="learning-task-panel__subcard">
-			<h3>前置阅读 · 15 min</h3>
-			<ul>
-				{
-					task.preRead.map((reference) => (
-						<li>
-							<a href={reference.href}>{reference.label}</a>
-						</li>
-					))
-				}
-			</ul>
-			<p>每篇只记录一句：它确认或修正了哪条预测。</p>
-		</SurfaceCard>
-		<SurfaceCard class="learning-task-panel__subcard">
-			<h3>交付与门禁</h3>
-			<p><strong>Artifact：</strong>{task.artifact}</p>
-			<p><strong>Acceptance：</strong>{task.acceptance}</p>
-			<p><a href={documentHref}>打开当前工作表 →</a></p>
-		</SurfaceCard>
-	</div>
+	<h3>前置阅读 · 15 min</h3>
+	<ul>
+		{
+			task.preRead.map((reference) => (
+				<li>
+					<a href={reference.href}>{reference.label}</a>
+				</li>
+			))
+		}
+	</ul>
+	<p>每篇只记录一句：它确认或修正了哪条预测。<a href={documentHref}>打开当前工作表 →</a></p>
 
-	<ol class="learning-task-panel__steps">
+	<h3>执行顺序</h3>
+	<ol>
 		{task.steps.map((step) => <li>{step}</li>)}
 	</ol>
-	<p class="learning-task-panel__decision">
-		<strong>下一步判断：</strong>{task.nextDecision}
-	</p>
-</SurfaceCard>
+	<p><strong>下一步判断：</strong>{task.nextDecision}</p>
+</section>
 
 <style>
 	.learning-task-panel {
 		margin: 2rem 0;
-		padding: 2rem 1rem;
-		overflow: hidden;
+		padding: 2rem 0;
+		border-top: 1px solid #cbd5e1;
+		border-bottom: 1px solid #cbd5e1;
 		scroll-margin-top: 4.5rem;
 	}
 
-	.learning-task-panel__heading {
-		margin-bottom: 1rem;
-	}
-
-	.learning-task-panel__heading p {
+	.learning-task-panel h2 {
 		margin: 0;
-		color: #64748b;
-		font-family: var(--font-mono);
-		font-size: 0.72rem;
-		letter-spacing: 0.08em;
-	}
-
-	.learning-task-panel__heading h2 {
-		margin: 0.25rem 0 0;
 		font-size: 1.35rem;
 	}
 
-	.learning-task-panel__summary p,
-	.learning-task-panel__grid :global(p) {
-		line-height: 1.65;
-	}
-
-	.learning-task-panel__grid {
+	.learning-task-panel__summary {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.8rem;
+		grid-template-columns: 7rem minmax(0, 1fr);
+		gap: 0.3rem 0.8rem;
 		margin-top: 1rem;
 	}
 
-	.learning-task-panel__grid :global(.learning-task-panel__subcard) {
-		height: 100%;
-		background: #fff;
+	.learning-task-panel__summary dt {
+		color: #64748b;
+		font-size: 0.9rem;
+		font-weight: 700;
 	}
 
-	.learning-task-panel__grid :global(h3) {
-		margin: 0 0 0.55rem;
-		font-size: 1rem;
-	}
-
-	.learning-task-panel__grid :global(ul) {
+	.learning-task-panel__summary dd {
 		margin: 0;
-		padding-left: 1.2rem;
+		color: #334155;
+		font-size: 0.92rem;
+		line-height: 1.6;
 	}
 
-	.learning-task-panel__steps {
-		margin: 1.25rem 0 0;
-		padding-left: 1.4rem;
-		line-height: 1.75;
+	.learning-task-panel h3 {
+		margin: 1.2rem 0 0.4rem;
+		font-size: 0.95rem;
 	}
 
-	.learning-task-panel__steps li {
-		margin: 0.55rem 0;
+	.learning-task-panel ul,
+	.learning-task-panel ol {
+		margin: 0;
+		padding-left: 1.3rem;
+		line-height: 1.7;
 	}
 
-	.learning-task-panel__decision {
-		margin: 1rem 0 0;
-		padding-top: 0.75rem;
-		border-top: 1px dashed #cbd5e1;
+	.learning-task-panel li {
+		margin: 0.25rem 0;
+	}
+
+	.learning-task-panel > p {
+		margin: 0.65rem 0 0;
 		line-height: 1.65;
 	}
 
-	@media (max-width: 720px) {
-		.learning-task-panel {
-			margin-right: -0.4rem;
-			margin-left: -0.4rem;
-			padding-right: 0.8rem;
-			padding-left: 0.8rem;
+	@media (max-width: 560px) {
+		.learning-task-panel__summary {
+			grid-template-columns: 1fr;
+			gap: 0.1rem;
 		}
 
-		.learning-task-panel__grid {
-			grid-template-columns: 1fr;
+		.learning-task-panel__summary dd + dt {
+			margin-top: 0.4rem;
 		}
 	}
 </style>

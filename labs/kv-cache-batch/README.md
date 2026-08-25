@@ -1,6 +1,22 @@
-# 当前实验任务书：M2-B Multi-Head Causal Attention
+# Phase 2 当前 Lab Handout：M2-B Multi-Head Causal Attention
 
-这份 README 只回答“现在做什么、编辑哪里、怎样验收”。当前 Lab 用最小 NumPy 实现建立 Attention Oracle：先把投影结果拆成多个 Head，再完成 Q/K/V 投影，最后实现不带 KV Cache 的 Multi-Head Causal Attention。完成它之后，Cached MHA、GQA 和真实 Serving 实验才有可信的数值基线。
+这份 README 只回答“现在做什么、编辑哪里、怎样验收”。跨阶段路线与所有 Gate 的依赖统一从[AI Infra 课程页](/learning/)查看；Phase 2 的完整路线位于[阶段 2 课程页](/learning/phase-2/)。
+
+当前 Lab 用最小 NumPy 实现建立 Attention Oracle：先把投影结果拆成多个 Head，再完成 Q/K/V 投影，最后实现不带 KV Cache 的 Multi-Head Causal Attention。完成它之后，Cached MHA、GQA 和真实 Serving 实验才有可信的数值基线。
+
+```text
+Phase 1 Checkoff
+  → P0 NumPy 语义
+  → M0 Single-Head KV Cache
+  → M1 Batch Size Curve
+  → M2-A1 Head 轴
+  → M2-A2 Q/K/V 投影
+  → M2-B 无 Cache MHA  ← 当前
+  → M2-C Cached MHA
+  → M2-D GQA
+  → M2-E KV 容量
+  → S0 真实 vLLM 环境
+```
 
 ## 先分清几份材料
 
@@ -8,13 +24,14 @@
 
 | 你要回答的问题                 | 应该打开的材料                                | 职责                                     |
 | ------------------------------ | --------------------------------------------- | ---------------------------------------- |
+| 当前位于哪一层？               | [阶段 2 课程页](/learning/phase-2/)           | 依赖、状态、交付、Checkoff 与下一层      |
 | 现在具体做什么？               | 本 README                                     | 当前任务、允许修改的范围、命令与评分     |
-| 这个任务在阶段 2 的哪里？      | [`docs/PLAN.md`](docs/PLAN.md)                | 总路线、Gate 依赖、阶段验收与停止条件    |
+| 怎样审计详细阶段边界？         | [`docs/PLAN.md`](docs/PLAN.md)                | 完整实验协议、阶段验收与停止条件         |
 | 我的预测、失败和结果记在哪里？ | [`docs/gates/M2.md`](docs/gates/M2.md)        | 边做边填写的工作记录，不是第二份任务说明 |
 | 已经产生了什么证据？           | [`results/`](results) 与测试                  | 原始数据、派生结果和可运行验收           |
-| 机制与结果怎样解释？           | [阶段 2 共学页](/learning/phase-2/)中的文章区 | 系统文章解释机制，实验文章总结已完成证据 |
+| 机制与结果怎样解释？           | [阶段 2 课程页](/learning/phase-2/)中的文章区 | 系统文章解释机制，实验文章总结已完成证据 |
 
-正常路径是：**README → M2 工作表 → 实现与测试 → results**。只有需要确认前后依赖或停止条件时，才回到总计划。
+正常路径是：**课程页定位 → README 执行 → M2 工作表记录 → 实现与测试 → results 验收**。只有需要审计详细实验协议或停止条件时，才打开总计划。
 
 当前练习是 **M2-B**。M2-A1 与 M2-A2 已作为可运行的起点保留；M2-B 故意只有输入契约和 `TODO`，初次评分失败是正常状态。
 

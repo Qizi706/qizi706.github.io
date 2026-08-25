@@ -1,19 +1,11 @@
 ---
-import DefinitionGrid from '../components/DefinitionGrid.astro';
-import DisclosureCard from '../components/DisclosureCard.astro';
+import { phase1, phase2 } from '../data/learning-course';
 import Layout from '../layouts/BlogPost.astro';
-import LearningStage from '../components/LearningStage.astro';
-import '../styles/global.css';
 import { getLabManifest } from '../utils/lab-artifacts.mjs';
+import '../styles/global.css';
 
 const kvCacheLab = await getLabManifest('kv-cache-batch');
-const phase2Progress = kvCacheLab.progress;
-const phase2Milestone = phase2Progress.milestone;
-const currentGate = phase2Progress.current;
-const completedGateSummary = phase2Progress.completed
-	.map((gate: { id: string; title: string }) => `${gate.id} ${gate.title}`)
-	.join(' · ');
-const phase2Evidence = phase2Progress.evidence;
+const currentGate = kvCacheLab.progress.current;
 ---
 
 <Layout
@@ -24,45 +16,28 @@ const phase2Evidence = phase2Progress.evidence;
 	hideTitleDivider
 >
 	<section class="profile-brief" aria-label="技术方向与工作方法">
-		<div class="section-label">00 / profile</div>
+		<h2>技术方向</h2>
 		<p class="profile-summary">
 			以系统软件与数据基础设施为主线：已在 xv6 与 BusTub
 			中完成虚拟内存、文件系统、缓冲池、并发索引、查询执行与 MVCC
 			等核心模块；当前将这些系统能力迁移到单机 LLM Serving，聚焦请求链路、KV Cache、调度与性能工程。
 		</p>
-		<DefinitionGrid class="profile-ledger" variant="ledger" collapseAt="620">
-			<div>
-				<dt>focus</dt>
-				<dd>AI Infrastructure / Systems</dd>
-			</div>
-			<div>
-				<dt>foundation</dt>
-				<dd>OS · Storage Engine · Concurrency</dd>
-			</div>
-			<div>
-				<dt>working set</dt>
-				<dd>C · C++ · Python · RISC-V · Linux</dd>
-			</div>
-			<div>
-				<dt>method</dt>
-				<dd>implement → benchmark → source trace → write</dd>
-			</div>
-		</DefinitionGrid>
+		<dl class="profile-ledger">
+			<dt>focus</dt><dd>AI Infrastructure / Systems</dd>
+			<dt>foundation</dt><dd>OS · Storage Engine · Concurrency</dd>
+			<dt>working set</dt><dd>C · C++ · Python · RISC-V · Linux</dd>
+			<dt>method</dt><dd>implement → benchmark → source trace → write</dd>
+		</dl>
 	</section>
 
 	<section class="about-section" aria-labelledby="projects-title">
-		<div class="section-label">01 / implemented systems</div>
 		<h2 id="projects-title">系统项目</h2>
 
-		<DisclosureCard
-			title="MIT 6.S081"
-			meta="RISC-V · xv6 · C · Linux"
-			surface="elevated"
-			stackOnMobile
-			open
-		>
+		<section class="project">
+			<h3>MIT 6.S081</h3>
+			<p class="project-stack">RISC-V · xv6 · C · Linux</p>
 			<div class="project-body">
-				<p class="project-meta">2026.02 — 2026.04 · independent implementation</p>
+				<p class="project-meta">2026.02 — 2026.04 · 独立完成</p>
 				<p>
 					基于 RISC-V / xv6 扩展内存、进程、Trap
 					与文件系统路径，重点验证虚拟内存、异常处理和持久化语义。
@@ -75,17 +50,13 @@ const phase2Evidence = phase2Progress.evidence;
 					<li>扩展 xv6 文件系统，支持三级间接索引、软链接、mmap/munmap 与按需映射回写。</li>
 				</ul>
 			</div>
-		</DisclosureCard>
+		</section>
 
-		<DisclosureCard
-			title="CMU 15-445"
-			meta="BusTub · C++ · Linux"
-			surface="elevated"
-			stackOnMobile
-			open
-		>
+		<section class="project">
+			<h3>CMU 15-445</h3>
+			<p class="project-stack">BusTub · C++ · Linux</p>
 			<div class="project-body">
-				<p class="project-meta">2025.11 — 2025.12 · independent implementation</p>
+				<p class="project-meta">2025.11 — 2025.12 · 独立完成</p>
 				<p>
 					围绕单机数据库内核完成存储、索引、执行、优化与事务链路，实现可并发访问的 BusTub 核心模块。
 				</p>
@@ -103,457 +74,40 @@ const phase2Evidence = phase2Progress.evidence;
 					<li>基于版本链和 undo log 实现 MVCC，支持快照隔离下的并发读写。</li>
 				</ul>
 			</div>
-		</DisclosureCard>
+		</section>
 	</section>
 
 	<section class="about-section" aria-labelledby="learning-title">
-		<div class="section-label">02 / learning roadmap</div>
 		<h2 id="learning-title">AI Infra 学习路线</h2>
+		<p class="section-intro">
+			完整课程已经从 About 独立出来，统一按“Prerequisite → Question → Work → Artifact → Checkoff →
+			Unlocks”组织。这里仅保留状态摘要，避免出现第二份路线图。
+		</p>
 
-		<LearningStage
-			period="2026.07.27 — 2026.08.11"
-			title="阶段 1 · LLM Serving 请求链路与基线"
-			status="done"
-		>
-			<div class="quest-line">
-				<input
-					class="quest-checkbox"
-					type="checkbox"
-					checked
-					disabled
-					aria-label="LLM Serving 请求链路与基线已完成"
-				/>
-				<span>request lifecycle baseline <span class="muted">/ 16 days</span></span>
-				<span class="quest-state is-done" aria-hidden="true">[done]</span>
-			</div>
+		<ol class="roadmap-summary" aria-label="AI Infra 阶段摘要">
+			<li>
+				<h3>阶段 1：{phase1.title}</h3>
+				<p><strong>状态：</strong>已通过 · <strong>学习周期：</strong>{phase1.period}</p>
+				<p>{phase1.goal}</p>
+				<p class="roadmap-route">P1-L0 → P1-L1 → P1-L2 → P1-L3 → P1-L4 → P1-F</p>
+				<a href={phase1.path}>查看阶段 1 课程与证据 →</a>
+			</li>
+			<li class="is-active">
+				<h3>阶段 2：{phase2.title}</h3>
+				<p><strong>状态：</strong>进行中 · <strong>学习周期：</strong>{phase2.period}</p>
+				<p>{phase2.goal}</p>
+				<p class="roadmap-route">P0 → M0 → M1 → M2 → S0 → S1 → S2 → S3 → S4 → F0</p>
+				<p class="current-line">
+					<strong>当前：</strong>{currentGate.id} · {currentGate.title}
+				</p>
+				<a href={`${phase2.path}#current`}>继续当前 Lab →</a>
+			</li>
+		</ol>
 
-			<DefinitionGrid
-				class="phase-ledger"
-				variant="ledger"
-				collapseAt="620"
-				aria-label="阶段一证据摘要"
-			>
-				<div>
-					<dt>scope</dt>
-					<dd>single-node · single-request · 4B quantized model</dd>
-				</div>
-				<div>
-					<dt>runtime</dt>
-					<dd>Ollama · vLLM Metal</dd>
-				</div>
-				<div>
-					<dt>evidence</dt>
-					<dd>2 articles · benchmark script · CSV · raw logs</dd>
-				</div>
-				<div>
-					<dt>boundary</dt>
-					<dd>no streaming concurrency or tail-latency claim</dd>
-				</div>
-			</DefinitionGrid>
-
-			<div class="learning-grid">
-				<div>
-					<h3>核心问题</h3>
-					<ol>
-						<li>请求如何经过 API、Tokenizer、Scheduler、Model Runner 与 Backend？</li>
-						<li>Prefill、Decode 与 KV Cache 分别承担什么计算和状态？</li>
-						<li>输入/输出长度如何改变 Prefill、Decode 与端到端耗时？</li>
-						<li>实验结论依赖哪些环境、负载、统计口径和证据边界？</li>
-					</ol>
-				</div>
-				<div>
-					<h3>已交付证据</h3>
-					<ul>
-						<li>完成 Qwen3-4B 的本地推理与 vLLM Metal 服务基线。</li>
-						<li>对输入/输出长度进行单变量实验，保留脚本、CSV、响应与日志。</li>
-						<li>
-							完成<a href="/blog/llm-inference-request-lifecycle/"
-								>《LLM 推理系统从请求到返回的完整链路》</a
-							>。
-						</li>
-						<li>
-							完成<a href="/blog/llm-inference-request-lifecycle-practice/"
-								>《本地 LLM 推理服务实验》</a
-							>，显式区分近似指标、严格指标与未验证结论。
-						</li>
-					</ul>
-				</div>
-			</div>
-
-			<DisclosureCard
-				title="reading queue"
-				meta="展开阅读清单"
-				stackOnMobile
-				style="margin-top: 1.25rem"
-			>
-				<div class="reading-columns">
-					<div>
-						<h3>理解 LLM 和 Transformer</h3>
-						<ul>
-							<li>
-								<a
-									href="https://jalammar.github.io/illustrated-transformer/"
-									target="_blank"
-									rel="noreferrer">The Illustrated Transformer</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://jalammar.github.io/illustrated-gpt2/"
-									target="_blank"
-									rel="noreferrer">The Illustrated GPT-2</a
-								>
-							</li>
-						</ul>
-						<h3>理解推理和生成</h3>
-						<ul>
-							<li>
-								<a
-									href="https://huggingface.co/blog/how-to-generate"
-									target="_blank"
-									rel="noreferrer">How to generate text</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://huggingface.co/docs/transformers/main/en/llm_tutorial"
-									target="_blank"
-									rel="noreferrer">Transformers: Text generation</a
-								>
-							</li>
-						</ul>
-					</div>
-					<div>
-						<h3>理解 KV Cache</h3>
-						<ul>
-							<li>
-								<a
-									href="https://huggingface.co/docs/transformers/main/en/cache_explanation"
-									target="_blank"
-									rel="noreferrer">KV Cache explained</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://huggingface.co/docs/transformers/main/en/llm_optims"
-									target="_blank"
-									rel="noreferrer">Optimizing inference</a
-								>
-							</li>
-						</ul>
-						<h3>性能与系统</h3>
-						<ul>
-							<li>
-								<a href="https://blog.vllm.ai/2023/06/20/vllm.html" target="_blank" rel="noreferrer"
-									>vLLM + PagedAttention</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://docs.vllm.ai/en/latest/design/kernel/paged_attention.html"
-									target="_blank"
-									rel="noreferrer">Paged Attention</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://docs.nvidia.com/nim/benchmarking/llm/latest/metrics.html"
-									target="_blank"
-									rel="noreferrer">LLM Benchmarking Metrics</a
-								>
-							</li>
-						</ul>
-					</div>
-				</div>
-			</DisclosureCard>
-
-			<pre
-				class="pipeline"
-				aria-label="LLM inference pipeline"><code>prompt
-  -&gt; tokenizer
-  -&gt; prefill  -&gt;  KV Cache
-  -&gt; decode   -&gt;  scheduler / batching
-  -&gt; response
-
-constraint: KV Cache consumes GPU memory</code></pre>
-		</LearningStage>
-
-		<LearningStage
-			period={phase2Milestone.period}
-			title={phase2Milestone.title}
-			status="active"
-			open
-		>
-			<div class="quest-line">
-				<input
-					class="quest-checkbox"
-					type="checkbox"
-					disabled
-					aria-label="LLM 推理核心知识与 vLLM 性能实验进行中"
-				/>
-				<span>core inference + vLLM benchmark <span class="muted">/ 32 days</span></span>
-				<span class="quest-state is-active" aria-hidden="true">[active]</span>
-			</div>
-			<p>{phase2Milestone.goal}</p>
-
-			<DefinitionGrid
-				class="phase-ledger"
-				variant="ledger"
-				collapseAt="620"
-				aria-label="阶段二实验契约"
-			>
-				<div>
-					<dt>current</dt>
-					<dd>{currentGate.id} · {currentGate.title}</dd>
-				</div>
-				<div>
-					<dt>completed</dt>
-					<dd>{completedGateSummary}</dd>
-				</div>
-				<div>
-					<dt>core route</dt>
-					<dd>{phase2Milestone.coreRoute}</dd>
-				</div>
-				<div>
-					<dt>evidence</dt>
-					<dd>
-						{phase2Evidence.tests} passing tests · {phase2Evidence.rawSamples} raw samples · {
-							phase2Evidence.summary
-						}
-					</dd>
-				</div>
-				<div>
-					<dt>final output</dt>
-					<dd>{phase2Milestone.finalArtifact}</dd>
-				</div>
-			</DefinitionGrid>
-
-			<div class="learning-grid">
-				<div>
-					<h3>核心问题</h3>
-					<ol>
-						<li>Transformer 的 Prefill 与 Decode 分别执行什么？</li>
-						<li>Attention 为什么需要 KV Cache，它节省了什么又增加了什么？</li>
-						<li>Prefill 为什么计算密集，Decode 为什么容易受内存与调度影响？</li>
-						<li>Batch Size 怎样改变吞吐与延迟，为什么它在动态 Serving 中不是一个数字？</li>
-						<li>Continuous Batching 怎样提高利用率，又引入什么竞争？</li>
-						<li>Prefix Caching 复用了什么，为什么主要影响重复 Prefill？</li>
-						<li>Speculative Decoding 怎样提出和验证候选，收益取决于什么？</li>
-						<li>Chunked Prefill 为什么可能改善 Decode ITL，又会付出什么代价？</li>
-						<li>权重、激活、KV Cache、临时 Buffer 与 Runtime 开销怎样组成显存占用？</li>
-						<li>输入长度、并发与 Scheduler Budget 怎样共同决定 TTFT、TPOT 和吞吐？</li>
-					</ol>
-				</div>
-				<div>
-					<h3>证据进度</h3>
-					<ul>
-						{
-							phase2Progress.completed.map((gate: { id: string; summary: string }) => (
-								<li>
-									[done] {gate.id} · {gate.summary}
-								</li>
-							))
-						}
-						<li>[active] {currentGate.id} · {currentGate.objective}</li>
-						<li>
-							[pending/core] S0–S4：真实 vLLM 环境、TTFT/TPOT、显存、输入长度、并发与调度预算。
-						</li>
-						<li>[pending/core] F0：结论矩阵、复现包、闭卷答辩与最终 vLLM 性能文章。</li>
-						<li>[optional] {phase2Milestone.advancedRoute}</li>
-					</ul>
-				</div>
-			</div>
-
-			<h3 class="subsection-title">执行窗口</h3>
-			<div class="month-plan" aria-label="阶段二学习与验收计划">
-				<article>
-					<span>08.12 — 08.18 / week 01</span>
-					<h4>KV Cache 与 Batch 机制证据 · done</h4>
-					<p>完成 Cache 等价性、预分配、Batched Decode、P0 NumPy 语义和 M1 Batch Size Scan。</p>
-					<p class="week-gate"><b>evidence</b> 9 tests + 300 length samples + 240 batch samples</p>
-				</article>
-				<article class="is-current">
-					<span>08.19 — 08.25 / week 02</span>
-					<h4>完成 A1/A2，启动无 Cache MHA · active</h4>
-					<p>{currentGate.id}：{currentGate.objective}</p>
-					<p class="week-gate"><b>gate</b> M2 acceptance → S0 snapshot</p>
-				</article>
-				<article>
-					<span>08.26 — 09.01 / week 03</span>
-					<h4>关闭 M2，冻结真实 vLLM · pending</h4>
-					<p>完成 MHA/GQA 与 KV 容量表，再完成 S0 环境快照和 S1 单并发稳态基线。</p>
-					<p class="week-gate"><b>gate</b> M2 capacity table + S0 snapshot + S1 baseline</p>
-				</article>
-				<article>
-					<span>09.02 — 09.08 / week 04</span>
-					<h4>输入长度、并发与调度批量 · pending</h4>
-					<p>
-						完成 S2 Input Length、S3 Client Concurrency 和 S4 Scheduler
-						Budget，区分客户端负载、配置上限与实际 Batch。
-					</p>
-					<p class="week-gate"><b>gate</b> input curves + saturation point + scheduler evidence</p>
-				</article>
-				<article class="review-window">
-					<span>09.09 — 09.12 / review</span>
-					<h4>原始阶段产出与闭卷验收</h4>
-					<p>重建核心曲线、复测异常、完成十个知识点答辩并交付最终 vLLM 性能文章。</p>
-					<p class="week-gate">
-						<b>release</b> reproducible bundle + final article + core complete
-					</p>
-				</article>
-			</div>
-
-			<p class="scope-note">
-				<span>[scope]</span> 当前只做 {currentGate.id}：{currentGate.objective} M2 通过后立即进入 S0。Speculative
-				Decoding、Prefix Caching 与 Chunked Prefill 的基本思想属于核心口述范围；S5/S6 实验、源码追踪、跨环境迁移和分布式并行不阻塞本月交付。
-			</p>
-
-			<DisclosureCard
-				title="reference set"
-				meta="核心材料 / 按需扩展"
-				stackOnMobile
-				style="margin-top: 1.25rem"
-			>
-				<div class="reading-columns">
-					<div>
-						<h3>core / 机制与系统</h3>
-						<ul>
-							<li>
-								<a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noreferrer"
-									>Attention Is All You Need</a
-								>
-							</li>
-							<li>
-								<a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noreferrer"
-									>Efficient Memory Management for LLM Serving with PagedAttention</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://www.usenix.org/conference/osdi22/presentation/yu"
-									target="_blank"
-									rel="noreferrer"
-									>Orca: A Distributed Serving System for Transformer-Based Generative Models</a
-								>
-							</li>
-							<li>
-								<a href="/blog/conjecture-verification-practice/"
-									>Speculative Decoding：候选、验证与分布保持</a
-								>
-							</li>
-						</ul>
-
-						<h3>core / 实现与测量</h3>
-						<ul>
-							<li>
-								<a
-									href="https://docs.vllm.ai/en/stable/configuration/optimization/"
-									target="_blank"
-									rel="noreferrer">vLLM Optimization and Tuning</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://docs.vllm.ai/en/stable/benchmarking/cli/"
-									target="_blank"
-									rel="noreferrer">vLLM Benchmark CLI</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://docs.vllm.ai/en/stable/usage/metrics/"
-									target="_blank"
-									rel="noreferrer">vLLM Production Metrics</a
-								>
-							</li>
-						</ul>
-					</div>
-					<div>
-						<h3>extension / 调度与 Cache</h3>
-						<ul>
-							<li>
-								<a href="https://arxiv.org/abs/2403.02310" target="_blank" rel="noreferrer"
-									>Sarathi-Serve: Taming the Throughput-Latency Tradeoff</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://docs.vllm.ai/en/stable/features/automatic_prefix_caching/"
-									target="_blank"
-									rel="noreferrer">vLLM Automatic Prefix Caching</a
-								>
-							</li>
-						</ul>
-
-						<h3>environment / Backend 边界</h3>
-						<ul>
-							<li>
-								<a
-									href="https://docs.vllm.ai/projects/vllm-metal/en/latest/"
-									target="_blank"
-									rel="noreferrer">vLLM Metal</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://docs.vllm.ai/projects/vllm-metal/en/latest/configuration/"
-									target="_blank"
-									rel="noreferrer">vLLM Metal Configuration</a
-								>
-							</li>
-						</ul>
-
-						<h3>source / vertical slice</h3>
-						<ul>
-							<li>
-								<a
-									href="https://docs.vllm.ai/en/stable/api/vllm/v1/request/"
-									target="_blank"
-									rel="noreferrer">Request and RequestStatus</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://docs.vllm.ai/en/stable/api/vllm/config/scheduler/"
-									target="_blank"
-									rel="noreferrer">Scheduler Configuration</a
-								>
-							</li>
-							<li>
-								<a
-									href="https://docs.vllm.ai/en/stable/api/vllm/v1/core/kv_cache_coordinator/"
-									target="_blank"
-									rel="noreferrer">KV Cache Coordinator</a
-								>
-							</li>
-						</ul>
-					</div>
-				</div>
-			</DisclosureCard>
-
-			<pre
-				class="pipeline"
-				aria-label="LLM serving performance model"><code>load: request_rate != client_concurrency
-  -&gt; queue: queue_time / waiting_requests
-  -&gt; scheduler: active_sequences + token_budget
-  -&gt; prefill / chunked_prefill &lt;-&gt; decode
-  -&gt; KV blocks: allocate / reuse / release
-  -&gt; client: TTFT / TPOT / ITL / E2E / throughput
-  -&gt; server: running / waiting / KV_cache_usage
-
-scope: backend + hardware + model + version + workload</code></pre>
-
-			<p class="stage-gate">
-				<strong>核心验收：</strong>闭卷解释十个推理知识点；完成 M2 与 S0–S4，在固定环境中记录 TTFT、
-				TPOT、吞吐、显存、输入长度、并发和 Scheduler
-				Budget；用客户端与服务端证据解释吞吐—延迟权衡，并完成
-				{phase2Milestone.finalArtifact}。S5、S6、R0 与 T0 属于进阶扩展，不阻塞 Core Complete。
-			</p>
-		</LearningStage>
+		<a class="course-link" href="/learning/">打开完整 AI Infra 课程路线 →</a>
 	</section>
 
 	<section class="about-section principles-section" aria-labelledby="principles-title">
-		<div class="section-label">03 / operating principles</div>
 		<h2 id="principles-title">学习与 AI 协作原则</h2>
 
 		<p class="principles-lead">
@@ -561,40 +115,31 @@ scope: backend + hardware + model + version + workload</code></pre>
 			用于扩大代码库探索、验证和工程交付效率。最终结论只由代码、测试、测量与可复现证据确认。
 		</p>
 
-		<div class="mode-grid" aria-label="三种 AI 协作模式">
-			<article>
-				<header>
-					<span>M0</span>
-					<h3>独立模式</h3>
-				</header>
+		<ol class="mode-list" aria-label="三种 AI 协作模式">
+			<li>
+				<h3>M0 · 独立模式</h3>
 				<p>用于核心机制、第一轮调试与最终解释；AI 不介入问题求解。</p>
-				<small>own: model · invariant · implementation</small>
-			</article>
-			<article>
-				<header>
-					<span>M1</span>
-					<h3>教练模式</h3>
-				</header>
+				<p class="mode-own">负责：系统模型、约束与实现</p>
+			</li>
+			<li>
+				<h3>M1 · 教练模式</h3>
 				<p>用于源码导航、概念澄清与反例生成；AI 提问和 Review，不直接接管结论。</p>
-				<small>own: source trace · hypothesis · trade-off</small>
-			</article>
-			<article>
-				<header>
-					<span>M2</span>
-					<h3>Agent 模式</h3>
-				</header>
+				<p class="mode-own">负责：源码追踪、假设与权衡</p>
+			</li>
+			<li>
+				<h3>M2 · Agent 模式</h3>
 				<p>用于脚手架、测试、数据处理与重构；AI 在明确契约和验收标准内执行。</p>
-				<small>own: scope · acceptance · final diff</small>
-			</article>
-		</div>
+				<p class="mode-own">负责：范围、验收与最终修改</p>
+			</li>
+		</ol>
 
 		<div class="protocol-grid">
 			<div>
 				<h3>before delegation</h3>
 				<ul>
 					<li>定义 Question、Prediction 与 Invariant。</li>
-					<li>限定 Action 与 Allowed AI Help，写明不可外包的判断。</li>
-					<li>指定 Artifact，并用测试、指标或可观察行为定义 Acceptance。</li>
+					<li>限定 Action 与 Allowed AI Help。</li>
+					<li>指定 Artifact 与 Acceptance。</li>
 				</ul>
 			</div>
 			<div>
@@ -602,23 +147,16 @@ scope: backend + hardware + model + version + workload</code></pre>
 				<ul>
 					<li>审阅完整 Diff，运行测试并复现实验。</li>
 					<li>脱离对话解释关键路径，独立修改一个约束。</li>
-					<li>记录 Feedback、Reflection、适用边界与下一项决策。</li>
+					<li>记录 Feedback、Reflection 与下一项决策。</li>
 				</ul>
 			</div>
 		</div>
 
 		<pre
-			class="pipeline principle-loop"
-			aria-label="Evidence-driven learning loop"><code>question -&gt; prediction
-  -&gt; minimum necessary reading
-  -&gt; implementation
-  -&gt; test / benchmark
+			class="pipeline"
+			aria-label="Evidence-driven learning loop"><code>question -&gt; prediction -&gt; minimum reading
+  -&gt; implementation -&gt; test / benchmark
   -&gt; explanation -&gt; review -&gt; correction</code></pre>
-
-		<p class="moat-formula">
-			<span>competitive edge =</span>
-			<strong>systems depth × AI leverage × evidence ownership × external feedback</strong>
-		</p>
 
 		<p class="principle-gate">
 			<strong>验收标准：</strong>能够在不查看 AI
@@ -633,16 +171,11 @@ scope: backend + hardware + model + version + workload</code></pre>
 </Layout>
 
 <style>
-	.section-label,
 	.project-meta,
-	.quest-line,
 	.profile-ledger,
-	.phase-ledger,
-	.week-gate,
-	.scope-note,
-	.mode-grid,
+	.roadmap-summary,
+	.mode-list,
 	.protocol-grid,
-	.moat-formula,
 	.pipeline,
 	.about-footer {
 		font-family: var(--font-mono);
@@ -652,6 +185,10 @@ scope: backend + hardware + model + version + workload</code></pre>
 		margin: 0.5rem 0 2.5rem;
 	}
 
+	.profile-brief > h2 {
+		margin: 0 0 0.75rem;
+	}
+
 	.profile-summary {
 		max-width: 72ch;
 		margin: 0.45rem 0 1rem;
@@ -659,241 +196,121 @@ scope: backend + hardware + model + version + workload</code></pre>
 		line-height: 1.85;
 	}
 
-	.about-section > h2 {
-		margin-top: 0;
+	.profile-ledger {
+		display: grid;
+		grid-template-columns: 7rem minmax(0, 1fr);
+		gap: 0.25rem 0.75rem;
+		margin: 0;
+		font-size: 0.86rem;
+	}
+
+	.profile-ledger dt {
+		color: rgb(var(--gray));
+	}
+
+	.profile-ledger dd {
+		margin: 0;
 	}
 
 	.about-section {
 		margin: 2.25rem 0;
 	}
 
-	.section-label {
-		margin-bottom: 0.25rem;
-		color: var(--accent);
-		font-size: 0.7rem;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-	}
-
 	.about-section > h2 {
+		margin-top: 0;
 		margin-bottom: 1rem;
 	}
 
+	.section-intro {
+		max-width: 68ch;
+		color: rgb(var(--gray));
+		line-height: 1.7;
+	}
+
+	.project {
+		padding: 0.9rem 0;
+		border-top: 1px solid rgb(var(--gray-light));
+	}
+
+	.project > h3,
+	.project-stack {
+		margin: 0;
+	}
+
+	.project-stack {
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.86rem;
+	}
+
 	.project-body {
-		padding: 0 1rem 1rem;
+		padding: 0;
 	}
 
 	.project-meta {
 		margin: 0.75rem 0;
 		color: rgb(var(--gray));
-		font-size: 0.72rem;
+		font-size: 0.86rem;
 	}
 
 	.project-body > p:not(.project-meta) {
 		font-size: 0.92rem;
 	}
 
-	.project-body ul,
-	.learning-grid ul,
-	.learning-grid ol,
-	.reading-columns ul {
+	.project-body ul {
 		padding-left: 1.35rem;
 	}
 
-	.project-body li,
-	.learning-grid li,
-	.reading-columns li {
+	.project-body li {
 		margin: 0.35rem 0;
 	}
 
-	.project-body li::marker,
-	.learning-grid li::marker,
-	.reading-columns li::marker {
-		color: var(--accent);
-		font-family: var(--font-mono);
-	}
-
-	.quest-line {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-		margin: 0.75rem 0 0.85rem;
-		padding: 0.55rem 0.7rem;
-		border: 1px dashed rgb(var(--gray-light));
-		border-radius: var(--card-radius);
-		background: rgb(226 232 240 / 24%);
-		font-size: 0.9rem;
-	}
-
-	.quest-checkbox {
-		display: inline-grid;
-		flex: 0 0 auto;
-		place-content: center;
-		width: 0.95rem;
-		height: 0.95rem;
-		margin: 0;
-		border: 1px solid var(--accent);
-		border-radius: 2px;
-		appearance: none;
-		background: transparent;
-		opacity: 1;
-		pointer-events: none;
-	}
-
-	.quest-checkbox::before {
-		content: '';
-		width: 0.5rem;
-		height: 0.5rem;
-		transform: scale(0);
-		background: var(--accent);
-		clip-path: polygon(14% 44%, 0 65%, 38% 100%, 100% 18%, 80% 0, 36% 68%);
-	}
-
-	.quest-checkbox:checked::before {
-		transform: scale(1);
-	}
-
-	.quest-state {
-		margin-left: auto;
-		color: rgb(var(--gray));
-		font-size: 0.7rem;
-	}
-
-	.quest-state.is-done {
-		color: #15803d;
-	}
-
-	.quest-state.is-active {
-		color: var(--accent);
-	}
-
-	.muted {
-		color: rgb(var(--gray));
-	}
-
-	.learning-grid,
-	.reading-columns,
-	.month-plan {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 1.5rem;
-	}
-
-	.learning-grid {
+	.roadmap-summary {
 		margin-top: 1rem;
-		gap: 1.25rem;
+		padding-left: 1.4rem;
+		border-top: 1px solid #cbd5e1;
 	}
 
-	.learning-grid h3,
-	.reading-columns h3 {
-		margin-top: 0.5rem;
-		font-size: 0.95rem;
+	.roadmap-summary > li {
+		padding: 0.85rem 0;
+		border-bottom: 1px solid #e2e8f0;
 	}
 
-	.reading-columns {
-		padding: 0 1rem 1rem;
+	.roadmap-summary h3 {
+		margin: 0.35rem 0;
+		font-size: 1rem;
 	}
 
-	.reading-columns h3 {
+	.roadmap-summary p {
+		margin: 0.35rem 0;
+		font-family: var(--font-body);
+		font-size: 0.84rem;
+		line-height: 1.6;
+	}
+
+	.roadmap-summary .roadmap-route {
+		margin: 0.65rem 0;
+		color: #64748b;
 		font-family: var(--font-mono);
-		font-size: 0.78rem;
+		font-size: 0.86rem;
+		line-height: 1.6;
 	}
 
-	.reading-columns a {
-		text-decoration: underline;
-		text-decoration-color: rgb(var(--accent) / 35%);
+	.roadmap-summary .current-line {
+		padding-top: 0.5rem;
+		border-top: 1px dashed #cbd5e1;
 	}
 
-	.subsection-title {
-		margin: 1.35rem 0 0.65rem;
-		font-size: 0.95rem;
+	.roadmap-summary a,
+	.course-link {
+		font-size: 0.86rem;
 	}
 
-	.month-plan {
-		gap: 0.75rem;
-	}
-
-	.month-plan article {
-		padding: 0.75rem 0.8rem;
-		border: 1px dashed rgb(var(--gray-light));
-		border-radius: var(--card-radius);
-		background: rgb(226 232 240 / 24%);
-	}
-
-	.month-plan article.is-current {
-		border-style: solid;
-		border-color: var(--accent);
-	}
-
-	.month-plan span {
-		color: var(--accent);
+	.course-link {
+		display: inline-block;
+		margin-top: 0.85rem;
 		font-family: var(--font-mono);
-		font-size: 0.68rem;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-	}
-
-	.month-plan h4 {
-		margin: 0.2rem 0 0.35rem;
-		font-size: 0.85rem;
-	}
-
-	.month-plan p {
-		margin: 0;
-		font-size: 0.82rem;
-	}
-
-	.month-plan .week-gate {
-		margin-top: 0.55rem;
-		padding-top: 0.45rem;
-		border-top: 1px dashed rgb(var(--gray-light));
-		color: rgb(var(--gray));
-		font-size: 0.68rem;
-	}
-
-	.week-gate b {
-		margin-right: 0.45rem;
-		color: var(--accent);
-		font-weight: 500;
-		text-transform: uppercase;
-	}
-
-	.review-window {
-		grid-column: 1 / -1;
-	}
-
-	.scope-note {
-		margin: 0.85rem 0 0;
-		padding-left: 0.7rem;
-		border-left: 2px solid rgb(var(--gray-light));
-		color: rgb(var(--gray));
-		font-size: 0.74rem;
-	}
-
-	.scope-note span {
-		color: var(--accent);
-	}
-
-	.pipeline {
-		overflow-x: auto;
-		margin: 1.25rem 0 0;
-		border: 1px solid rgb(var(--gray-light));
-		border-radius: var(--card-radius);
-		background: rgb(226 232 240 / 45%);
-		color: rgb(var(--black));
-		font-size: 0.78rem;
-		line-height: 1.7;
-	}
-
-	.stage-gate {
-		margin: 0.85rem 0 0;
-		padding-left: 0.75rem;
-		border-left: 3px solid var(--accent);
-		font-size: 0.88rem;
-	}
-
-	.principles-section {
-		margin-top: 2.75rem;
+		font-weight: 700;
 	}
 
 	.principles-lead {
@@ -904,68 +321,49 @@ scope: backend + hardware + model + version + workload</code></pre>
 		line-height: 1.8;
 	}
 
-	.mode-grid {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 0.7rem;
+	.mode-list {
+		margin: 0;
+		padding-left: 1.4rem;
+		border-top: 1px solid rgb(var(--gray-light));
 	}
 
-	.mode-grid article {
-		min-width: 0;
-		padding: 0.75rem 0.8rem;
-		border: 1px dashed rgb(var(--gray-light));
-		border-radius: var(--card-radius);
-		background: rgb(226 232 240 / 24%);
+	.mode-list li {
+		padding: 0.65rem 0;
+		border-bottom: 1px solid rgb(var(--gray-light));
 	}
 
-	.mode-grid header {
-		display: flex;
-		align-items: baseline;
-		gap: 0.5rem;
-	}
-
-	.mode-grid header span {
-		color: var(--accent);
-		font-size: 0.7rem;
-		letter-spacing: 0.06em;
-	}
-
-	.mode-grid h3 {
+	.mode-list h3 {
 		margin: 0;
 		font-size: 0.88rem;
 	}
 
-	.mode-grid p {
+	.mode-list p {
 		margin: 0.45rem 0 0.65rem;
 		font-family: var(--font-body);
 		font-size: 0.82rem;
 	}
 
-	.mode-grid small {
-		display: block;
-		padding-top: 0.45rem;
-		border-top: 1px dashed rgb(var(--gray-light));
+	.mode-list .mode-own {
+		margin-bottom: 0;
 		color: rgb(var(--gray));
-		font-size: 0.64rem;
-		line-height: 1.55;
+		font-family: var(--font-body);
+		font-size: 0.86rem;
 	}
 
 	.protocol-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 1.25rem;
 		margin-top: 1.1rem;
-		padding: 0.75rem 0;
 		border-top: 1px solid rgb(var(--gray-light));
+	}
+
+	.protocol-grid > div {
+		padding: 0.7rem 0;
 		border-bottom: 1px solid rgb(var(--gray-light));
 	}
 
 	.protocol-grid h3 {
 		margin: 0 0 0.45rem;
 		color: var(--accent);
-		font-size: 0.74rem;
-		letter-spacing: 0.05em;
-		text-transform: uppercase;
+		font-size: 0.9rem;
 	}
 
 	.protocol-grid ul {
@@ -975,38 +373,15 @@ scope: backend + hardware + model + version + workload</code></pre>
 		font-size: 0.84rem;
 	}
 
-	.protocol-grid li {
-		margin: 0.28rem 0;
-	}
-
-	.protocol-grid li::marker {
-		color: var(--accent);
-	}
-
-	.principle-loop {
-		margin-top: 1rem;
-	}
-
-	.moat-formula {
-		display: flex;
-		align-items: baseline;
-		gap: 0.7rem;
-		margin: 0.85rem 0 0;
-		padding: 0.6rem 0.7rem;
-		border: 1px dashed rgb(var(--gray-light));
-		border-radius: var(--card-radius);
-		font-size: 0.72rem;
-	}
-
-	.moat-formula span {
-		flex: 0 0 auto;
-		color: var(--accent);
-		text-transform: uppercase;
-	}
-
-	.moat-formula strong {
-		font-family: var(--font-mono);
-		font-weight: 500;
+	.pipeline {
+		overflow-x: auto;
+		margin: 1.25rem 0 0;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: rgb(var(--black));
+		font-size: 0.86rem;
+		line-height: 1.7;
 	}
 
 	.principle-gate {
@@ -1019,46 +394,21 @@ scope: backend + hardware + model + version + workload</code></pre>
 	.about-footer {
 		display: flex;
 		justify-content: space-between;
-		margin-top: 3rem;
+		margin-top: 2.75rem;
 		padding-top: 0.75rem;
-		border-top: 1px dashed rgb(var(--gray-light));
+		border-top: 1px solid rgb(var(--gray-light));
 		color: rgb(var(--gray));
-		font-size: 0.7rem;
+		font-size: 0.82rem;
 	}
 
 	@media (max-width: 620px) {
-		.learning-grid,
-		.reading-columns,
-		.month-plan {
+		.profile-ledger {
 			grid-template-columns: 1fr;
-			gap: 0.75rem;
+			gap: 0.1rem;
 		}
 
-		.review-window {
-			grid-column: auto;
-		}
-
-		.mode-grid,
-		.protocol-grid {
-			grid-template-columns: 1fr;
-			gap: 0.75rem;
-		}
-
-		.moat-formula {
-			align-items: flex-start;
-			flex-direction: column;
-			gap: 0.25rem;
-		}
-
-		.quest-line {
-			align-items: flex-start;
-			flex-wrap: wrap;
-		}
-
-		.about-footer {
-			align-items: flex-start;
-			flex-direction: column;
-			gap: 0.3rem;
+		.profile-ledger dd + dt {
+			margin-top: 0.35rem;
 		}
 	}
 </style>

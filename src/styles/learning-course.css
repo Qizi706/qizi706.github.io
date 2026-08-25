@@ -1,0 +1,260 @@
+.course-breadcrumbs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem;
+	margin: 0 0 1.25rem;
+	color: #64748b;
+	font-size: 0.9rem;
+}
+
+.course-breadcrumbs span[aria-hidden='true'] {
+	color: #cbd5e1;
+}
+
+.course-hero {
+	padding-bottom: 1.5rem;
+	border-bottom: 1px solid #cbd5e1;
+}
+
+.course-status {
+	margin: 0;
+	color: #64748b;
+	font-size: 1rem;
+	line-height: 1.6;
+}
+
+.course-hero h1 {
+	max-width: 52rem;
+	margin: 0.4rem 0 0.75rem;
+	font-size: clamp(1.75rem, 4vw, 2.6rem);
+	line-height: 1.2;
+}
+
+.course-lead {
+	max-width: 54rem;
+	margin: 0;
+	color: #475569;
+	font-size: 1rem;
+	line-height: 1.8;
+}
+
+.course-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem 1rem;
+	margin-top: 1rem;
+}
+
+.course-action {
+	font-size: 0.9rem;
+}
+
+.course-action:hover,
+.course-action:focus-visible {
+	text-decoration: underline;
+}
+
+.course-action--primary,
+.course-action--primary:hover,
+.course-action--primary:focus-visible {
+	font-weight: 700;
+}
+
+.course-section-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem 1rem;
+	padding: 1rem 0;
+	border-bottom: 1px solid #e2e8f0;
+	font-size: 0.9rem;
+}
+
+.course-section {
+	padding: 2rem 0;
+	border-bottom: 1px solid #e2e8f0;
+	scroll-margin-top: 4.5rem;
+}
+
+.course-contract-grid {
+	display: grid;
+	grid-template-columns: 8rem minmax(0, 1fr);
+	gap: 0.35rem 1rem;
+	margin: 1rem 0 0;
+}
+
+.course-contract-grid > div {
+	display: contents;
+}
+
+.course-contract-grid dt {
+	color: #64748b;
+	font-size: 0.88rem;
+	font-weight: 700;
+}
+
+.course-contract-grid dd {
+	margin: 0;
+	color: #334155;
+	font-size: 0.86rem;
+	line-height: 1.6;
+}
+
+.course-method {
+	margin: 1rem 0 0;
+	padding-left: 1.4rem;
+}
+
+.course-method li {
+	margin: 0.45rem 0;
+	padding-left: 0.2rem;
+}
+
+.course-method strong {
+	margin-right: 0.45rem;
+}
+
+.course-method span {
+	color: #64748b;
+	font-size: 0.82rem;
+	line-height: 1.55;
+}
+
+.course-callout {
+	margin: 1rem 0 0;
+	padding-left: 0.9rem;
+	border-left: 2px solid #cbd5e1;
+	color: #334155;
+	line-height: 1.65;
+}
+
+.course-callout p:last-child {
+	margin-bottom: 0;
+}
+
+.course-resource-grid {
+	margin-top: 0.75rem;
+	border-top: 1px solid #cbd5e1;
+}
+
+.course-resource-grid > article {
+	padding: 0.75rem 0;
+	border-bottom: 1px solid #e2e8f0;
+}
+
+.course-resource-grid article > span {
+	color: #64748b;
+	font-size: 0.88rem;
+}
+
+.course-resource-grid h3 {
+	margin: 0.15rem 0 0.25rem;
+	font-size: 1rem;
+}
+
+.course-resource-grid p {
+	margin: 0 0 0.25rem;
+	color: #64748b;
+	font-size: 0.9rem;
+	line-height: 1.6;
+}
+
+.course-boundary {
+	margin-top: 2rem;
+	padding-top: 1rem;
+	border-top: 1px solid #cbd5e1;
+	color: #64748b;
+	font-size: 0.9rem;
+	line-height: 1.65;
+}
+
+.page-frame.learning-course-page,
+.page-frame.phase-course-page,
+.page-frame.phase2-course-page {
+	max-width: 70rem;
+	color: #1f2937;
+	font-family: var(--font-body);
+}
+
+.phase-overview {
+	margin-top: 1.25rem;
+	padding-top: 1rem;
+	border-top: 1px solid #cbd5e1;
+}
+
+.phase-overview > h3 {
+	margin: 0;
+}
+
+.phase-overview > h3 {
+	font-size: 1.15rem;
+}
+
+.phase-overview > p {
+	max-width: 55rem;
+	margin: 0.5rem 0 0;
+	color: #475569;
+	line-height: 1.65;
+}
+
+.phase-overview__link {
+	display: inline-block;
+	margin-top: 0.25rem;
+	font-size: 0.9rem;
+}
+
+.current-position {
+	margin: 1rem 0 0;
+	color: #475569;
+	font-size: 0.86rem;
+	line-height: 1.65;
+}
+
+.completed-ledger,
+.article-ledger {
+	margin: 0.75rem 0 0;
+	padding-left: 1.4rem;
+}
+
+.completed-ledger li,
+.article-ledger li {
+	padding: 0.7rem 0;
+	border-bottom: 1px solid #e2e8f0;
+}
+
+.completed-ledger header {
+	display: flex;
+	justify-content: space-between;
+	gap: 0.75rem;
+	color: #64748b;
+	font-size: 0.85rem;
+}
+
+.completed-ledger h3,
+.article-ledger h3 {
+	margin: 0.25rem 0;
+	font-size: 0.95rem;
+}
+
+.completed-ledger p,
+.article-ledger p {
+	margin: 0.25rem 0 0;
+	color: #475569;
+	font-size: 0.9rem;
+	line-height: 1.55;
+}
+
+.article-state {
+	color: #64748b;
+	font-size: 0.88rem;
+}
+
+@media (max-width: 720px) {
+	.course-contract-grid {
+		grid-template-columns: 1fr;
+		gap: 0.1rem;
+	}
+
+	.course-contract-grid dd + dt {
+		margin-top: 0.4rem;
+	}
+}

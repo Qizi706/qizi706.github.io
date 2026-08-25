@@ -1,0 +1,195 @@
+---
+import type { CourseUnit } from '../data/learning-course';
+
+interface Props {
+	units: CourseUnit[];
+	compact?: boolean;
+	label?: string;
+}
+
+const { units, compact = false, label = '课程模块路线' } = Astro.props;
+const statusLabels = {
+	done: '已通过',
+	active: '当前',
+	pending: '待解锁',
+	optional: '进阶',
+};
+---
+
+<ol class:list={['course-route', { 'course-route--compact': compact }]} aria-label={label}>
+	{
+		units.map((unit) => (
+			<li class:list={['course-unit', `is-${unit.status}`]}>
+				<header>
+					<h3>
+						{unit.id} · {unit.title}
+					</h3>
+					<p class="course-unit__details">
+						<strong>预计：</strong>
+						{unit.duration} · <strong>状态：</strong>
+						{statusLabels[unit.status]}
+					</p>
+				</header>
+
+				<p class="course-unit__question">{unit.question}</p>
+
+				{!compact && (
+					<dl class="course-unit__contract">
+						<dt>Prerequisite</dt>
+						<dd>{unit.dependsOn}</dd>
+						<dt>Work</dt>
+						<dd>{unit.work}</dd>
+						<dt>Artifact</dt>
+						<dd>{unit.artifact}</dd>
+						<dt>Checkoff</dt>
+						<dd>{unit.acceptance}</dd>
+					</dl>
+				)}
+
+				{!compact && unit.parts && (
+					<ol class="course-parts" aria-label={`${unit.id} 子任务`}>
+						{unit.parts.map((part) => (
+							<li>
+								<strong>
+									{part.id} · {part.title}
+								</strong>
+								<span> — {part.checkoff}</span>
+								<span>（{statusLabels[part.status]}）</span>
+							</li>
+						))}
+					</ol>
+				)}
+
+				{compact ? (
+					<p class="course-unit__gate">
+						<strong>Gate：</strong>
+						{unit.acceptance}
+					</p>
+				) : (
+					<p class="course-unit__next">
+						<strong>Unlocks：</strong>
+						{unit.unlocks} {unit.href && <a href={unit.href}>打开材料 →</a>}
+					</p>
+				)}
+			</li>
+		))
+	}
+</ol>
+
+<style>
+	.course-route {
+		margin: 1rem 0 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.course-unit {
+		padding: 1rem 0;
+		border-top: 1px solid #e2e8f0;
+	}
+
+	.course-unit:first-child {
+		border-top-color: #cbd5e1;
+	}
+
+	.course-unit h3 {
+		margin: 0;
+	}
+
+	.course-unit__details {
+		margin: 0.25rem 0 0;
+		color: #64748b;
+		font-size: 0.9rem;
+		line-height: 1.55;
+	}
+
+	.course-unit__details strong {
+		color: #475569;
+	}
+
+	.course-unit.is-active .course-unit__details {
+		color: var(--accent);
+	}
+
+	.course-unit h3 {
+		font-size: 1.05rem;
+	}
+
+	.course-unit__question {
+		margin: 0.55rem 0;
+		color: #334155;
+		line-height: 1.65;
+	}
+
+	.course-unit__contract {
+		display: grid;
+		grid-template-columns: 7rem minmax(0, 1fr);
+		gap: 0.25rem 0.8rem;
+		margin: 0.7rem 0 0;
+	}
+
+	.course-unit__contract dt {
+		color: #64748b;
+		font-size: 0.86rem;
+		font-weight: 700;
+	}
+
+	.course-unit__contract dd {
+		margin: 0;
+		color: #475569;
+		font-size: 0.84rem;
+		line-height: 1.55;
+	}
+
+	.course-parts {
+		margin: 0.75rem 0 0;
+		padding-left: 1.35rem;
+		color: #475569;
+		font-size: 0.88rem;
+		line-height: 1.65;
+	}
+
+	.course-parts li {
+		margin: 0.25rem 0;
+	}
+
+	.course-parts span {
+		color: #64748b;
+	}
+
+	.course-unit__next,
+	.course-unit__gate {
+		margin: 0.65rem 0 0;
+		color: #64748b;
+		font-size: 0.88rem;
+		line-height: 1.55;
+	}
+
+	.course-unit__next a {
+		margin-left: 0.35rem;
+	}
+
+	.course-route--compact .course-unit {
+		padding: 0.7rem 0;
+	}
+
+	.course-route--compact .course-unit__question {
+		margin: 0.35rem 0 0;
+		font-size: 0.95rem;
+	}
+
+	.course-route--compact .course-unit__gate {
+		margin-top: 0.25rem;
+	}
+
+	@media (max-width: 560px) {
+		.course-unit__contract {
+			grid-template-columns: 1fr;
+			gap: 0.1rem;
+		}
+
+		.course-unit__contract dd + dt {
+			margin-top: 0.4rem;
+		}
+	}
+</style>

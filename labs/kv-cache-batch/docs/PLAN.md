@@ -1,6 +1,6 @@
 # 阶段 2 总路线与验收：LLM 推理核心知识与 vLLM 性能实验
 
-这份文件是 2026.08.12—2026.09.12 阶段 2 的范围、依赖和验收标准，不是当前练习的逐步操作说明。目标是在一个月内理解推理系统的核心矛盾，并用真实 vLLM 实验解释调度、显存、Batching 与 KV Cache 如何共同决定吞吐和延迟。
+这份文件是 2026.08.12—2026.09.12 阶段 2 的范围、依赖和验收标准，不是当前练习的逐步操作说明。跨 Phase 1/2 的课程入口见[AI Infra 学习路线](/learning/)；可视化的 Phase 2 Gate 顺序见[阶段 2 课程页](/learning/phase-2/)。目标是在一个月内理解推理系统的核心矛盾，并用真实 vLLM 实验解释调度、显存、Batching 与 KV Cache 如何共同决定吞吐和延迟。
 
 本文明确区分“阶段 2 核心完成”和“进阶扩展”。不要因为阅读完一节就标记为完成；也不要让源码追踪、混合负载或跨环境迁移无限推迟原定的一月交付。
 
@@ -10,13 +10,13 @@
 
 | 需要                     | 唯一入口                            | 这份材料不负责什么                   |
 | ------------------------ | ----------------------------------- | ------------------------------------ |
-| 查看当前 Gate 和入口     | [阶段 2 共学页](/learning/phase-2/) | 不保存实现细节和原始证据             |
+| 查看当前 Gate 和入口     | [阶段 2 课程页](/learning/phase-2/) | 不保存实现细节和原始证据             |
 | 执行当前练习             | [`README.md`](../README.md)         | 不展开完整阶段路线和历史实验         |
 | 查看依赖、验收和停止条件 | 本计划                              | 不重复当前练习的命令、提示和填写记录 |
 | 填写预测、失败与结果     | [`docs/gates/M2.md`](gates/M2.md)   | 不定义阶段范围，也不充当教程         |
 | 审计已经产生的证据       | [`results/`](../results) 与测试     | 不用叙事代替原始数据                 |
 
-正常执行链是：**共学页定位当前 Gate → README 执行 → Gate 工作表记录 → 测试与 results 验收**。系统文章解释机制，实验文章总结已经完成的证据；两者都不决定当前进度。
+正常执行链是：**课程页定位当前 Gate → README 执行 → Gate 工作表记录 → 测试与 results 验收**。系统文章解释机制，实验文章总结已经完成的证据；两者都不决定当前进度。
 
 ## 0. 当前路线快照
 
@@ -167,8 +167,8 @@ question
 
 | ID  | 任务                      | 当前状态    | 直接产物                                  |
 | --- | ------------------------- | ----------- | ----------------------------------------- |
-| M0  | Cache、预分配、固定 `B=2` | Completed   | 测试、300 条长度扫描样本、机制实验文章    |
 | P0  | Python/NumPy 语义         | Completed   | 六个可预测的小实验                        |
+| M0  | Cache、预分配、固定 `B=2` | Completed   | 测试、300 条长度扫描样本、机制实验文章    |
 | M1  | Batch Size 曲线           | Completed   | `B=1/2/4/8` 原始数据与曲线                |
 | M2  | MHA/GQA 与 KV 容量        | In progress | 正确性测试与容量表                        |
 | S0  | vLLM 环境与可观测性       | Pending     | 环境快照与 Capability Matrix              |
@@ -196,6 +196,25 @@ question
 六个实验已保留运行前预测、实际结果、差异解释与断言；能够脱离代码解释 Binding、浅复制、基础切片、Advanced Indexing、`swapaxes`、`concatenate`、Stride 与 Buffer 分配，并把这些语义映射回 Attention/KV Cache。
 
 完整记录见 [`docs/gates/P0.md`](gates/P0.md)，可执行例子见 [`examples/numpy_array_semantics.py`](../examples/numpy_array_semantics.py)。P0 已关闭，不再追加脱离当前主线的 Python 练习。
+
+---
+
+# Gate M0：单 Head Attention、KV Cache 与预分配
+
+状态：**Completed（2026-08-12—2026-08-18）**。
+
+推荐教学顺序把 P0 放在 M0 前面，让学习者先掌握 View、Copy、Stride 与 Axis，再阅读 Cache 实现。历史上 M0 先于 P0 完成；重排只改变后续学习者的进入顺序，不改写原始时间和实验结果。
+
+M0 依次建立 Full Recompute、Dynamic KV Cache、Preallocated KV Cache 和固定 `B=2` Batched Decode，并用 Full Recompute 作为逐位置正确性 Oracle。直接产物包括实现、测试与 [`results/batch-length-scan/raw.csv`](../results/batch-length-scan/raw.csv) 中的 300 条长度扫描样本。
+
+**Checkoff**
+
+- 三条 Attention 路径逐位置数值等价。
+- K/V Cache Shape 与当前长度一致，Batch 内状态隔离。
+- 能解释 Dynamic Cache 的 `concatenate` 数据移动与预分配写入的差异。
+- 不把 CPU/NumPy 固定 Shape 结果外推为 GPU/vLLM 性能结论。
+
+M0 通过后进入 M1，用多 Batch Size 曲线验证摊销收益与收益收窄。
 
 ---
 

@@ -1,0 +1,173 @@
+import CourseRoute from '../../components/CourseRoute.astro';
+import LearningTaskPanel from '../../components/LearningTaskPanel.astro';
+import PageLayout from '../../layouts/PageLayout.astro';
+import { phase2, phase2Extensions } from '../../data/learning-course';
+import kvCacheLab from '../../../labs/kv-cache-batch/lab.json';
+import { getLabArtifactDisplayHref } from '../../utils/lab-artifacts.mjs';
+import '../../styles/learning-course.css';
+
+export const progress = kvCacheLab.progress;
+export const current = progress.current;
+export const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', current.document);
+export const labInstructionsHref = getLabArtifactDisplayHref('kv-cache-batch', 'README.md');
+export const planHref = getLabArtifactDisplayHref('kv-cache-batch', 'docs/PLAN.md');
+export const description =
+	'阶段 2 完整学习路线：从 NumPy 语义、KV Cache、Batching 与 MHA/GQA Oracle，逐层进入真实 vLLM 环境、输入长度、并发、调度和最终性能报告。';
+
+<PageLayout title={`阶段 2：${phase2.title}`} description={description} mainClass="phase2-course-page" noindex>
+
+<nav class="course-breadcrumbs" aria-label="课程层级">
+	<a href="/learning/">AI Infra 学习路线</a>
+	<span aria-hidden="true">/</span>
+	<a href="/learning/phase-1/">Phase 1</a>
+	<span aria-hidden="true">/</span>
+	<span>Phase 2</span>
+</nav>
+
+<header class="course-hero">
+	<p class="course-status">阶段 2 · 进行中 · {phase2.period}</p>
+	<h1>{phase2.title}</h1>
+	<p class="course-lead">{phase2.goal}</p>
+	<p class="current-position">
+		<strong>当前位置：</strong>
+		{current.id} · {current.title}。只有当前 Gate 的 Checkoff 通过，才进入 {progress.next.id}。
+	</p>
+	<p class="course-actions">
+		<a class="course-action course-action--primary" href="#current">
+			开始当前任务
+		</a>
+		<a class="course-action" href={labInstructionsHref}>
+			打开 Lab Handout
+		</a>
+		<a class="course-action" href={currentDocumentHref}>
+			填写当前工作表
+		</a>
+	</p>
+</header>
+
+<nav class="course-section-nav" aria-label="阶段 2 目录">
+	<a href="#contract">阶段契约</a>
+	<a href="#route">核心路线</a>
+	<a href="#current">当前任务</a>
+	<a href="#materials">材料关系</a>
+	<a href="#evidence">完成证据</a>
+	<a href="#writing">文章</a>
+	<a href="#extensions">进阶</a>
+	<a href="#files">文件</a>
+</nav>
+
+<section id="contract" class="course-section">
+
+## 先在最小系统中证明，再进入真实系统测量
+
+- <strong>Entry check：</strong> {phase2.entryCheck}
+- <strong>Core dependency：</strong> P0 → M0 → M1 → M2 → S0 → S1 → S2 → S3 → S4 → F0。
+- <strong>Current：</strong> {current.id} · {current.objective}
+- <strong>Core complete：</strong> {phase2.completion}
+
+M 系列回答“机制在数值和状态上是否正确”；S 系列回答“真实 Serving 中这些机制怎样与负载、容量和调度共同形成性能结果”。Toy Lab 的结论不能越级代替真实 Serving 证据。
+
+</section>
+
+<section id="route" class="course-section">
+
+## 十个核心 Gate，严格按依赖推进
+
+每个模块都给出前置条件、唯一问题、实际工作、交付物和 Checkoff。M2 内部继续拆为六个小 Gate；当前只做 M2-B，不提前实现 Cache 或 GQA。
+
+<CourseRoute units={phase2.units} label="阶段 2 核心 Lab 路线" />
+
+</section>
+
+<LearningTaskPanel task={current} documentHref={currentDocumentHref} />
+
+<section id="materials" class="course-section">
+
+## 课程页定位，Handout 执行，工作表留痕
+
+正常执行链固定为：课程页定位 Gate → README 执行 → Gate 工作表记录 → 测试与 results 验收。当前行动不需要同时打开所有文档。
+
+- <strong>当前任务书：</strong> <a href={labInstructionsHref}>Lab Handout · README</a>
+  只回答现在做什么、允许编辑哪里、怎样测试和评分。
+- <strong>当前工作表：</strong> <a href={currentDocumentHref}>{current.id} 预测与验收记录</a>
+  保存预测、第一次失败、修正规则、结果和闭卷解释。
+- <strong>阶段计划：</strong> <a href={planHref}>Phase 2 总路线与验收</a>用于审计 Gate
+  依赖、实验协议、停止条件和阶段边界。
+- <strong>事实证据：</strong>
+  [测试、原始数据与结果目录](/labs/kv-cache-batch/results/)证明契约与实验事实；派生结果必须可以从
+  Raw 重建。
+
+</section>
+
+<section id="evidence" class="course-section">
+
+## 已通过的 Gate 与可复查证据
+
+当前累计 {progress.evidence.tests} 项回归测试、{progress.evidence.rawSamples} 条原始计时样本；{progress.evidence.summary}。
+
+<ol class="completed-ledger">
+	{progress.completed.map((task) => (
+		<li>
+			<header>
+				<span>{task.id}</span>
+				<time>{task.period}</time>
+			</header>
+			<h3>{task.title}</h3>
+			<p>{task.summary}</p>
+		</li>
+	))}
+</ol>
+
+### 已完成实验
+
+- [P0 · NumPy View/Copy 与轴语义](/labs/kv-cache-batch/read/docs/gates/P0/)
+- [M0 · KV Cache、预分配与固定 B=2 Length Scan](/labs/kv-cache-batch/results/batch-length-scan/)
+- [M1 · B=1/2/4/8 Batch Size Scan](/labs/kv-cache-batch/read/results/batch-size-scan/knee-analysis/)
+
+</section>
+
+<section id="writing" class="course-section">
+
+## 先读机制，再用实验文章审查证据边界
+
+{import.meta.env.DEV && (
+
+  <ul class="article-ledger">
+    <li><span class="article-state">草稿 · 仅本地可见</span><h3><a href="/draft/llm-inference-optimization-system-view/">LLM 推理优化的系统视角</a></h3><p>机制模型：解释 KV Cache、Prefill、Decode、Batching 与调度之间的关系。</p></li>
+    <li><span class="article-state">草稿 · 仅本地可见</span><h3><a href="/draft/vllm-inference-performance-lab/">LLM 推理机制实验</a></h3><p>中间证据：记录 Toy Attention 实验、可复现结果与证据边界。</p></li>
+  </ul>
+)}
+
+- [Python / NumPy 前置能力](/blog/python-for-llm-inference/)：补齐完成推理实验需要的最小语言与数组语义。
+- [从零构建完整系统](/blog/build-a-complete-system-from-scratch/)：把阶段任务组织成可验证、可重构、可交付的项目。
+
+</section>
+
+<section id="extensions" class="course-section">
+
+## Core Complete 之后，按问题选择进阶路线
+
+S5、S6、R0、T0 不阻塞 F0。只有核心实验产生了对应问题，才选择其中一项；不要把源码追踪或更多变量扫描当成主线进度。
+
+<CourseRoute units={phase2Extensions} label="阶段 2 进阶路线" />
+
+</section>
+
+<section id="files" class="course-section">
+
+## 完整可审计文件
+
+课程页决定学习顺序；Lab 目录只用于审计源码、测试、工作表和原始结果，不作为学习起点。
+
+- [浏览 kv-cache-batch 全部文件](/labs/kv-cache-batch/)
+- <a href={labInstructionsHref}>阅读当前任务书</a>
+- <a href={planHref}>阅读阶段总计划</a>
+
+</section>
+
+<footer class="course-boundary">
+	当前只执行 <strong>{current.id}</strong>。文章写清楚只代表 Explained；测试通过代表
+	Implemented；原始数据可重建才代表 Measured；完成闭卷解释才通过 Checkoff。
+</footer>
+
+</PageLayout>

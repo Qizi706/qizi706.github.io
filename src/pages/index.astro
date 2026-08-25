@@ -1,11 +1,9 @@
 ---
 import { getCollection } from 'astro:content';
-import DefinitionGrid from '../components/DefinitionGrid.astro';
 import FormattedDate from '../components/FormattedDate.astro';
-import LearningStage from '../components/LearningStage.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 import PageLayout from '../layouts/PageLayout.astro';
-import { getLabManifest } from '../utils/lab-artifacts.mjs';
+import { getLabArtifactDisplayHref, getLabManifest } from '../utils/lab-artifacts.mjs';
 import { getCategoryUrl, getDraftPostUrl, getPostUrl } from '../utils/posts';
 
 const allPosts = await getCollection('blog');
@@ -61,10 +59,8 @@ const systemBuildingPost = posts.find((post) => post.id === 'build-a-complete-sy
 const kvCacheLab = await getLabManifest('kv-cache-batch');
 const learningProgress = kvCacheLab.progress;
 const learningMilestone = learningProgress.milestone;
-const featuredCompletedStages = learningProgress.completed.filter(
-	(stage: { featured?: boolean }) => stage.featured,
-);
 const currentStage = learningProgress.current;
+const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', currentStage.document);
 ---
 
 <PageLayout title={SITE_TITLE} description={SITE_DESCRIPTION} mainClass="home-page">
@@ -126,7 +122,7 @@ const currentStage = learningProgress.current;
 					<h2 id="draft-heading">
 						<a href="/draft/">本地草稿</a>
 					</h2>
-					<span class="draft-badge">DEV ONLY · {draftPosts.length}</span>
+					<span class="draft-badge">仅本地可见 · {draftPosts.length} 篇</span>
 				</div>
 				<p class="draft-description">
 					这些页面只在本地开发服务器中生成。点击标题可直接检查文章内容和渲染效果。
@@ -188,95 +184,33 @@ const currentStage = learningProgress.current;
 	}
 
 	<section class="tomorrow-section" aria-labelledby="tomorrow-heading">
-		<h2 id="tomorrow-heading">明日学习</h2>
+		<h2 id="tomorrow-heading">当前学习</h2>
 		<div class="tomorrow-milestone" aria-label="当前阶段目标">
 			<p><strong>{learningMilestone.title}</strong> · {learningMilestone.goal}</p>
-			<DefinitionGrid collapseAt="520">
-				<div>
-					<dt>core route</dt>
-					<dd>{learningMilestone.coreRoute}</dd>
-				</div>
-				<div>
-					<dt>final output</dt>
-					<dd>{learningMilestone.finalArtifact}</dd>
-				</div>
-			</DefinitionGrid>
+			<dl>
+				<dt>核心路线</dt>
+				<dd>{learningMilestone.coreRoute}</dd>
+				<dt>最终产出</dt>
+				<dd>{learningMilestone.finalArtifact}</dd>
+			</dl>
+			<a class="course-overview-link" href="/learning/">查看 Phase 1 → Phase 2 完整课程路线 →</a>
 		</div>
-		{
-			featuredCompletedStages.map(
-				(stage: { id: string; period: string; title: string; summary: string }) => (
-					<LearningStage period={stage.period} title={`${stage.id} · ${stage.title}`} status="done">
-						<p class="tomorrow-objective">
-							<strong>完成依据：</strong>
-							{stage.summary}
-						</p>
-					</LearningStage>
-				),
-			)
-		}
 
-		<LearningStage
-			period={currentStage.period}
-			title={`${currentStage.id} · ${currentStage.title}`}
-			status="active"
-			open
-		>
-			<p class="tomorrow-objective">
-				<strong>唯一目标：</strong>
-				{currentStage.objective}
-			</p>
-
-			<DefinitionGrid
-				class="tomorrow-contract"
-				variant="elevated"
-				collapseAt="520"
-				aria-label="明日学习契约"
-			>
-				<div>
-					<dt>question</dt>
-					<dd>{currentStage.question}</dd>
-				</div>
-				<div>
-					<dt>prediction</dt>
-					<dd>{currentStage.prediction}</dd>
-				</div>
-				<div>
-					<dt>pre-read · 15 min</dt>
-					<dd>
-						只读{
-							currentStage.preRead.map(
-								(reference: { label: string; href: string }, index: number) => (
-									<>
-										{index > 0 ? '、' : ''}
-										<a href={reference.href}>{reference.label}</a>
-									</>
-								),
-							)
-						}；每处只记一句对预测的确认或修正。
-					</dd>
-				</div>
-				<div>
-					<dt>artifact</dt>
-					<dd>
-						{currentStage.artifact}{' '}
-						<a href={`/labs/kv-cache-batch/${currentStage.document}`}>打开工作表</a>
-					</dd>
-				</div>
-				<div>
-					<dt>gate</dt>
-					<dd>{currentStage.acceptance}</dd>
-				</div>
-			</DefinitionGrid>
-
-			<ol class="tomorrow-steps">
-				{currentStage.steps.map((step: string) => <li>{step}</li>)}
-			</ol>
-
-			<p class="tomorrow-decision">
-				<strong>下一步判断：</strong>
-				{currentStage.nextDecision}
-			</p>
-		</LearningStage>
+		<div class="current-learning">
+			<p class="current-learning__meta">当前任务 · {currentStage.period} · 进行中</p>
+			<h3>{currentStage.id} · {currentStage.title}</h3>
+			<p><strong>唯一目标：</strong>{currentStage.objective}</p>
+			<dl>
+				<dt>问题</dt>
+				<dd>{currentStage.question}</dd>
+				<dt>验收</dt>
+				<dd>{currentStage.acceptance}</dd>
+			</dl>
+			<nav aria-label="当前学习入口">
+				<a href="/learning/phase-2/#current">进入当前 Lab</a>
+				<a href={currentDocumentHref}>填写工作表</a>
+			</nav>
+		</div>
 	</section>
 
 	{
@@ -378,7 +312,7 @@ const currentStage = learningProgress.current;
 		gap: 0.2rem 0.4rem;
 		margin-top: 0.85rem;
 		color: #334155;
-		font-size: 0.68rem;
+		font-size: 0.84rem;
 		line-height: 1.7;
 		text-align: right;
 	}
@@ -428,20 +362,8 @@ const currentStage = learningProgress.current;
 		background: rgb(248 250 252 / 72%);
 	}
 
-	.tomorrow-objective {
-		margin: 0.8rem 0;
-		color: #334155;
-		font-size: 0.9rem;
-		line-height: 1.6;
-	}
-
 	.tomorrow-milestone {
 		margin: 0 0 1rem;
-		padding: 0.85rem 1rem;
-		border: 0;
-		border-radius: var(--card-radius);
-		background: rgb(248 250 252 / 60%);
-		box-shadow: var(--elevated-card-shadow);
 	}
 
 	.tomorrow-milestone p {
@@ -451,55 +373,75 @@ const currentStage = learningProgress.current;
 		line-height: 1.6;
 	}
 
-	.tomorrow-milestone dt {
-		color: #64748b;
-		font-family: var(--font-mono);
-		font-size: 0.66rem;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
+	.tomorrow-milestone dl,
+	.current-learning dl {
+		display: grid;
+		grid-template-columns: 6rem minmax(0, 1fr);
+		gap: 0.25rem 0.75rem;
+		margin: 0;
 	}
 
-	.tomorrow-milestone dd {
-		margin: 0.25rem 0 0;
+	.tomorrow-milestone dt,
+	.current-learning dt {
+		color: #64748b;
+		font-size: 0.86rem;
+		font-weight: 700;
+	}
+
+	.tomorrow-milestone dd,
+	.current-learning dd {
+		margin: 0;
 		color: #334155;
-		font-size: 0.8rem;
+		font-size: 0.86rem;
 		line-height: 1.5;
 	}
 
-	.tomorrow-contract dt {
+	.course-overview-link {
+		display: inline-block;
+		margin-top: 0.7rem;
+		font-size: 0.86rem;
+	}
+
+	.current-learning {
+		padding-top: 0.9rem;
+		border-top: 1px solid #cbd5e1;
+	}
+
+	.current-learning__meta {
+		margin: 0;
 		color: #64748b;
-		font-family: var(--font-mono);
-		font-size: 0.66rem;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
+		font-size: 0.9rem;
 	}
 
-	.tomorrow-contract dd {
+	.current-learning h3 {
 		margin: 0.25rem 0 0;
-		color: #334155;
-		font-size: 0.8rem;
-		line-height: 1.5;
+		font-size: 1rem;
 	}
 
-	.tomorrow-steps {
-		margin: 0.8rem 0;
-		padding-left: 1.35rem;
-		color: #334155;
-		font-size: 0.82rem;
-		line-height: 1.55;
+	.current-learning > p {
+		margin: 0.7rem 0;
+		font-size: 0.86rem;
+		line-height: 1.6;
 	}
 
-	.tomorrow-steps li {
-		margin: 0.3rem 0;
+	.current-learning nav {
+		display: flex;
+		gap: 1rem;
+		margin-top: 0.7rem;
+		font-size: 0.86rem;
 	}
 
-	.tomorrow-decision {
-		margin: 0.75rem 0 0;
-		padding-top: 0.65rem;
-		border-top: 1px dashed #cbd5e1;
-		color: #475569;
-		font-size: 0.8rem;
-		line-height: 1.55;
+	@media (max-width: 520px) {
+		.tomorrow-milestone dl,
+		.current-learning dl {
+			grid-template-columns: 1fr;
+			gap: 0.1rem;
+		}
+
+		.tomorrow-milestone dd + dt,
+		.current-learning dd + dt {
+			margin-top: 0.4rem;
+		}
 	}
 
 	.draft-heading {
@@ -515,14 +457,9 @@ const currentStage = learningProgress.current;
 
 	.draft-badge {
 		flex: none;
-		padding: 0.1rem 0.4rem;
-		border: 1px solid #cbd5e1;
-		border-radius: var(--card-radius);
 		color: #64748b;
-		font-family: var(--font-mono);
-		font-size: 0.65rem;
+		font-size: 0.84rem;
 		line-height: 1.4;
-		letter-spacing: 0.04em;
 	}
 
 	.draft-description {
@@ -545,8 +482,7 @@ const currentStage = learningProgress.current;
 		display: block;
 		margin: 0.05rem 0 0 1.1rem;
 		color: #64748b;
-		font-family: var(--font-mono);
-		font-size: 0.68rem;
+		font-size: 0.84rem;
 		line-height: 1.5;
 	}
 
@@ -580,8 +516,7 @@ const currentStage = learningProgress.current;
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		font-family: var(--font-mono);
-		font-size: 0.78rem;
+		font-size: 0.86rem;
 	}
 
 	.profile-links svg {
@@ -603,7 +538,7 @@ const currentStage = learningProgress.current;
 	.featured-links small {
 		margin-left: 0.2rem;
 		color: #0f172a;
-		font-size: 0.8rem;
+		font-size: 0.9rem;
 	}
 
 	.featured-image {
@@ -629,7 +564,7 @@ const currentStage = learningProgress.current;
 	.category-links small {
 		margin-left: 0.25rem;
 		color: #0f172a;
-		font-size: 0.8rem;
+		font-size: 0.9rem;
 	}
 
 	@media (max-width: 520px) {

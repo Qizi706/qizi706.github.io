@@ -1,0 +1,126 @@
+import CourseRoute from '../../components/CourseRoute.astro';
+import PageLayout from '../../layouts/PageLayout.astro';
+import { learningPhases, phase2 } from '../../data/learning-course';
+import kvCacheLab from '../../../labs/kv-cache-batch/lab.json';
+import { getLabArtifactDisplayHref } from '../../utils/lab-artifacts.mjs';
+import '../../styles/learning-course.css';
+
+export const current = kvCacheLab.progress.current;
+export const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', current.document);
+export const description =
+	'从阶段 1 的 LLM Serving 请求链路与本地基线，到阶段 2 的 Attention、KV Cache、调度与 vLLM 性能工程：按依赖、实验和 Checkoff 递进的完整学习路线。';
+
+<PageLayout title="AI Infra 学习路线" description={description} mainClass="learning-course-page">
+
+<header class="course-hero">
+	<p class="course-status">课程总览 · 阶段 1 已完成，阶段 2 进行中</p>
+	<h1>从一条请求，到一个可解释的推理系统</h1>
+	<p class="course-lead">
+		这是一门以 Lab 为主线的自学课程。阶段 1 先观察真实 Serving，建立请求链路与测量纪律；阶段 2
+		再从最小 Attention Oracle 逐层进入 KV Cache、MHA/GQA、vLLM
+		调度与真实性能实验。每一层都必须交付可运行产物并通过 Checkoff，才能解锁下一层。
+	</p>
+	<p class="course-actions">
+		<a class="course-action course-action--primary" href="/learning/phase-2/#current">
+			继续当前任务 · {current.id}
+		</a>
+		<a class="course-action" href={currentDocumentHref}>
+			打开当前工作表
+		</a>
+		<a class="course-action" href="/learning/phase-1/">
+			从 Phase 1 开始
+		</a>
+	</p>
+</header>
+
+<nav class="course-section-nav" aria-label="课程页目录">
+	<a href="#contract">课程契约</a>
+	<a href="#method">学习循环</a>
+	<a href="#route">完整路线</a>
+	<a href="#materials">材料关系</a>
+	<a href="#checkoff">完成标准</a>
+</nav>
+
+<section id="contract" class="course-section">
+
+## 先看依赖，再开始编码
+
+- <strong>Scope：</strong> 单机 LLM Serving，包括请求链路、Attention、KV
+  Cache、Batching、调度、显存与性能测量。
+- <strong>Core dependency：</strong> 观察真实服务 → 建立指标 → 构造最小 Oracle → 验证机制 → 回到真实
+  Serving → 综合。
+- <strong>Pass condition：</strong>
+  阅读不计完成；Artifact、自动测试、原始证据和闭卷解释必须同时通过。
+- <strong>Current position：</strong> Phase 1 已通过；Phase 2 当前为 {current.id} · {current.title}
+  。
+
+</section>
+
+<section id="method" class="course-section">
+
+## 所有 Lab 使用同一个闭环
+
+系统 Lab 被拆成连续小步，每一步先产生可失败的测试，最后用自动验收和闭卷解释完成 Checkoff。
+
+1. <strong>Question：</strong> 明确本轮只回答一个可以被证伪的问题。
+2. <strong>Prediction：</strong> 运行前写 Shape、趋势、状态变化或失败边界。
+3. <strong>Pre-read：</strong> 只阅读马上会用到的章节、接口和源码文件。
+4. <strong>Implement：</strong> 一次只增加一个变换，并先写最小失败测试。
+5. <strong>Grade：</strong> 通过定向测试、完整回归和原始数据审计。
+6. <strong>Checkoff：</strong> 关闭代码复述机制，记录修正规则，再解锁下一层。
+
+</section>
+
+<section id="route" class="course-section">
+
+## 完整路线：Phase 1 → Phase 2
+
+主干只有一条：模型与服务边界 → 请求链路 → 本地基线 → 测量协议 → Attention/KV Cache → MHA/GQA → 真实 vLLM → 输入、并发与调度 → 最终综合。
+
+{learningPhases.map((phase) => (
+
+	<section class={`phase-overview is-${phase.status}`}>
+		<h3>阶段 {Number(phase.number)}：{phase.title}</h3>
+		<p><strong>状态：</strong>{phase.status === 'done' ? '已通过' : '进行中'} · <strong>学习周期：</strong>{phase.period}</p>
+		<p>{phase.goal}</p>
+		<CourseRoute units={phase.units} compact label={`${phase.title}模块路线`} />
+		<a class="phase-overview__link" href={phase.path}>进入阶段 {Number(phase.number)} 课程页 →</a>
+
+	</section>
+))}
+
+</section>
+
+<section id="materials" class="course-section">
+
+## 每种材料只承担一种职责
+
+- <strong>Syllabus — 学习总路线：</strong>
+  回答“先学什么、为什么、通过后解锁什么”；本页是唯一跨阶段入口。
+- <strong>Assignment — Lab README：</strong> 只回答当前任务的准备、边界、实现要求、提示和评分命令。
+- <strong>Notebook — Gate 工作表：</strong> 保存预测、第一次失败、修正规则、结果与
+  Checkoff，不重复任务说明。
+- <strong>Evidence — 测试与 results：</strong>
+  保存自动验收、原始样本和可重建结果，是实验结论的事实源。
+- <strong>Textbook — 机制文章：</strong> 建立稳定概念模型；阅读用于形成预测，但不能替代 Lab。
+- <strong>Report — 实验文章：</strong> 只总结已经产生的证据、失败和适用边界，不承担进度追踪。
+
+</section>
+
+<section id="checkoff" class="course-section">
+
+## 什么才算真正完成？
+
+- <strong>Phase 1：</strong> {learningPhases[0].completion}
+- <strong>Phase 2：</strong> {phase2.completion}
+
+任何模块若只能“看懂文章”或“让 AI 写出代码”，但不能独立运行、解释失败和修改约束，都保持未通过状态。
+
+</section>
+
+<footer class="course-boundary">
+	当前唯一行动：进入 <a href="/learning/phase-2/#current">Phase 2 · {current.id}</a>。Phase 1
+	已完成的内容用于复习和 Checkoff，不与当前 Lab 并行重做。
+</footer>
+
+</PageLayout>

@@ -1,0 +1,105 @@
+import CourseRoute from '../../components/CourseRoute.astro';
+import PageLayout from '../../layouts/PageLayout.astro';
+import { phase1 } from '../../data/learning-course';
+import '../../styles/learning-course.css';
+
+export const description =
+	'阶段 1 完整学习路线：从模型、推理与 Serving 的边界出发，追踪请求链路，启动本地服务，并建立可复现的长度实验基线。';
+
+<PageLayout title={`阶段 1：${phase1.title}`} description={description} mainClass="phase-course-page">
+
+<nav class="course-breadcrumbs" aria-label="课程层级">
+	<a href="/learning/">AI Infra 学习路线</a>
+	<span aria-hidden="true">/</span>
+	<span>Phase 1</span>
+</nav>
+
+<header class="course-hero">
+	<p class="course-status">阶段 1 · 已完成 · {phase1.period}</p>
+	<h1>{phase1.title}</h1>
+	<p class="course-lead">{phase1.goal}</p>
+	<p class="course-actions">
+		<a class="course-action course-action--primary" href="#route">
+			查看完整 Lab 路线
+		</a>
+		<a class="course-action" href="/labs/serving-baseline/read/README/">
+			打开复现包说明
+		</a>
+		<a class="course-action" href="/learning/phase-2/">
+			进入 Phase 2
+		</a>
+	</p>
+</header>
+
+<nav class="course-section-nav" aria-label="阶段 1 目录">
+	<a href="#contract">阶段契约</a>
+	<a href="#route">Lab 路线</a>
+	<a href="#evidence">证据</a>
+	<a href="#checkoff">Checkoff</a>
+	<a href="#transition">进入阶段 2</a>
+</nav>
+
+<section id="contract" class="course-section">
+
+## 先学会观察系统，再解释优化
+
+- <strong>Entry check：</strong> {phase1.entryCheck}
+- <strong>Question：</strong> 一条请求怎样经过本地 LLM Serving，以及怎样用可复现证据描述它的耗时？
+- <strong>Runtime：</strong> Qwen3-4B · Ollama · vLLM Metal · OpenAI-compatible API。
+- <strong>Boundary：</strong> 单机、单请求基线；不声称验证 Streaming 并发、调度因果或真实尾延迟。
+
+</section>
+
+<section id="route" class="course-section">
+
+## 六个 Gate，按依赖逐层解锁
+
+这不是六篇并列阅读。前一个 Gate 产生的系统模型或实验能力，是后一个 Gate 的输入。历史学习时间保持不变；这里按更清晰的教学依赖重新组织。
+
+<CourseRoute units={phase1.units} label="阶段 1 Lab 路线" />
+
+</section>
+
+<section id="evidence" class="course-section">
+
+## 每条结论都能回到原始产物
+
+- <strong>机制文章：</strong> [请求生命周期](/blog/llm-inference-request-lifecycle/)解释
+  API、Tokenizer、Scheduler、Prefill、KV Cache、Decode 与 Streaming 的连接方式。
+- <strong>实验报告：</strong> [本地 Serving
+  实验](/blog/llm-inference-request-lifecycle-practice/)记录环境、长度实验、结果、失败与指标边界。
+- <strong>复现包：</strong> [Phase 1 Lab 目录](/labs/serving-baseline/)保存 Benchmark
+  脚本、安装与服务日志、原始响应和长度扫描数据。
+- <strong>任务说明：</strong> [serving-baseline
+  README](/labs/serving-baseline/read/README/)说明复跑顺序、验收标准和证据边界。
+
+</section>
+
+<section id="checkoff" class="course-section">
+
+## Phase 1 通过标准
+
+{phase1.completion}
+
+1. 闭卷画出请求链路，并标出 Prefill、Decode 与 KV Cache。
+2. 从干净终端启动一个本地服务并保存可审计响应。
+3. 复跑一个长度扫描点，解释 Warmup、重复次数与计时边界。
+4. 明确近似 TPOT 不等于严格流式 ITL，并列出未验证结论。
+
+</section>
+
+<section id="transition" class="course-section">
+
+## Phase 1 留下问题，Phase 2 用实现回答
+
+阶段 1 已经观察到 Prompt 长度、Decode 和 KV Cache 与延迟相关，但还不能解释 Cache 复用了多少计算、Batch 为什么收益收窄、Head 数怎样改变容量，也没有验证真实调度因果。Phase 2 从这些缺口出发，先用最小 NumPy Oracle 建立正确性，再回到 vLLM。
+
+[继续 Phase 2 · 推理机制与性能工程 →](/learning/phase-2/)
+
+</section>
+
+<footer class="course-boundary">
+	Phase 1 状态为 Completed。复习时按 Checkoff 缺口回到具体模块，不重新把整份阅读清单从头读一遍。
+</footer>
+
+</PageLayout>
