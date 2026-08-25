@@ -18,7 +18,7 @@
 		"results"
 	],
 	"notes": [
-		"Directories open one level at a time. File names open the original published artifact.",
+		"Directories open one level at a time. Markdown documents open in reading mode; code, data, and other files open the original published artifact.",
 		"Generated caches, virtual environments, and hidden repository files are excluded."
 	],
 	"checks": {
@@ -51,6 +51,44 @@
 		},
 		"preview": {
 			"path": "/learning/phase-2/",
+			"documents": [
+				{
+					"label": "Lab 说明",
+					"title": "README",
+					"description": "先了解目录、复现命令、已有证据与当前边界。",
+					"path": "README.md"
+				},
+				{
+					"label": "执行路线",
+					"title": "阶段 2 学习计划",
+					"description": "查看 M2 到 F0 的 Gate、验收条件与停止条件。",
+					"path": "docs/PLAN.md"
+				},
+				{
+					"label": "当前 Gate",
+					"title": "M2 学习工作表",
+					"description": "跟进 Head 拆分、Q/K/V 投影和无 Cache MHA Oracle。",
+					"path": "docs/gates/M2.md"
+				},
+				{
+					"label": "语义实验",
+					"title": "P0 · NumPy View / Copy",
+					"description": "阅读轴语义、Stride、View 与 Copy 的预测和观察。",
+					"path": "docs/gates/P0.md"
+				},
+				{
+					"label": "性能实验",
+					"title": "M1 · Batch Size 扫描",
+					"description": "阅读 240 条样本的设计、门禁和 Knee 判定过程。",
+					"path": "docs/gates/M1.md"
+				},
+				{
+					"label": "实验结论",
+					"title": "Batch Knee 分析",
+					"description": "阅读从原始 CSV 重建的吞吐、延迟与 Knee 结论。",
+					"path": "results/batch-size-scan/knee-analysis.md"
+				}
+			],
 			"articles": [
 				{
 					"id": "llm-inference-optimization-system-view",

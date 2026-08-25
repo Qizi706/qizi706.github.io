@@ -354,6 +354,13 @@ export function getLabMarkdownHref(labName, artifactPath) {
 	return `${getLabBasePath(labName)}read/${encodeLabArtifactPath(documentPath)}/`;
 }
 
+export function getLabArtifactDisplayHref(labName, artifactPath) {
+	const normalizedPath = normalizeRelativePath(artifactPath, 'artifact path');
+	return path.posix.extname(normalizedPath).toLowerCase() === '.md'
+		? getLabMarkdownHref(labName, normalizedPath)
+		: getLabArtifactRawHref(labName, normalizedPath);
+}
+
 export function getLabDirectoryHref(labName, directoryPath = '') {
 	const normalizedDirectory = normalizeArtifactDirectoryPath(directoryPath);
 	const basePath = getLabBasePath(labName);

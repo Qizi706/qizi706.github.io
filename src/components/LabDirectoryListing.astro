@@ -1,5 +1,5 @@
 ---
-import { getLabArtifactRawHref, getLabDirectoryHref } from '../utils/lab-artifacts.mjs';
+import { getLabArtifactDisplayHref, getLabDirectoryHref } from '../utils/lab-artifacts.mjs';
 
 interface DirectoryEntry {
 	kind: 'directory';
@@ -29,7 +29,7 @@ const sizeColumnWidth = 20;
 
 function getEntryHref(entry: DirectoryEntry | FileEntry): string {
 	if (entry.kind === 'directory') return getLabDirectoryHref(labName, entry.path);
-	return getLabArtifactRawHref(labName, entry.path);
+	return getLabArtifactDisplayHref(labName, entry.path);
 }
 
 function getEntryLabel(entry: DirectoryEntry | FileEntry): string {

@@ -11,6 +11,7 @@ import SurfaceCard from '../../components/SurfaceCard.astro';
 import PageLayout from '../../layouts/PageLayout.astro';
 import {
 	collectLabArtifacts,
+	getLabArtifactDisplayHref,
 	getLabArchiveInfo,
 	getLabManifest,
 	listLabDirectoryEntries,
@@ -26,6 +27,13 @@ interface PhaseArticle {
 interface ResolvedArticle {
 	article: PhaseArticle;
 	post: CollectionEntry<'blog'>;
+}
+
+interface PhaseDocument {
+	label: string;
+	title: string;
+	description: string;
+	path: string;
 }
 
 const labName = 'kv-cache-batch';
@@ -50,7 +58,17 @@ const rootEntries = listLabDirectoryEntries(artifacts);
 const archive = await getLabArchiveInfo(labName);
 const archiveHref = `/labs/${archive.filename}?v=${archive.sha256.slice(0, 12)}`;
 const labHref = `/labs/${labName}/`;
-const currentDocumentHref = `/labs/${labName}/${current.document}`;
+const planHref = getLabArtifactDisplayHref(labName, 'docs/PLAN.md');
+const currentDocumentHref = getLabArtifactDisplayHref(labName, current.document);
+const labDocuments = (preview.documents as PhaseDocument[]).map((document) => ({
+	...document,
+	href: getLabArtifactDisplayHref(labName, document.path),
+}));
+const labArtifactPrefix = `/labs/${labName}/`;
+const preferReadingMode = (href: string) =>
+	href.startsWith(labArtifactPrefix) && href.endsWith('.md')
+		? getLabArtifactDisplayHref(labName, href.slice(labArtifactPrefix.length))
+		: href;
 const description =
 	'阶段 2 的共学入口：查看当前任务、前置阅读、完成记录、实验原始证据、文章草稿与完整 Lab 文件。';
 ---
@@ -73,9 +91,14 @@ const description =
 			<span>共学页面会随学习进度变化，不出现在主页、文章归档、RSS 或 sitemap。</span>
 			<span>未完成的文章草稿仅通过未收录的 <code>/draft</code> 路由预览。</span>
 		</NoticeBanner>
+		<div class="hero-actions" aria-label="Lab 快捷入口">
+			<a class="action-link action-link--primary" href="#lab">进入 Lab</a>
+			<a class="action-link" href={currentDocumentHref}>阅读当前工作表</a>
+		</div>
 	</header>
 
 	<nav class="section-nav" aria-label="阶段共学页目录">
+		<a href="#lab">Lab 入口</a>
 		<a href="#start">从这里开始</a>
 		<a href="#current">当前任务</a>
 		<a href="#completed">完成记录</a>
@@ -84,9 +107,55 @@ const description =
 		<a href="#files">文件</a>
 	</nav>
 
+	<section id="lab" class="section-block lab-section">
+		<div class="section-heading">
+			<p>00 / LAB ENTRY</p>
+			<h2>进入 Lab：阅读机制，检查证据</h2>
+		</div>
+
+		<SurfaceCard as="article" class="lab-launch" padding="none">
+			<div class="lab-launch__main">
+				<p class="lab-launch__kicker">CURRENT · {current.id}</p>
+				<h3>{manifest.title}</h3>
+				<p>{manifest.description}</p>
+				<p class="lab-launch__current"><strong>当前目标：</strong>{current.objective}</p>
+			</div>
+			<div class="lab-launch__actions">
+				<a class="action-link action-link--primary" href={currentDocumentHref}>继续 {current.id}</a>
+				<a class="action-link" href={planHref}>阅读完整计划</a>
+				<a class="action-link" href={labHref}>浏览全部文件</a>
+				<a class="text-link" href={archiveHref} download={archive.filename}>
+					下载完整 Lab · {archive.filename}
+				</a>
+			</div>
+		</SurfaceCard>
+
+		<div class="document-heading">
+			<div>
+				<h3>实验文档 · 阅读模式</h3>
+				<p>说明、工作表和结论按排版后的 Markdown 阅读；代码与原始数据从文件目录直接打开。</p>
+			</div>
+			<span>{labDocuments.length} DOCS</span>
+		</div>
+		<ul class="document-grid">
+			{
+				labDocuments.map((document) => (
+					<li>
+						<a href={document.href}>
+							<span>{document.label}</span>
+							<strong>{document.title}</strong>
+							<p>{document.description}</p>
+							<small>{document.path} · READ →</small>
+						</a>
+					</li>
+				))
+			}
+		</ul>
+	</section>
+
 	<section id="start" class="section-block">
 		<div class="section-heading">
-			<p>00 / ONBOARDING</p>
+			<p>01 / ONBOARDING</p>
 			<h2>从这里开始</h2>
 		</div>
 
@@ -112,8 +181,7 @@ const description =
 		<ol class="follow-steps">
 			<li>
 				<strong>先看路线，不先抄代码。</strong>
-				打开<a href={`/labs/${labName}/docs/PLAN.md`}>阶段 2 学习执行手册</a>，确认核心路线、当前
-				Gate 和停止条件。
+				打开<a href={planHref}>阶段 2 学习执行手册</a>，确认核心路线、当前 Gate 和停止条件。
 			</li>
 			<li>
 				<strong>拿到相同材料。</strong>
@@ -131,11 +199,11 @@ const description =
 		</ol>
 	</section>
 
-	<LearningTaskPanel task={current} documentHref={currentDocumentHref} />
+	<LearningTaskPanel task={current} documentHref={currentDocumentHref} eyebrow="02 / CURRENT" />
 
 	<section id="completed" class="section-block">
 		<div class="section-heading">
-			<p>02 / COMPLETED</p>
+			<p>03 / COMPLETED</p>
 			<h2>已完成任务</h2>
 		</div>
 		<p class="evidence-line">
@@ -161,7 +229,7 @@ const description =
 
 	<section id="experiments" class="section-block">
 		<div class="section-heading">
-			<p>03 / EXPERIMENTS</p>
+			<p>04 / EXPERIMENTS</p>
 			<h2>已经可以复查的实验</h2>
 		</div>
 		<div class="experiment-grid">
@@ -172,7 +240,7 @@ const description =
 							<span>{experiment.id} · evidence</span>
 							<h3>{experiment.title}</h3>
 							<p>{experiment.summary}</p>
-							<a href={experiment.href}>查看记录与原始文件 →</a>
+							<a href={preferReadingMode(experiment.href)}>查看记录与原始文件 →</a>
 						</SurfaceCard>
 					),
 				)
@@ -182,7 +250,7 @@ const description =
 
 	<section id="articles" class="section-block">
 		<div class="section-heading">
-			<p>04 / WRITING</p>
+			<p>05 / WRITING</p>
 			<h2>文章：先读机制，再读证据</h2>
 		</div>
 
@@ -231,7 +299,7 @@ const description =
 
 	<section id="files" class="section-block">
 		<div class="section-heading">
-			<p>05 / FILES</p>
+			<p>06 / FILES</p>
 			<h2>完整 Lab 目录</h2>
 		</div>
 		<p>
@@ -292,6 +360,47 @@ const description =
 		line-height: 1.8;
 	}
 
+	.hero-actions,
+	.lab-launch__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.6rem;
+	}
+
+	.hero-actions {
+		margin-top: 1rem;
+	}
+
+	.action-link {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 2.35rem;
+		padding: 0.45rem 0.8rem;
+		border: 1px solid #cbd5e1;
+		border-radius: var(--card-radius);
+		color: #334155;
+		background: #fff;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		font-weight: 600;
+		text-decoration: none;
+	}
+
+	.action-link:hover,
+	.action-link:focus-visible {
+		border-color: #64748b;
+		color: #0f172a;
+	}
+
+	.action-link--primary,
+	.action-link--primary:hover,
+	.action-link--primary:focus-visible {
+		border-color: #0f172a;
+		color: #fff;
+		background: #0f172a;
+	}
+
 	.section-nav {
 		display: flex;
 		flex-wrap: wrap;
@@ -315,6 +424,151 @@ const description =
 	.section-heading h2 {
 		margin: 0.25rem 0 0;
 		font-size: 1.35rem;
+	}
+
+	.lab-section {
+		padding-top: 1.5rem;
+	}
+
+	.lab-launch {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(13rem, 0.38fr);
+		border: 1px solid #cbd5e1;
+		background: linear-gradient(135deg, #f8fafc 0%, #fff 60%, #f1f5f9 100%);
+	}
+
+	.lab-launch__main,
+	.lab-launch__actions {
+		padding: 1.1rem;
+	}
+
+	.lab-launch__main {
+		border-right: 1px dashed #cbd5e1;
+	}
+
+	.lab-launch__main h3 {
+		margin: 0.3rem 0 0.5rem;
+		font-size: clamp(1.2rem, 3vw, 1.6rem);
+	}
+
+	.lab-launch__main > p {
+		max-width: 42rem;
+		margin: 0;
+		color: #475569;
+		line-height: 1.65;
+	}
+
+	.lab-launch__main .lab-launch__kicker {
+		color: #2563eb;
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+	}
+
+	.lab-launch__main .lab-launch__current {
+		margin-top: 0.85rem;
+		padding-top: 0.75rem;
+		border-top: 1px dashed #cbd5e1;
+		color: #334155;
+		font-size: 0.9rem;
+	}
+
+	.lab-launch__actions {
+		align-content: center;
+		align-items: stretch;
+		flex-direction: column;
+		justify-content: center;
+	}
+
+	.lab-launch__actions .action-link {
+		width: 100%;
+	}
+
+	.text-link {
+		margin-top: 0.15rem;
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		text-align: center;
+	}
+
+	.document-heading {
+		display: flex;
+		align-items: start;
+		justify-content: space-between;
+		gap: 1rem;
+		margin: 1.5rem 0 0.75rem;
+	}
+
+	.document-heading h3,
+	.document-heading p {
+		margin: 0;
+	}
+
+	.document-heading h3 {
+		font-size: 1rem;
+	}
+
+	.document-heading p {
+		max-width: 48rem;
+		margin-top: 0.3rem;
+		color: #64748b;
+		font-size: 0.85rem;
+		line-height: 1.6;
+	}
+
+	.document-heading > span {
+		flex: none;
+		color: #64748b;
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+	}
+
+	.document-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.7rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.document-grid a {
+		display: block;
+		height: 100%;
+		padding: 0.9rem;
+		border: 1px solid #e2e8f0;
+		border-radius: var(--card-radius);
+		color: inherit;
+		background: #fff;
+		text-decoration: none;
+	}
+
+	.document-grid a:hover,
+	.document-grid a:focus-visible {
+		border-color: #94a3b8;
+		background: #f8fafc;
+	}
+
+	.document-grid span,
+	.document-grid small {
+		display: block;
+		color: #64748b;
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+	}
+
+	.document-grid strong {
+		display: block;
+		margin-top: 0.25rem;
+		font-size: 0.95rem;
+	}
+
+	.document-grid p {
+		margin: 0.35rem 0 0.75rem;
+		color: #475569;
+		font-size: 0.82rem;
+		line-height: 1.55;
 	}
 
 	.milestone-ledger dt,
@@ -443,6 +697,23 @@ const description =
 	}
 
 	@media (max-width: 720px) {
+		.hero-actions .action-link {
+			flex: 1 1 12rem;
+		}
+
+		.lab-launch {
+			grid-template-columns: 1fr;
+		}
+
+		.lab-launch__main {
+			border-right: 0;
+			border-bottom: 1px dashed #cbd5e1;
+		}
+
+		.document-grid {
+			grid-template-columns: 1fr;
+		}
+
 		.experiment-grid {
 			grid-template-columns: 1fr;
 		}

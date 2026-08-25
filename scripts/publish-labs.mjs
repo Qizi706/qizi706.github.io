@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
 	collectLabArtifactDirectories,
 	discoverLabs,
+	getLabArtifactDisplayHref,
 	getLabArtifactRawHref,
 	listLabDirectoryEntries,
 	publicLabsRoot,
@@ -29,10 +30,12 @@ function escapeHtml(value) {
 		.replaceAll('"', '&quot;');
 }
 
-function renderDirectoryIndex(displayedPath, entries) {
+function renderDirectoryIndex(displayedPath, entries, resolveHref) {
 	const rows = entries.map((entry) => {
 		const label = entry.name + (entry.kind === 'directory' ? '/' : '');
-		const href = encodeURIComponent(entry.name) + (entry.kind === 'directory' ? '/' : '');
+		const href = resolveHref
+			? resolveHref(entry)
+			: encodeURIComponent(entry.name) + (entry.kind === 'directory' ? '/' : '');
 		const namePadding = ' '.repeat(Math.max(1, nameColumnWidth - label.length));
 		const size = (entry.kind === 'directory' ? '-' : String(entry.size)).padStart(
 			sizeColumnWidth,
@@ -63,7 +66,14 @@ async function writeLabDirectoryIndexes(stagingRoot, labName, artifacts) {
 		await mkdir(targetDirectory, { recursive: true });
 		await writeFile(
 			path.join(targetDirectory, 'index.html'),
-			renderDirectoryIndex(displayedPath, listLabDirectoryEntries(artifacts, directoryPath)),
+			renderDirectoryIndex(
+				displayedPath,
+				listLabDirectoryEntries(artifacts, directoryPath),
+				(entry) =>
+					entry.kind === 'directory'
+						? `${encodeURIComponent(entry.name)}/`
+						: getLabArtifactDisplayHref(labName, entry.path),
+			),
 		);
 	}
 }
