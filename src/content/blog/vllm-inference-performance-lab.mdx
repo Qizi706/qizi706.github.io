@@ -2,7 +2,7 @@
 title: 'LLM 推理机制实验：KV Cache、预分配与 Batch Size'
 description: '阶段 2 的中间机制产出：用最小 NumPy Causal Attention 验证 KV Cache、预分配和 Batched Decode，并为真实 vLLM Serving 实验建立可证伪预测。'
 pubDate: '2026-08-16T20:30:00+08:00'
-updatedDate: '2026-08-25T04:03:46+08:00'
+updatedDate: '2026-08-25T17:36:16+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -50,7 +50,8 @@ mathjax: true
 - M0 已实现 Cache、预分配和固定 <code>B=2</code> 的 Batched Decode；当前公开归档保留 300 条 Batch Length 原始样本。Cache Strategy 的历史结论仍保留，但当前复现包缺少 450 条逐样本数据，因此不能独立重建。
 - M1 已完成 <code>B=1/2/4/8</code> 正确性检查、240 条原始样本、P50/P95 汇总、两张独立曲线和 Knee 判定。
 - P0 已完成 Binding、View/Copy、Advanced Indexing、<code>swapaxes</code> 与 <code>concatenate</code> 的预测、运行记录、差异解释和闭卷验收。
-- M2 正在进行：A1/A2 已完成 Head 拆分、Q/K/V 投影、两个非零坐标 Oracle、五类非法配置与闭卷 Shape 推导，A2 定向 6 项和完整 12 项回归测试通过；当前唯一任务是 B 的无 Cache MHA Oracle。
+- M2 正在进行：A1/A2 已完成 Head 拆分、Q/K/V 投影、两个非零坐标 Oracle、五类非法配置与闭卷 Shape 推导，完整 12 项回归测试通过。
+- 当前 Lab 已加入任务书、`Makefile`、公开评分器和 5 项 M2-B 验收测试；`make grade` 为 `40/100`，A1/A2 通过，B 的输入契约已固定，但无 Cache MHA 核心仍明确停在 `TODO`。
 
 </Note>
 
@@ -373,7 +374,7 @@ KV Cache 用线性增长的状态换掉了更昂贵的历史重算；历史 Cach
 
 当前还没有覆盖：
 
-- Multi-Head Attention、MQA 或 GQA；
+- 完整 Multi-Head Attention、MQA 或 GQA；当前只有 Head 拆分和 Q/K/V 投影契约；
 - 不同长度 Sequence 的 Padding、Mask 与动态退出；
 - GPU Kernel、显存带宽、Kernel Launch 与同步；
 - Continuous Batching、PagedAttention 与 Scheduler；
@@ -384,9 +385,9 @@ KV Cache 用线性增长的状态换掉了更昂贵的历史重算；历史 Cach
 | 层级        | 当前状态 | 证据                                                     |
 | ----------- | -------- | -------------------------------------------------------- |
 | Explained   | 已达到   | 能区分 Batch Wall Time、摊销成本、吞吐和在线请求延迟     |
-| Implemented | 已达到   | Cache、预分配、Batched Decode、Batch Size CLI 与汇总脚本 |
+| Implemented | 已达到   | Cache、预分配、Batched Decode、Batch Size CLI、Head 拆分与 Q/K/V 投影 |
 | Measured    | 部分达到 | Batch Length/M1 完整；Cache Strategy 缺少逐样本 CSV      |
-| Reviewed    | 尚未达到 | 只有单测与构建检查，还没有独立复现或外部 Review          |
+| Reviewed    | 尚未达到 | 12 项回归、公开评分器与构建检查已存在；还没有独立复现或外部 Review |
 | Transferred | 尚未达到 | 尚未把 Toy 机制迁移到真实 vLLM Scheduler 与 Serving      |
 
 ## 9. 复现与实验产物
@@ -395,10 +396,11 @@ KV Cache 用线性增长的状态换掉了更昂贵的历史重算；历史 Cach
 
 ```bash
 cd labs/kv-cache-batch
-uv sync
+make setup
+make test
 
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  uv run python -m unittest discover -s tests -v
+# 当前应得到 40/100；M2-B 的 TODO 会让命令以非零状态退出
+make grade
 
 # 重建当前公开的 B=2 Length Scan
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
@@ -431,24 +433,31 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   --csv results/cache-strategy/raw.csv
 ```
 
-可以从 [实验产物目录](/labs/kv-cache-batch/) 统一浏览、查看原始文件或下载。文章中涉及的主要文件包括：
+可以从 [实验产物目录](/labs/kv-cache-batch/) 统一浏览、查看原始文件或下载。要跟做当前练习，先打开 [M2 实验任务书](/labs/kv-cache-batch/read/README/)。文章中涉及的主要文件包括：
 
-- [Lab README](/labs/kv-cache-batch/README.md)
+- [M2 实验任务书](/labs/kv-cache-batch/read/README/)
+- [Makefile](/labs/kv-cache-batch/Makefile)
+- [公开评分器](/labs/kv-cache-batch/grade-lab-kv-cache)
+- [M2-B 公开验收测试](/labs/kv-cache-batch/grader_tests/test_m2_b.py)
 - [Attention 与 Cache 实现](/labs/kv-cache-batch/src/kv_cache_lab/attention.py)
 - [Benchmark Harness](/labs/kv-cache-batch/src/kv_cache_lab/benchmark.py)
 - [Batch Size 汇总与绘图脚本](/labs/kv-cache-batch/src/kv_cache_lab/summarize_batch_size.py)
-- [M2 Head 轴实现（A1）](/labs/kv-cache-batch/src/kv_cache_lab/multi_head.py)
+- [M2 Head 轴、投影与当前 TODO](/labs/kv-cache-batch/src/kv_cache_lab/multi_head.py)
 - [正确性测试](/labs/kv-cache-batch/tests/test_attention.py)
 - [M2 Head 契约测试](/labs/kv-cache-batch/tests/test_multi_head.py)
 - [Batch Size 汇总公式测试](/labs/kv-cache-batch/tests/test_summarize_batch_size.py)
-- [M2 学习工作表](/labs/kv-cache-batch/docs/gates/M2.md)
+- [M2 学习工作表](/labs/kv-cache-batch/read/docs/gates/M2/)
 - [Batch Length Scan 的 300 条原始样本](/labs/kv-cache-batch/results/batch-length-scan/raw.csv)
 - [Batch Size Scan 的 240 条原始样本](/labs/kv-cache-batch/results/batch-size-scan/raw.csv)
 - [Batch Size 汇总表](/labs/kv-cache-batch/results/batch-size-scan/summary.csv)
-- [Batch Size Knee 分析](/labs/kv-cache-batch/results/batch-size-scan/knee-analysis.md)
+- [Batch Size Knee 分析](/labs/kv-cache-batch/read/results/batch-size-scan/knee-analysis/)
 
 ```text
 kv-cache-batch/
+├── Makefile
+├── grade-lab-kv-cache
+├── grader_tests/
+│   └── test_m2_b.py
 ├── lab.json
 ├── docs/
 │   ├── PLAN.md
@@ -477,7 +486,7 @@ kv-cache-batch/
 
 ## 10. 当前状态与下一门禁
 
-本文是阶段 2 的**中间机制产出**，只记录已经发生的 Toy Attention 实验、可重建证据与明确的数据缺口，不冒充最终 vLLM Benchmark。一个月内的核心路线是 M2 → S0–S4 → F0；S5、S6、R0 与 T0 属于不阻塞阶段交付的进阶扩展。完整步骤、命令、目录结构和验收条件，以[阶段 2 学习执行手册](/labs/kv-cache-batch/docs/PLAN.md)为唯一来源。
+本文是阶段 2 的**中间机制产出**，只记录已经发生的 Toy Attention 实验、可重建证据与明确的数据缺口，不冒充最终 vLLM Benchmark。一个月内的核心路线是 M2 → S0–S4 → F0；S5、S6、R0 与 T0 属于不阻塞阶段交付的进阶扩展。完整步骤、命令、目录结构和验收条件，以[阶段 2 学习执行手册](/labs/kv-cache-batch/read/docs/PLAN/)为唯一来源。
 
 F0 将使用真实 vLLM 数据单独完成《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》。在那之前，本页标题保持“机制实验”，不会因为计划已经写好就升级证据等级。
 
@@ -485,7 +494,9 @@ F0 将使用真实 vLLM 数据单独完成《vLLM 推理性能实验：并发、
 
 **Question：** Q/K/V 已经是 `[B,H,T,D_head]` 时，怎样证明 Score、Mask、Softmax 和 `Weight @ V` 没有混合 Batch、Head 或 Future Token？
 
-**Action：** 固定 `H_q=H_kv`，先写独立标量 Oracle、Future Token 与 Head/Batch 隔离测试，再实现无 Cache MHA；本轮不加入 Cache、GQA 映射、Head 合并或 Output Projection。
+**Current State：** `multi_head_causal_attention` 已固定四维输入、同 Shape 和非空维度契约，随后主动抛出 `NotImplementedError`。A1/A2 的 40 分已经通过；M2-B 的功能测试仍按预期失败。
+
+**Action：** 运行 `make m2-b`，先用自己的标量 Oracle 保存第一次失败，再补完无 Cache MHA；本轮不加入 Cache、GQA 映射、Head 合并或 Output Projection。
 
 **Acceptance：** Score/Weight 与逐 Head Output Shape、两个非零坐标 Oracle、因果性、归一化、隔离性、非法 Shape 和完整回归全部通过；在此之前不进入 M2-C。
 
@@ -493,4 +504,4 @@ F0 将使用真实 vLLM 数据单独完成《vLLM 推理性能实验：并发、
 
 </Note>
 
-M2-B 的预测、前置阅读和逐项验收见 [M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md)。后续 Gate 只有在真实产物产生后才回写本文；没有数据时使用 `Inconclusive` 或 `Pending`，不把计划写成结果。
+M2-B 的任务、提示和单项评分命令见 [M2 实验任务书](/labs/kv-cache-batch/read/README/)，预测、前置阅读和逐项验收记录见 [M2 工作表](/labs/kv-cache-batch/read/docs/gates/M2/)。后续 Gate 只有在真实产物产生后才回写本文；没有数据时使用 `Inconclusive` 或 `Pending`，不把计划写成结果。

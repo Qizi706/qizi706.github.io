@@ -1,4 +1,6 @@
 ---
+import 'katex/dist/katex.min.css';
+
 interface Props {
 	title: string;
 }
@@ -22,16 +24,24 @@ const { title } = Astro.props;
 		font-family: 'Times New Roman', Times, serif;
 	}
 
-	.easy {
-		color: #00cc00;
+	table {
+		border-collapse: collapse;
+		display: block;
+		width: max-content;
+		max-width: 100%;
+		margin: 1em 0;
+		overflow-x: auto;
+		white-space: nowrap;
 	}
 
-	.moderate {
-		color: #0066ff;
+	th,
+	td {
+		padding: 0.4em 0.9em;
 	}
 
-	.hard {
-		color: #ff3300;
+	th:first-child,
+	td:first-child {
+		padding-left: 0.3em;
 	}
 
 	div.required,

@@ -1,7 +1,7 @@
 {
 	"slug": "kv-cache-batch",
 	"title": "KV Cache and Batched Decode",
-	"description": "Causal Attention, KV Cache, batched decode, and MHA/GQA learning evidence",
+	"description": "An assignment-style NumPy lab for causal attention, KV Cache, batched decode, and MHA/GQA",
 	"parent": {
 		"href": "/blog/build-a-complete-system-from-scratch/",
 		"label": "只有编辑器和构建工具，如何从零构建一个完整系统？"
@@ -9,10 +9,13 @@
 	"publish": [
 		"lab.json",
 		"README.md",
+		"Makefile",
+		"grade-lab-kv-cache",
 		"pyproject.toml",
 		"uv.lock",
 		"src",
 		"tests",
+		"grader_tests",
 		"examples",
 		"docs",
 		"results"
@@ -24,6 +27,9 @@
 	"checks": {
 		"required": [
 			"README.md",
+			"Makefile",
+			"grade-lab-kv-cache",
+			"grader_tests/test_m2_b.py",
 			"docs/PLAN.md",
 			"docs/gates/P0.md",
 			"docs/gates/M1.md",
@@ -54,8 +60,8 @@
 			"documents": [
 				{
 					"label": "Lab 说明",
-					"title": "README",
-					"description": "先了解目录、复现命令、已有证据与当前边界。",
+					"title": "M2 实验任务书",
+					"description": "按任务、提示、示例输出和单项评分命令完成当前练习。",
 					"path": "README.md"
 				},
 				{

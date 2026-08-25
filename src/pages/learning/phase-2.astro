@@ -58,6 +58,7 @@ const rootEntries = listLabDirectoryEntries(artifacts);
 const archive = await getLabArchiveInfo(labName);
 const archiveHref = `/labs/${archive.filename}?v=${archive.sha256.slice(0, 12)}`;
 const labHref = `/labs/${labName}/`;
+const labInstructionsHref = getLabArtifactDisplayHref(labName, 'README.md');
 const planHref = getLabArtifactDisplayHref(labName, 'docs/PLAN.md');
 const currentDocumentHref = getLabArtifactDisplayHref(labName, current.document);
 const labDocuments = (preview.documents as PhaseDocument[]).map((document) => ({
@@ -121,7 +122,8 @@ const description =
 				<p class="lab-launch__current"><strong>当前目标：</strong>{current.objective}</p>
 			</div>
 			<div class="lab-launch__actions">
-				<a class="action-link action-link--primary" href={currentDocumentHref}>继续 {current.id}</a>
+				<a class="action-link action-link--primary" href={labInstructionsHref}>打开实验任务书</a>
+				<a class="action-link" href={currentDocumentHref}>填写 {current.id} 工作表</a>
 				<a class="action-link" href={planHref}>阅读完整计划</a>
 				<a class="action-link" href={labHref}>浏览全部文件</a>
 				<a class="text-link" href={archiveHref} download={archive.filename}>

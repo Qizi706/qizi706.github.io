@@ -2,33 +2,33 @@
 
 这份文件是 2026.08.12—2026.09.12 阶段 2 的唯一执行清单。目标是在一个月内理解推理系统的核心矛盾，并用真实 vLLM 实验解释调度、显存、Batching 与 KV Cache 如何共同决定吞吐和延迟。
 
-本文明确区分“阶段 2 核心完成”和“进阶扩展”。不要因为阅读完一节就勾选完成；也不要让源码追踪、混合负载或跨环境迁移无限推迟原定的一月交付。
+本文明确区分“阶段 2 核心完成”和“进阶扩展”。不要因为阅读完一节就标记为完成；也不要让源码追踪、混合负载或跨环境迁移无限推迟原定的一月交付。
 
 ## 0. 当前状态
 
 ### 已有证据
 
-- [x] 实现 No Cache、Dynamic KV Cache 与 Preallocated KV Cache。
-- [x] 三条路径与 Full Recompute Oracle 逐位置数值等价。
-- [x] 实现固定 `B=2` 的 Sequential 与 Batched Decode。
-- [x] Batched 输出、K Cache、V Cache 的 Shape 通过测试。
-- [x] 保存固定 `B=2` 的 300 条 Batch Length Scan 原始计时样本。
-- [x] 能解释 Batch 摊薄 Python/NumPy 调用开销，但不消除 Attention 工作。
-- [x] M0 结果已经回写阶段 2 中间机制实验文章。
-- [x] `B=1/2/4/8` 全部通过独立 Oracle、Shape 与状态隔离检查。
-- [x] M1 保存 240 条原始样本，并从 Raw CSV 生成汇总、两张曲线和 Knee 分析。
-- [x] M1 结果与证据边界已经回写实验文章。
-- [x] M2-A1 已完成 Head 轴变换的 Shape、非零坐标映射和内存共享验证。
-- [x] M2-A2 已完成 Q/K/V 投影、两个非零坐标 Oracle、五类非法配置与闭卷 Shape 推导。
+- 实现 No Cache、Dynamic KV Cache 与 Preallocated KV Cache。
+- 三条路径与 Full Recompute Oracle 逐位置数值等价。
+- 实现固定 `B=2` 的 Sequential 与 Batched Decode。
+- Batched 输出、K Cache、V Cache 的 Shape 通过测试。
+- 保存固定 `B=2` 的 300 条 Batch Length Scan 原始计时样本。
+- 能解释 Batch 摊薄 Python/NumPy 调用开销，但不消除 Attention 工作。
+- M0 结果已经回写阶段 2 中间机制实验文章。
+- `B=1/2/4/8` 全部通过独立 Oracle、Shape 与状态隔离检查。
+- M1 保存 240 条原始样本，并从 Raw CSV 生成汇总、两张曲线和 Knee 分析。
+- M1 结果与证据边界已经回写实验文章。
+- M2-A1 已完成 Head 轴变换的 Shape、非零坐标映射和内存共享验证。
+- M2-A2 已完成 Q/K/V 投影、两个非零坐标 Oracle、五类非法配置与闭卷 Shape 推导。
 
 ### 当前缺口
 
-- [ ] Cache Strategy 的历史测量支持 H2，但当前复现状态为 `Inconclusive`：450 条逐样本数据未保留。若要重新验证，必须生成独立的 `results/cache-strategy/raw.csv`，不能与其他实验共用文件，也不能把新测量冒充原始样本。
-- [ ] 尚未实现 MHA/GQA 与 KV 容量对照。
-- [ ] 尚未重新冻结真实 vLLM 环境。
-- [ ] 尚无真实 vLLM 的 TTFT、TPOT、吞吐、显存、Input Length、Client Concurrency 与 Scheduler Budget 证据。
-- [ ] 十个核心知识点已有文章说明，但还没有完成阶段末闭卷口述与实测交叉检查。
-- [ ] Mixed Prefill/Decode、Prefix Reuse、源码追踪与跨环境迁移属于进阶扩展，不计入当前核心缺口。
+- Cache Strategy 的历史测量支持 H2，但当前复现状态为 `Inconclusive`：450 条逐样本数据未保留。若要重新验证，必须生成独立的 `results/cache-strategy/raw.csv`，不能与其他实验共用文件，也不能把新测量冒充原始样本。
+- 尚未实现 MHA/GQA 与 KV 容量对照。
+- 尚未重新冻结真实 vLLM 环境。
+- 尚无真实 vLLM 的 TTFT、TPOT、吞吐、显存、Input Length、Client Concurrency 与 Scheduler Budget 证据。
+- 十个核心知识点已有文章说明，但还没有完成阶段末闭卷口述与实测交叉检查。
+- Mixed Prefill/Decode、Prefix Reuse、源码追踪与跨环境迁移属于进阶扩展，不计入当前核心缺口。
 
 ### 当前唯一主任务
 
@@ -134,16 +134,18 @@ question
 
 ### 通用实验纪律
 
-- [ ] 一次只改变一个主变量。
-- [ ] 预测在运行实验之前写下。
-- [ ] 前置阅读只选择会在当天第一段代码中使用的官方文档，默认不超过 15 分钟，并记录它确认或修正了哪条预测。
-- [ ] 正确性检查在计时之前完成，不进入计时区间。
-- [ ] 输入、权重、随机种子和环境在对照组之间保持一致。
-- [ ] 保留全部原始样本，不只保存平均数或中位数。
-- [ ] 报告 P50/P95；在线 Serving 还要报告 P99。
-- [ ] 异常样本先保留并解释，不因图形不好看而删除。
-- [ ] 客户端相关性不能直接写成 Scheduler 因果。
-- [ ] 没有证据时使用 `Inconclusive` 或 `Not reached`。
+执行实验时需逐项满足：
+
+- 一次只改变一个主变量。
+- 预测在运行实验之前写下。
+- 前置阅读只选择会在当天第一段代码中使用的官方文档，默认不超过 15 分钟，并记录它确认或修正了哪条预测。
+- 正确性检查在计时之前完成，不进入计时区间。
+- 输入、权重、随机种子和环境在对照组之间保持一致。
+- 保留全部原始样本，不只保存平均数或中位数。
+- 报告 P50/P95；在线 Serving 还要报告 P99。
+- 异常样本先保留并解释，不因图形不好看而删除。
+- 客户端相关性不能直接写成 Scheduler 因果。
+- 没有证据时使用 `Inconclusive` 或 `Not reached`。
 
 ## 3. 总路线
 
@@ -204,8 +206,10 @@ H3：Batch Wall Time / B 会下降，因为固定开销被摊薄。
 H4：B=8 以内可能没有明确拐点；若没有，只能写 Not reached。
 ```
 
-- [x] 每条预测都写明可能推翻它的结果。
-- [x] 不先运行 Benchmark 偷看趋势。
+**已完成**
+
+- 每条预测都写明可能推翻它的结果。
+- 不先运行 Benchmark 偷看趋势。
 
 ### A2. 确认 M0 基线
 
@@ -214,8 +218,10 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   uv run python -m unittest discover -s tests -v
 ```
 
-- [x] 现有基线测试全部通过；当前测试总数为 6。
-- [x] 目录重命名和 Import 已通过测试与 Astro 构建验证。
+**已完成**
+
+- 现有基线测试全部通过；当前测试总数为 6。
+- 目录重命名和 Import 已通过测试与 Astro 构建验证。
 
 ### A3. 增加多 Batch Size 测试
 
@@ -228,13 +234,15 @@ def test_batched_path_matches_oracle_for_batch_size_scan(self) -> None:
 
 实现顺序：
 
-1. [x] 构造最大输入 `[8, T, D_model]`。
-2. [x] 依次取 `x[:1]`、`x[:2]`、`x[:4]`、`x[:8]`。
-3. [x] 每个 B 使用 `decode_without_cache` 逐 Sequence 生成 Oracle。
-4. [x] 调用 `batched_cached_attention`。
-5. [x] 使用 `subTest(batch_size=B)` 标记当前 Case。
-6. [x] 使用 `assert_allclose` 检查数值。
-7. [x] 检查以下 Shape：
+**已完成**
+
+1. 构造最大输入 `[8, T, D_model]`。
+2. 依次取 `x[:1]`、`x[:2]`、`x[:4]`、`x[:8]`。
+3. 每个 B 使用 `decode_without_cache` 逐 Sequence 生成 Oracle。
+4. 调用 `batched_cached_attention`。
+5. 使用 `subTest(batch_size=B)` 标记当前 Case。
+6. 使用 `assert_allclose` 检查数值。
+7. 检查以下 Shape：
 
 ```text
 output:  [B, T, D_v]
@@ -244,10 +252,12 @@ V cache: [B, T, D_v]
 
 ### M1-A Acceptance
 
-- [x] `B=1/2/4/8` 全部与独立 Oracle 等价。
-- [x] 每个 B 的 Output/K/V Shape 正确。
-- [x] 能解释为什么只检查 Shape 无法证明 Batch 间没有状态泄漏。
-- [x] 任何 Oracle 失败时停止计时并先修复。
+**已完成**
+
+- `B=1/2/4/8` 全部与独立 Oracle 等价。
+- 每个 B 的 Output/K/V Shape 正确。
+- 能解释为什么只检查 Shape 无法证明 Batch 间没有状态泄漏。
+- 任何 Oracle 失败时停止计时并先修复。
 
 ## M1-B：扩展 Benchmark
 
@@ -298,9 +308,11 @@ x_max = rng.normal(
 x = x_max[:batch_size].copy()
 ```
 
-- [x] B=1 的输入也是 B=8 的第一个 Sequence。
-- [x] 所有 B 共享同一组权重。
-- [x] `.copy()` 隔离不同实验输入的状态。
+**已完成**
+
+- B=1 的输入也是 B=8 的第一个 Sequence。
+- 所有 B 共享同一组权重。
+- `.copy()` 隔离不同实验输入的状态。
 
 ### B4. 随机化 B 的运行顺序
 
@@ -309,9 +321,11 @@ execution_order = list(BATCH_SIZES)
 rng.shuffle(execution_order)
 ```
 
-- [x] 保存实际运行顺序；当前 `raw.csv` 为 `4 → 1 → 8 → 2`。
-- [x] 输出汇总时按 B 排序。
-- [x] 不因顺序随机化而重新生成不同输入。
+**已完成**
+
+- 保存实际运行顺序；当前 `raw.csv` 为 `4 → 1 → 8 → 2`。
+- 输出汇总时按 B 排序。
+- 不因顺序随机化而重新生成不同输入。
 
 ### B5. 正确性门禁放在计时之前
 
@@ -324,9 +338,11 @@ construct input
   -> benchmark
 ```
 
-- [x] 输入和权重在计时区间外创建。
-- [x] Oracle 不进入计时。
-- [x] 每次被测函数内部重新创建自己的 Cache。
+**已完成**
+
+- 输入和权重在计时区间外创建。
+- Oracle 不进入计时。
+- 每次被测函数内部重新创建自己的 Cache。
 
 ### B6. 测量两条路径
 
@@ -339,10 +355,12 @@ batched_cached_attention
 
 每条路径：
 
-- [x] 每条 Path Warm-up 10 次；3 次 Warm-up 已验证不足以消除启动漂移。
-- [x] 正式计时 30 次。
-- [x] 使用 `experiment="batch_size_scan"` 记录。
-- [x] 保存所有样本，不只打印 Median。
+**已完成**
+
+- 每条 Path Warm-up 10 次；3 次 Warm-up 已验证不足以消除启动漂移。
+- 正式计时 30 次。
+- 使用 `experiment="batch_size_scan"` 记录。
+- 保存所有样本，不只打印 Median。
 
 ### B7. 增加 CLI 实验选择
 
@@ -410,9 +428,11 @@ speedup = sequential_p50_ms / batched_p50_ms
 rg -c '^batch_size_scan,' results/batch-size-scan/raw.csv
 ```
 
-- [x] 得到 240。
-- [x] 每个 `(B, path)` 都恰好有 30 条记录。
-- [x] 没有 NaN、负耗时或缺失组。
+**已完成**
+
+- 得到 240。
+- 每个 `(B, path)` 都恰好有 30 条记录。
+- 没有 NaN、负耗时或缺失组。
 
 ### C3. 汇总表
 
@@ -435,9 +455,11 @@ B | Batch P50 | Batch P95 | P50/B | Positions/s | Sequential/Batch
 uv add --dev matplotlib
 ```
 
-- [x] 图只从原始 CSV 生成。
-- [x] 图标题包含 `T=128`、dtype、BLAS Thread。
-- [x] 不手工复制汇总数字进绘图脚本。
+**已完成**
+
+- 图只从原始 CSV 生成。
+- 图标题包含 `T=128`、dtype、BLAS Thread。
+- 不手工复制汇总数字进绘图脚本。
 
 ### C5. 判断收益收窄
 
@@ -464,12 +486,14 @@ Knee: B=8
 
 ### M1 Acceptance
 
-- [x] 所有 B 通过 Oracle 与 Shape 检查。
-- [x] 原始 CSV 有 240 条完整样本。
-- [x] 能区分 Batch Wall Time、摊销成本、Positions/s 与请求延迟。
-- [x] 能解释为什么 Batch 加速不会达到 B 倍。
-- [x] 能说明当前实验不是 Continuous Batching。
-- [x] 结果和证据边界已回写实验文章。
+**已完成**
+
+- 所有 B 通过 Oracle 与 Shape 检查。
+- 原始 CSV 有 240 条完整样本。
+- 能区分 Batch Wall Time、摊销成本、Positions/s 与请求延迟。
+- 能解释为什么 Batch 加速不会达到 B 倍。
+- 能说明当前实验不是 Continuous Batching。
+- 结果和证据边界已回写实验文章。
 
 产物：
 
@@ -513,11 +537,13 @@ M2 整体仍是 **In progress**。M2-A1 与 M2-A2 已完成；`Current` 只表�
 
 已实现 `split_heads(projected, num_heads)`，将 `[B, T, H × D_head]` 变成 `[B, H, T, D_head]`。实际测试使用 `B=2, T=4, H=5, D_head=3`，避免所有维度相等掩盖轴错误。
 
-- [x] 为 `B/H/T/D_head` 写明轴语义。
-- [x] Shape 测试通过。
-- [x] 非零坐标元素映射 Oracle 通过。
-- [x] `split_heads` 结果与输入共享数据 Buffer。
-- [x] A1 定向测试与完整 9 项回归测试通过。
+**已完成**
+
+- 为 `B/H/T/D_head` 写明轴语义。
+- Shape 测试通过。
+- 非零坐标元素映射 Oracle 通过。
+- `split_heads` 结果与输入共享数据 Buffer。
+- A1 定向测试与完整 9 项回归测试通过。
 
 预测、首次失败、修正规则与闭卷验收保存在 [`docs/gates/M2.md`](gates/M2.md)。A1 已关闭，不再把后续 Q/K/V 投影计入 A1 完成状态。
 
@@ -549,13 +575,15 @@ V: [B, H_kv, T, D_head]
 B=2, T=5, D_model=7, H_q=4, H_kv=2, D_head=3
 ```
 
-- [x] 运行前的权重 Shape、Q/K/V Shape、Buffer 与非零坐标预测已保存。
-- [x] 三处定向阅读各留下了一句对预测的确认或修正。
-- [x] `project_qkv` 已实现，并得到 `Q=[2,4,5,3]`、`K/V=[2,2,5,3]`。
-- [x] 至少两个非零坐标的独立元素 Oracle 通过。
-- [x] 输入维度、Head 数、整除关系、权重宽度与 `D_head` 五类非法配置明确失败。
-- [x] A1 测试与完整 12 项回归测试保持通过。
-- [x] 运行后结果、首次失败、修正规则与闭卷推导已回写 [`docs/gates/M2.md`](gates/M2.md)。
+**已完成**
+
+- 运行前的权重 Shape、Q/K/V Shape、Buffer 与非零坐标预测已保存。
+- 三处定向阅读各留下了一句对预测的确认或修正。
+- `project_qkv` 已实现，并得到 `Q=[2,4,5,3]`、`K/V=[2,2,5,3]`。
+- 至少两个非零坐标的独立元素 Oracle 通过。
+- 输入维度、Head 数、整除关系、权重宽度与 `D_head` 五类非法配置明确失败。
+- A1 测试与完整 12 项回归测试保持通过。
+- 运行后结果、首次失败、修正规则与闭卷推导已回写 [`docs/gates/M2.md`](gates/M2.md)。
 
 A2 七项门禁已经关闭。历史预测与第一次非法配置失败继续保留，不因通过验收而改写。
 
@@ -576,24 +604,28 @@ Output:       [2,3,4,5]
 
 顺序：
 
-1. [ ] 用 `Q @ swapaxes(K, -1, -2) / sqrt(D_head)` 独立计算每个 Batch/Head 的 Score。
-2. [ ] 添加上三角 Causal Mask，让 Future Token 权重为零。
-3. [ ] 只沿最后一个历史 Token Axis 做稳定 Softmax。
-4. [ ] 用 `Weight @ V` 得到逐 Head Output。
-5. [ ] 返回逐 Head Output 与 Weight；本 Gate 不合并 Head。
+**待完成**
+
+1. 用 `Q @ swapaxes(K, -1, -2) / sqrt(D_head)` 独立计算每个 Batch/Head 的 Score。
+2. 添加上三角 Causal Mask，让 Future Token 权重为零。
+3. 只沿最后一个历史 Token Axis 做稳定 Softmax。
+4. 用 `Weight @ V` 得到逐 Head Output。
+5. 返回逐 Head Output 与 Weight；本 Gate 不合并 Head。
 
 先只实现 `H_q=H_kv`。
 
 测试：
 
-- [ ] Score、Weight 与 Output Shape 正确。
-- [ ] 至少两个非零坐标匹配不调用待测函数的独立标量 Oracle。
-- [ ] 每行 Weight 在最后一维和为 1，且 Future Token 权重为 0。
-- [ ] 修改 Future Token 不改变当前位置及之前的输出。
-- [ ] 修改一个 Head 或一个 Batch 不污染其他切片。
-- [ ] Q/K/V 不是四维或关键轴不匹配时，在矩阵乘法前抛出 `ValueError`。
-- [ ] A2 与完整回归测试保持通过。
-- [ ] 关闭代码后能重新推导 Score、Weight、Output Shape，并解释缩放与 Softmax Axis。
+**待完成**
+
+- Score、Weight 与 Output Shape 正确。
+- 至少两个非零坐标匹配不调用待测函数的独立标量 Oracle。
+- 每行 Weight 在最后一维和为 1，且 Future Token 权重为 0。
+- 修改 Future Token 不改变当前位置及之前的输出。
+- 修改一个 Head 或一个 Batch 不污染其他切片。
+- Q/K/V 不是四维或关键轴不匹配时，在矩阵乘法前抛出 `ValueError`。
+- A2 与完整回归测试保持通过。
+- 关闭代码后能重新推导 Score、Weight、Output Shape，并解释缩放与 Softmax Axis。
 
 预测、120 分钟执行顺序与运行记录填写在 [`docs/gates/M2.md`](gates/M2.md)。全部通过后进入 M2-C；任一项失败时只修正 M2-B。
 
@@ -606,9 +638,11 @@ t=1 -> attend K/V[0:2]
 t=T-1 -> attend K/V[0:T]
 ```
 
-- [ ] 每个位置与 Full Recompute Oracle 对照。
-- [ ] 所有位置通过前不测性能。
-- [ ] Cache Shape 始终保持 `[B, H_kv, current_T, D_head]`。
+**待完成**
+
+- 每个位置与 Full Recompute Oracle 对照。
+- 所有位置通过前不测性能。
+- Cache Shape 始终保持 `[B, H_kv, current_T, D_head]`。
 
 ## M2-D：实现 GQA 映射
 
@@ -634,9 +668,11 @@ if h_q % h_kv != 0:
     raise ValueError(...)
 ```
 
-- [ ] 不同 KV Head 使用不同测试数据。
-- [ ] 非法 Head 数量触发明确异常。
-- [ ] Query Head 到 KV Head 的映射有独立测试。
+**待完成**
+
+- 不同 KV Head 使用不同测试数据。
+- 非法 Head 数量触发明确异常。
+- Query Head 到 KV Head 的映射有独立测试。
 
 ## M2-E：验证容量公式
 
@@ -655,17 +691,21 @@ GQA: H_q=8, H_kv=2
 actual_bytes = k_cache.nbytes + v_cache.nbytes
 ```
 
-- [ ] `actual_bytes == formula_bytes`。
-- [ ] 固定其他变量时，GQA 逻辑 KV 字节为 MHA 的四分之一。
-- [ ] 结论只写状态量减少，不外推为延迟或质量提高四倍。
+**待完成**
+
+- `actual_bytes == formula_bytes`。
+- 固定其他变量时，GQA 逻辑 KV 字节为 MHA 的四分之一。
+- 结论只写状态量减少，不外推为延迟或质量提高四倍。
 
 ## M2 Acceptance
 
-- [ ] Full Recompute 与 Cached Decode 等价。
-- [ ] 非法 Head 配置测试通过。
-- [ ] Batch 与 Head 状态隔离测试通过。
-- [ ] 实测字节与公式精确一致。
-- [ ] 结果写入容量 CSV 和 MHA/GQA 对照表。
+**待完成**
+
+- Full Recompute 与 Cached Decode 等价。
+- 非法 Head 配置测试通过。
+- Batch 与 Head 状态隔离测试通过。
+- 实测字节与公式精确一致。
+- 结果写入容量 CSV 和 MHA/GQA 对照表。
 
 M2 后停止扩展 NumPy Toy Transformer。不要继续实现完整 MLP、Tokenizer 或 Sampling。
 
@@ -703,11 +743,13 @@ vllm collect-env
 
 记录：
 
-- [ ] 日期、OS、CPU/GPU/统一内存。
-- [ ] Python 版本与环境路径。
-- [ ] vLLM Core 版本或 Commit。
-- [ ] Metal Plugin 版本或 Commit。
-- [ ] 模型仓库、Revision、dtype、量化方式。
+**待完成**
+
+- 日期、OS、CPU/GPU/统一内存。
+- Python 版本与环境路径。
+- vLLM Core 版本或 Commit。
+- Metal Plugin 版本或 Commit。
+- 模型仓库、Revision、dtype、量化方式。
 
 ## S0.2 保存本机帮助
 
@@ -722,12 +764,14 @@ vllm bench serve --help
 
 至少包含：
 
-- [ ] 模型路径与 Served Model Name。
-- [ ] dtype、量化与最大上下文。
-- [ ] `max_num_seqs`。
-- [ ] `max_num_batched_tokens`。
-- [ ] Prefix Cache 与 Chunked Prefill 配置。
-- [ ] Backend/Plugin 参数和环境变量。
+**待完成**
+
+- 模型路径与 Served Model Name。
+- dtype、量化与最大上下文。
+- `max_num_seqs`。
+- `max_num_batched_tokens`。
+- Prefix Cache 与 Chunked Prefill 配置。
+- Backend/Plugin 参数和环境变量。
 
 ## S0.4 验证端点
 
@@ -745,20 +789,24 @@ Capability | Supported | Argument accepted | Log confirmed | Metrics visible
 
 至少检查：
 
-- [ ] `bench serve`。
-- [ ] `max_num_seqs`。
-- [ ] `max_num_batched_tokens`。
-- [ ] Chunked Prefill。
-- [ ] Prefix Caching。
-- [ ] Prometheus Metrics。
+**待完成**
+
+- `bench serve`。
+- `max_num_seqs`。
+- `max_num_batched_tokens`。
+- Chunked Prefill。
+- Prefix Caching。
+- Prometheus Metrics。
 
 参数被 CLI 接受不等于 Backend 实际使用。
 
 ## S0 Acceptance
 
-- [ ] 另一个人只看产物目录就能启动相同服务。
-- [ ] 不支持的能力明确标成 `Unsupported`。
-- [ ] 无法观察的状态明确标成 `Unobservable`。
+**待完成**
+
+- 另一个人只看产物目录就能启动相同服务。
+- 不支持的能力明确标成 `Unsupported`。
+- 无法观察的状态明确标成 `Unobservable`。
 
 不通过就不进入性能扫描。
 
@@ -805,21 +853,25 @@ vllm bench serve \
 
 ## S1.2 独立运行三轮
 
-- [ ] `run-1` 独立 Warm-up、详细结果、Metrics。
-- [ ] `run-2` 独立 Warm-up、详细结果、Metrics。
-- [ ] `run-3` 独立 Warm-up、详细结果、Metrics。
-- [ ] 保存失败、超时与输出提前结束的请求。
+**待完成**
+
+- `run-1` 独立 Warm-up、详细结果、Metrics。
+- `run-2` 独立 Warm-up、详细结果、Metrics。
+- `run-3` 独立 Warm-up、详细结果、Metrics。
+- 保存失败、超时与输出提前结束的请求。
 
 ## S1.3 检查稳定性
 
 比较：
 
-- [ ] Request Throughput。
-- [ ] Output Token Throughput。
-- [ ] TTFT P50/P95/P99。
-- [ ] TPOT P50/P95/P99。
-- [ ] ITL P50/P95/P99。
-- [ ] E2E P50/P95/P99。
+**待完成**
+
+- Request Throughput。
+- Output Token Throughput。
+- TTFT P50/P95/P99。
+- TPOT P50/P95/P99。
+- ITL P50/P95/P99。
+- E2E P50/P95/P99。
 
 差异明显时优先检查模型编译、温度/功耗、系统负载、实际 Token 数、Fallback 和提前停止。
 
@@ -839,10 +891,12 @@ vllm bench serve \
 
 ## S1 Acceptance
 
-- [ ] 三轮结果达到可解释的稳定性。
-- [ ] 每个汇总值可追溯到每请求记录。
-- [ ] 指标定义与内置工具保持一致。
-- [ ] 完成权重、KV Cache、激活、临时 Buffer 与 Runtime 开销的显存组成表；不可观测项已明确标记。
+**待完成**
+
+- 三轮结果达到可解释的稳定性。
+- 每个汇总值可追溯到每请求记录。
+- 指标定义与内置工具保持一致。
+- 完成权重、KV Cache、激活、临时 Buffer 与 Runtime 开销的显存组成表；不可观测项已明确标记。
 
 ---
 
@@ -860,25 +914,31 @@ max_concurrency = 1
 
 记录：
 
-- [ ] 实际 Prompt Token 数。
-- [ ] TTFT、TPOT、ITL、E2E。
-- [ ] Input/Output Token Throughput。
-- [ ] 服务端 KV Usage。
-- [ ] 每组长度的稳态与峰值内存，以及它与 KV Usage 的差异。
+**待完成**
+
+- 实际 Prompt Token 数。
+- TTFT、TPOT、ITL、E2E。
+- Input/Output Token Throughput。
+- 服务端 KV Usage。
+- 每组长度的稳态与峰值内存，以及它与 KV Usage 的差异。
 
 必须回答：
 
-- [ ] Input Length 首先影响 Prefill 还是 Decode？
-- [ ] TTFT 是否随输入增长？
-- [ ] TPOT 是否也变化？
-- [ ] KV Usage 是否增长？
-- [ ] 没有 KV 指标时，哪些结论只能是相关性？
+**待完成**
+
+- Input Length 首先影响 Prefill 还是 Decode？
+- TTFT 是否随输入增长？
+- TPOT 是否也变化？
+- KV Usage 是否增长？
+- 没有 KV 指标时，哪些结论只能是相关性？
 
 ## S2 Acceptance
 
-- [ ] 三组只改变 Input Length。
-- [ ] 曲线可回溯到单请求记录。
-- [ ] 无服务端 KV 证据时，KV 因果写成 `Inconclusive`。
+**待完成**
+
+- 三组只改变 Input Length。
+- 曲线可回溯到单请求记录。
+- 无服务端 KV 证据时，KV 因果写成 `Inconclusive`。
 
 ---
 
@@ -892,13 +952,15 @@ max_concurrency = 1, 2, 4, 8, 16
 
 记录：
 
-- [ ] Request Throughput。
-- [ ] Input Token Throughput。
-- [ ] Output Token Throughput。
-- [ ] TTFT/TPOT/ITL/E2E P50/P95/P99。
-- [ ] Running/Waiting Requests。
-- [ ] KV Usage。
-- [ ] 稳态与峰值内存。
+**待完成**
+
+- Request Throughput。
+- Input Token Throughput。
+- Output Token Throughput。
+- TTFT/TPOT/ITL/E2E P50/P95/P99。
+- Running/Waiting Requests。
+- KV Usage。
+- 稳态与峰值内存。
 
 预先定义饱和点：
 
@@ -910,9 +972,11 @@ Output Token Throughput 增幅 < 10%
 
 ## S3 Acceptance
 
-- [ ] 找到操作性饱和点，或明确写 `Not reached`。
-- [ ] 能区分 Client Concurrency、Server Batch 和单轮 Scheduled Sequences。
-- [ ] 不使用一个“吞吐”混写 Request/Input Token/Output Token Throughput。
+**待完成**
+
+- 找到操作性饱和点，或明确写 `Not reached`。
+- 能区分 Client Concurrency、Server Batch 和单轮 Scheduled Sequences。
+- 不使用一个“吞吐”混写 Request/Input Token/Output Token Throughput。
 
 ---
 
@@ -922,25 +986,31 @@ Output Token Throughput 增幅 < 10%
 
 ## S4.1 只扫描 `max_num_seqs`
 
-- [ ] 选择较小值、默认值、较大值。
-- [ ] 每个配置重启服务。
-- [ ] 保存完整启动命令和日志。
-- [ ] 客户端负载保持不变。
+**待完成**
+
+- 选择较小值、默认值、较大值。
+- 每个配置重启服务。
+- 保存完整启动命令和日志。
+- 客户端负载保持不变。
 
 ## S4.2 恢复后只扫描 `max_num_batched_tokens`
 
-- [ ] 恢复 `max_num_seqs`。
-- [ ] 选择较小值、默认值、较大值。
-- [ ] 每个配置重启服务并保存日志。
+**待完成**
+
+- 恢复 `max_num_seqs`。
+- 选择较小值、默认值、较大值。
+- 每个配置重启服务并保存日志。
 
 ## S4 Acceptance
 
-- [ ] Backend 没有忽略参数。
-- [ ] 工作负载实际触及被扫描限制。
-- [ ] Waiting Requests 足够形成调度压力。
-- [ ] KV 容量没有先成为限制，或已明确记录。
-- [ ] 每个 Scheduler 配置保留实际 Scheduled Sequences/Token 数和峰值内存；无法观测时明确标记。
-- [ ] 无法证明时使用 `Inconclusive`，不写“调大参数无效”。
+**待完成**
+
+- Backend 没有忽略参数。
+- 工作负载实际触及被扫描限制。
+- Waiting Requests 足够形成调度压力。
+- KV 容量没有先成为限制，或已明确记录。
+- 每个 Scheduler 配置保留实际 Scheduled Sequences/Token 数和峰值内存；无法观测时明确标记。
+- 无法证明时使用 `Inconclusive`，不写“调大参数无效”。
 
 核心路线到这里停止增加变量，直接进入 F0。下面的 S5、S6 与 R0 是进阶扩展，不是完成原始阶段 2 的前置条件。
 
@@ -966,11 +1036,13 @@ results/serving/
 
 ## F0.1 交叉检查
 
-- [ ] 使用内置 `bench serve` 对照一次自定义聚合。
-- [ ] 对最异常的一组结果独立复跑。
-- [ ] 保留失败和超时请求。
-- [ ] 从 Raw JSON/CSV 重新生成至少一张核心曲线。
-- [ ] 逐项检查显存组成表中的实测、估算与 `Unobservable` 标签。
+**待完成**
+
+- 使用内置 `bench serve` 对照一次自定义聚合。
+- 对最异常的一组结果独立复跑。
+- 保留失败和超时请求。
+- 从 Raw JSON/CSV 重新生成至少一张核心曲线。
+- 逐项检查显存组成表中的实测、估算与 `Unobservable` 标签。
 
 ## F0.2 核心结论矩阵
 
@@ -987,11 +1059,13 @@ results/serving/
 
 ## F0.3 阶段产出
 
-- [ ] 系统文章只保留机制模型，并用真实 S0–S4 证据修正边界。
-- [ ] 当前《LLM 推理机制实验》继续作为 Toy Lab 中间产出，不改写成 GPU/vLLM 结果。
-- [ ] 使用真实 vLLM 数据完成《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》。
-- [ ] 最终文章包含 Question、Prediction、环境、受控变量、Raw Evidence、曲线、异常、限制和 Next Decision。
-- [ ] 文件真正产生后再添加文章与产物链接，不创建空链接充当完成进度。
+**待完成**
+
+- 系统文章只保留机制模型，并用真实 S0–S4 证据修正边界。
+- 当前《LLM 推理机制实验》继续作为 Toy Lab 中间产出，不改写成 GPU/vLLM 结果。
+- 使用真实 vLLM 数据完成《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》。
+- 最终文章包含 Question、Prediction、环境、受控变量、Raw Evidence、曲线、异常、限制和 Next Decision。
+- 文件真正产生后再添加文章与产物链接，不创建空链接充当完成进度。
 
 ## F0.4 最终闭卷答辩
 
@@ -1012,10 +1086,12 @@ results/serving/
 
 ## F0 Acceptance
 
-- [ ] M2 与 S0–S4 的 Acceptance 全部通过。
-- [ ] 最终 vLLM 性能文章和复现目录真实存在。
-- [ ] 每个核心结论都能回到原始请求、服务端状态或明确的 `Inconclusive` 边界。
-- [ ] 闭卷答辩能够连接调度、显存、Batching、KV Cache、吞吐与延迟。
+**待完成**
+
+- M2 与 S0–S4 的 Acceptance 全部通过。
+- 最终 vLLM 性能文章和复现目录真实存在。
+- 每个核心结论都能回到原始请求、服务端状态或明确的 `Inconclusive` 边界。
+- 闭卷答辩能够连接调度、显存、Batching、KV Cache、吞吐与延迟。
 
 满足以上四项后，阶段 2 标记为 **Core Complete**。S5、S6、R0 和 T0 尚未完成不影响这个状态。
 
@@ -1033,10 +1109,12 @@ results/serving/
 
 使用 `asyncio.sleep()` 模拟：
 
-- [ ] 多个短请求。
-- [ ] Semaphore Concurrency Gate。
-- [ ] 延迟注入的长请求。
-- [ ] Arrival/Admission/First Token/Token/Finish 时间戳。
+**待完成**
+
+- 多个短请求。
+- Semaphore Concurrency Gate。
+- 延迟注入的长请求。
+- Arrival/Admission/First Token/Token/Finish 时间戳。
 
 必须能解释 Task、Event Loop、Semaphore，以及 Client Concurrency 为什么不是 Server Batch。
 
@@ -1063,11 +1141,13 @@ short: input=128, output=128
 long:  input=2048, output=32
 ```
 
-1. [ ] 先让短请求稳定 Decode。
-2. [ ] 延迟注入一个长 Prompt。
-3. [ ] 保存长请求 Arrival。
-4. [ ] 对齐短请求 ITL 时间线。
-5. [ ] 独立重复至少三次。
+**待完成**
+
+1. 先让短请求稳定 Decode。
+2. 延迟注入一个长 Prompt。
+3. 保存长请求 Arrival。
+4. 对齐短请求 ITL 时间线。
+5. 独立重复至少三次。
 
 ### S5.4 Chunked Prefill 对照
 
@@ -1082,9 +1162,11 @@ Chunked Prefill on
 
 ### S5 Acceptance
 
-- [ ] ITL 尖峰能在至少三次复跑中重现。
-- [ ] 尖峰与长请求 Arrival 对齐。
-- [ ] 只有开关被确认生效时才归因于 Chunked Prefill。
+**待完成**
+
+- ITL 尖峰能在至少三次复跑中重现。
+- 尖峰与长请求 Arrival 对齐。
+- 只有开关被确认生效时才归因于 Chunked Prefill。
 
 ---
 
@@ -1099,19 +1181,23 @@ B: shared 512-token prefix
 
 每组：
 
-- [ ] 独立准备 Cache 状态。
-- [ ] 保存真实 Token IDs 或 JSONL。
-- [ ] 保存 Prefix Query/Hit Metrics。
-- [ ] 保存 TTFT 分布。
-- [ ] 保存实际输入与输出长度。
+**待完成**
+
+- 独立准备 Cache 状态。
+- 保存真实 Token IDs 或 JSONL。
+- 保存 Prefix Query/Hit Metrics。
+- 保存 TTFT 分布。
+- 保存实际输入与输出长度。
 
 ### S6 Acceptance
 
-- [ ] 两组总输入长度一致。
-- [ ] 实验组有 Prefix Hit 证据。
-- [ ] 主要结论落在重复 Prefill 与 TTFT。
-- [ ] 不把它写成 Decode 同比例加速。
-- [ ] 只有 TTFT 改善却无命中证据时，结论保持相关性。
+**待完成**
+
+- 两组总输入长度一致。
+- 实验组有 Prefix Hit 证据。
+- 主要结论落在重复 Prefill 与 TTFT。
+- 不把它写成 Decode 同比例加速。
+- 只有 TTFT 改善却无命中证据时，结论保持相关性。
 
 ---
 
@@ -1125,18 +1211,22 @@ B: shared 512-token prefix
 python -c 'import inspect, vllm; print(inspect.getfile(vllm))'
 ```
 
-- [ ] 记录 Core Commit。
-- [ ] 记录 Plugin Commit。
-- [ ] 记录实际 Package 路径。
+**待完成**
+
+- 记录 Core Commit。
+- 记录 Plugin Commit。
+- 记录实际 Package 路径。
 
 ### R0.2 选择一个已复现现象
 
 优先选择：
 
-- [ ] S3 吞吐饱和。
-- [ ] S4 Budget 生效或不生效。
-- [ ] S5 ITL 尖峰。
-- [ ] S6 Prefix Hit。
+**待完成**
+
+- S3 吞吐饱和。
+- S4 Budget 生效或不生效。
+- S5 ITL 尖峰。
+- S6 Prefix Hit。
 
 不要脱离实验漫游源码。
 
@@ -1165,30 +1255,36 @@ related metric
 
 必须回答：
 
-- [ ] Waiting 何时进入 Running？
-- [ ] Prefill 与 Decode 如何消费预算？
-- [ ] KV Block 在哪里分配、追加、复用、释放？
-- [ ] `max_num_seqs` 在哪里读取？
-- [ ] `max_num_batched_tokens` 在哪里约束调度？
-- [ ] 请求完成或取消怎样影响下一轮？
-- [ ] Metal Plugin 替换或限制了哪一层？
+**待完成**
+
+- Waiting 何时进入 Running？
+- Prefill 与 Decode 如何消费预算？
+- KV Block 在哪里分配、追加、复用、释放？
+- `max_num_seqs` 在哪里读取？
+- `max_num_batched_tokens` 在哪里约束调度？
+- 请求完成或取消怎样影响下一轮？
+- Metal Plugin 替换或限制了哪一层？
 
 ### R0.4 回到实验验证
 
 至少执行一个验证动作：
 
-- [ ] 缩小 Token Budget。
-- [ ] 改变请求到达方式。
-- [ ] 开启详细日志。
-- [ ] 构造能进入目标分支的负载。
+**待完成**
+
+- 缩小 Token Budget。
+- 改变请求到达方式。
+- 开启详细日志。
+- 构造能进入目标分支的负载。
 
 源码阅读本身不算完成。
 
 ### R0 Acceptance
 
-- [ ] 源码链路能解释一个已复现指标变化。
-- [ ] 至少保留一个仍可能成立的替代解释。
-- [ ] 完成一次验证性复跑。
+**待完成**
+
+- 源码链路能解释一个已复现指标变化。
+- 至少保留一个仍可能成立的替代解释。
+- 完成一次验证性复跑。
 
 ---
 
@@ -1196,11 +1292,13 @@ related metric
 
 换一个模型、Backend 或硬件，重新完成：
 
-- [ ] 写下哪些趋势应该保留。
-- [ ] 写下哪些趋势可能变化。
-- [ ] 重新冻结环境。
-- [ ] 复跑一组基线和一组压力实验。
-- [ ] 用差异修正原有机制模型。
+**待完成**
+
+- 写下哪些趋势应该保留。
+- 写下哪些趋势可能变化。
+- 重新冻结环境。
+- 复跑一组基线和一组压力实验。
+- 用差异修正原有机制模型。
 
 T0 达到 `Transferred`，但不反向改变阶段 2 的一个月核心完成日期。
 
@@ -1220,9 +1318,11 @@ T0 达到 `Transferred`，但不反向改变阶段 2 的一个月核心完成日
 
 当前只做以下三项：
 
-1. [ ] 在 `docs/gates/M2.md` 保存固定参数下的 Score、Weight、Output Shape、Softmax Axis 与隔离性预测，再完成 15 分钟定向阅读。
-2. [ ] 先写独立标量 Oracle、Future Token、Head/Batch 隔离和非法 Shape 测试，再实现无 Cache MHA 最小接口。
-3. [ ] 运行 M2-B 定向测试和完整回归测试，关闭代码重做坐标推导并解释 `sqrt(D_head)` 与 Softmax Axis。
+**待完成**
+
+1. 在 `docs/gates/M2.md` 保存固定参数下的 Score、Weight、Output Shape、Softmax Axis 与隔离性预测，再完成 15 分钟定向阅读。
+2. 先写独立标量 Oracle、Future Token、Head/Batch 隔离和非法 Shape 测试，再实现无 Cache MHA 最小接口。
+3. 运行 M2-B 定向测试和完整回归测试，关闭代码重做坐标推导并解释 `sqrt(D_head)` 与 Softmax Axis。
 
 M2-B 验收清单全部通过后进入 M2-C；不要提前实现 KV Cache、GQA 映射、Head 合并或 Output Projection。
 

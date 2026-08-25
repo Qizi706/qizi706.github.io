@@ -2,7 +2,7 @@
 title: 'LLM 推理优化的系统视角：从 KV Cache 到调度'
 description: '阶段 2 的 AI Infra 学习记录：从 Prefill、Decode 与 KV Cache 出发，理解计算、带宽、容量和调度如何共同决定 LLM Serving 的吞吐与延迟。'
 pubDate: '2026-08-13T20:00:00+08:00'
-updatedDate: '2026-08-25T04:03:46+08:00'
+updatedDate: '2026-08-25T17:36:16+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -313,11 +313,11 @@ Allocator 保留、Block 对齐、碎片、Graph 和框架状态会让进程占�
 
 实验还暴露了一个重要问题：未固定 BLAS 线程时，No Cache 路径的矩阵计算跨过了不同执行策略阈值，导致表面加速比被放大。固定线程后趋势仍然存在，但具体倍数发生了变化。现在 Benchmark 会保留全部原始计时样本，不再只留下中位数。
 
-完整代码、环境与边界保存在 [`kv-cache-batch` Lab](/labs/kv-cache-batch/)。这个 Microbenchmark 只证明 Cache 复用与分配策略的最小机制，不代表真实 GPU Serving 的固定收益。
+完整代码、环境与边界保存在 [`kv-cache-batch` Lab](/labs/kv-cache-batch/)，当前练习从 [M2 实验任务书](/labs/kv-cache-batch/read/README/)进入。这个 Microbenchmark 只证明 Cache 复用与分配策略的最小机制，不代表真实 GPU Serving 的固定收益。
 
 <Note title="机制验证不是 Serving Benchmark" class="title-underline">
 
-当前 Attention 实现仍只有 CPU、NumPy、单 Head、等长 Sequence、`B∈{1,2,4,8}` 和单层计算；M2-A1 只额外验证了 Head 轴变换，还不是完整 Multi-Head Attention。这里的 Batch 只是固定形状的 Batched NumPy 执行，不包含请求到达、不同长度、动态加入/退出或 Token Budget，因此还不能回答 MHA/GQA 性能、GPU Kernel、Continuous Batching、PagedAttention 或真实 Scheduler 的问题。
+当前已经完成的 Attention 数值路径仍只有 CPU、NumPy、单 Head、等长 Sequence、`B∈{1,2,4,8}` 和单层计算。M2-A1/A2 已额外固定 Head 轴变换与 Q/K/V 投影契约，但 M2-B 的无 Cache MHA 核心仍是 `TODO`，因此还不能把当前实现称为完整 Multi-Head Attention。这里的 Batch 只是固定形状的 Batched NumPy 执行，不包含请求到达、不同长度、动态加入/退出或 Token Budget，也还不能回答 MHA/GQA 性能、GPU Kernel、Continuous Batching、PagedAttention 或真实 Scheduler 的问题。
 
 </Note>
 
@@ -562,7 +562,7 @@ request rate / client concurrency
 
 ## 8. 当前证据与下一门禁
 
-这篇文章只维护相对稳定的机制模型。一个月内的核心交付路线是 M2 → S0–S4 → F0；Mixed Prefill/Decode、Prefix Reuse、固定版本源码追踪与跨环境迁移作为进阶扩展，不阻塞阶段 2 的基础完成。完整步骤、命令、产物目录和验收条件统一保存在[阶段 2 学习执行手册](/labs/kv-cache-batch/docs/PLAN.md)。
+这篇文章只维护相对稳定的机制模型。一个月内的核心交付路线是 M2 → S0–S4 → F0；Mixed Prefill/Decode、Prefix Reuse、固定版本源码追踪与跨环境迁移作为进阶扩展，不阻塞阶段 2 的基础完成。完整步骤、命令、产物目录和验收条件统一保存在[阶段 2 学习执行手册](/labs/kv-cache-batch/read/docs/PLAN/)。
 
 F0 的阶段产出固定为《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》。在 S0–S4 的真实数据出现前，这个标题只存在于计划中，不创建空文章或把 Toy 结果改写成 Serving 结论。
 
@@ -570,15 +570,16 @@ F0 的阶段产出固定为《vLLM 推理性能实验：并发、Batch Size 与�
 
 ## 已有证据
 
-- M0 已完成 Cache、预分配和固定 `B=2` 的 Batched Decode
+- M0 已完成 Cache、预分配和固定 `B=2` 的 Batched Decode；当前归档保留 300 条 Batch Length 样本
 - P0 已完成 NumPy View/Copy、Stride 与 Buffer 分配的语义闭环
-- M1 已完成 `B=1/2/4/8` 扫描、240 条原始样本、曲线与 Knee 分析
+- M1 已完成 `B=1/2/4/8` 扫描、240 条原始样本、曲线与 Knee 分析；两组当前可审计计时证据累计 540 条
 - M2-A1 已用 Shape、元素映射和内存共享测试固定 Head 轴变换
 - M2-A2 已完成 Q/K/V 投影、两个非零坐标 Oracle、五类非法配置和闭卷 Shape 推导；完整 12 项回归测试通过
+- Lab 已提供 `make setup/test/grade/m2-b`、M2-B `TODO` 骨架和 5 项公开验收测试；当前 `make grade` 为 `40/100`，只停在尚未实现的 M2-B
 
 ## 当前任务
 
-M2-B：先固定 `H_q=H_kv`，为四维 Q/K/V 建立无 Cache MHA Oracle。当前只验证 Score、Causal Mask、Softmax、`Weight @ V`、Future Token 不可见和 Batch/Head 隔离，不提前实现 Cache、GQA 映射或真实 Serving 实验。
+M2-B：先固定 `H_q=H_kv`，补完 `multi_head_causal_attention` 的 Score、Causal Mask、稳定 Softmax 与 `Weight @ V`。当前公开评分还会验证 Future Token 不可见、Batch/Head 隔离和非法输入；在 5 项验收全部通过前，不提前实现 Cache、GQA 映射或真实 Serving 实验。
 
 ## 下一决策
 
@@ -586,7 +587,7 @@ M2-B：先固定 `H_q=H_kv`，为四维 Q/K/V 建立无 Cache MHA Oracle。当�
 
 </SlideCard>
 
-M2-B 的预测、前置阅读、执行顺序与验收清单见 [M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md)。未完成的 Gate 一律保持 `In progress` 或 `Pending`；理论预测不能代替原始数据、服务端指标或固定版本源码。
+从 [M2 实验任务书](/labs/kv-cache-batch/read/README/)可以运行单项评分；预测、前置阅读、第一次失败与验收记录见 [M2 工作表](/labs/kv-cache-batch/read/docs/gates/M2/)。未完成的 Gate 一律保持 `In progress` 或 `Pending`；理论预测、评分骨架和公开测试都不能替代通过后的实现证据。
 
 ## 9. 重新回答最初的问题
 

@@ -67,3 +67,30 @@ def project_qkv(
     v = split_heads(v, num_kv_heads)
 
     return q, k, v
+
+
+def multi_head_causal_attention(
+    q: np.ndarray,
+    k: np.ndarray,
+    v: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return per-head output and attention weights without a KV cache.
+
+    M2-B asks you to finish this function. Keep the educational interface small:
+    Q/K/V enter as [B, H, T, D_head], and the function returns Output followed by
+    Weight. Do not merge heads or add a cache in this exercise.
+    """
+    tensors = (("q", q), ("k", k), ("v", v))
+    for name, tensor in tensors:
+        if tensor.ndim != 4:
+            raise ValueError(f"{name} must be 4D [B, H, T, D_head]")
+
+    if q.shape != k.shape or q.shape != v.shape:
+        raise ValueError("q, k, and v must have the same [B, H, T, D_head] shape")
+
+    if any(dimension <= 0 for dimension in q.shape):
+        raise ValueError("B, H, T, and D_head must all be positive")
+
+    raise NotImplementedError(
+        "M2-B TODO: implement scaled dot-product causal attention"
+    )

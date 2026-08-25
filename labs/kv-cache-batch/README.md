@@ -1,63 +1,182 @@
-# Phase 2 Lab：Causal Attention、KV Cache 与 Batched Decode
+# Lab M2：Multi-Head Causal Attention
 
-这个 Lab 用最小 NumPy 实现验证三个问题：KV Cache 是否保持 Attention 语义、缓存分配策略如何改变耗时，以及把两个独立 Sequence 放进同一个 Batch 后实际节省了什么。
+这个 Lab 用最小 NumPy 实现建立 Attention Oracle：先把投影结果拆成多个 Head，再完成 Q/K/V 投影，最后实现不带 KV Cache 的 Multi-Head Causal Attention。完成它之后，Cached MHA、GQA 和真实 Serving 实验才有可信的数值基线。
 
-这是阶段 2 的中间机制 Lab，不是最终 vLLM Serving Benchmark。一个月核心路线、进阶扩展、逐步命令和验收条件见 [`docs/PLAN.md`](./docs/PLAN.md)；Lab 的发布边界和当前任务由 [`lab.json`](./lab.json) 统一声明。
+当前练习是 **M2-B**。M2-A1 与 M2-A2 已作为可运行的起点保留；M2-B 故意只有输入契约和 `TODO`，初次评分失败是正常状态。
 
-方法文章：[只有编辑器和构建工具，如何从零构建一个完整系统？](/blog/build-a-complete-system-from-scratch/)
+<div class="required">
+<p class="header">当前任务：M2-B · 无 Cache MHA Oracle</p>
+<p>只编辑 <code>src/kv_cache_lab/multi_head.py</code> 和自己的测试记录。让每个 Batch、每个 Head 独立完成 Scaled Dot-Product Causal Attention；不要提前加入 KV Cache、GQA、Head 合并或 Output Projection。</p>
+</div>
 
-## 实验问题与预测
+## 获取代码并启动 Lab
 
-1. 增量 KV Cache 与每步重算完整前缀是否逐位置数值等价？
-2. `np.concatenate` 的反复分配和复制是否会让动态 Cache 慢于预分配？
-3. 两个等长 Sequence 共享一次 Batched 执行后，总耗时是否低于顺序执行两次？
-4. 当 Sequence 变长时，Batch 的相对加速为什么可能下降？
+如果已经在本站仓库中：
 
-实验前的预测：Cache 路径应保持数值等价；预分配应减少动态扩容成本；`B=2` 应减少 Python/NumPy 调用和分配次数，但不会减少 Attention 的总 FLOPs，因此加速不会稳定达到 2x，并会随长序列计算占比上升而收窄。
+<pre>
+$ <kbd>cd labs/kv-cache-batch</kbd>
+$ <kbd>make setup</kbd>
+$ <kbd>make grade</kbd>
+</pre>
 
-## 项目结构
+如果从网站单独下载：
+
+<pre>
+$ <kbd>curl -LO https://zqwiki.cn/labs/kv-cache-batch.tar.gz</kbd>
+$ <kbd>tar -xzf kv-cache-batch.tar.gz</kbd>
+$ <kbd>cd kv-cache-batch</kbd>
+$ <kbd>make setup</kbd>
+$ <kbd>make grade</kbd>
+</pre>
+
+初始评分应该呈现这个状态：
+
+<pre>
+$ <kbd>make grade</kbd>
+== m2-a1: PASS (20/20) ==
+== m2-a2: PASS (20/20) ==
+== m2-b: FAIL (0/60) ==
+
+Score: 40/100
+Still working: m2-b
+</pre>
+
+只运行当前练习可以使用任一命令：
+
+<pre>
+$ <kbd>make m2-b</kbd>
+$ <kbd>./grade-lab-kv-cache m2-b</kbd>
+$ <kbd>make GRADEFLAGS=m2-b grade</kbd>
+</pre>
+
+<kbd>make test</kbd> 只运行已经完成的回归测试，因此在 M2-B 尚未实现时仍应通过。<kbd>make grade</kbd> 代表整份作业的当前完成度，会在 `TODO` 处失败。
+
+## 评分方式
+
+| Exercise | 内容 | 分值 | 定向命令 |
+| --- | --- | ---: | --- |
+| M2-A1 | `split_heads` Shape、坐标映射与内存共享 | 20 | <kbd>make m2-a1</kbd> |
+| M2-A2 | Q/K/V 投影、GQA Shape 契约与非法输入 | 20 | <kbd>make m2-a2</kbd> |
+| M2-B | Score、Causal Mask、Softmax、Oracle 与隔离性 | 60 | <kbd>make m2-b</kbd> |
+
+公开评分测试位于 [`grader_tests/test_m2_b.py`](./grader_tests/test_m2_b.py)。先根据任务说明写自己的最小测试；卡住时再逐级查看工作表、错误输出和公开评分测试，不要直接从测试倒推并粘贴实现。
+
+## M2-A1：拆分 Head（已完成）
+
+编辑文件：[`src/kv_cache_lab/multi_head.py`](./src/kv_cache_lab/multi_head.py)
+
+`split_heads(projected, num_heads)` 把 `[B,T,H×D_head]` 转换为 `[B,H,T,D_head]`。实现必须保留元素映射，并且输出与输入共享内存。
+
+运行后应该看到：
+
+<pre>
+$ <kbd>make m2-a1</kbd>
+Ran 3 tests
+OK
+== m2-a1: PASS (20/20) ==
+</pre>
+
+## M2-A2：投影 Q/K/V（已完成）
+
+编辑文件：[`src/kv_cache_lab/multi_head.py`](./src/kv_cache_lab/multi_head.py)
+
+`project_qkv(...)` 接受 `X=[B,T,D_model]` 和三个二维权重，返回带显式 Head 轴的 Q/K/V。Query Head 数可以不同于 KV Head 数，但三者的 `D_head` 必须相同；非法配置要在矩阵乘法或 `reshape` 前抛出 `ValueError`。
+
+运行后应该看到：
+
+<pre>
+$ <kbd>make m2-a2</kbd>
+Ran 3 tests
+OK
+== m2-a2: PASS (20/20) ==
+</pre>
+
+## M2-B：实现无 Cache MHA（当前）
+
+编辑函数：
+
+```python
+def multi_head_causal_attention(
+    q: np.ndarray,
+    k: np.ndarray,
+    v: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return per-head output and attention weights without a KV cache."""
+```
+
+输入 Q/K/V 都是 `[B,H,T,D_head]`。返回值顺序固定为 `output, weights`：
+
+```text
+weights  [B,H,T,T]
+output   [B,H,T,D_head]
+```
+
+你的实现必须满足：
+
+1. Score 使用 `Q @ K^T`，并除以 `sqrt(D_head)`。
+2. 位置 `i` 只能看到 `0..i`，严格上三角的 Weight 必须为 0。
+3. Softmax 沿最后一个历史 Token 轴计算，并使用减最大值的稳定写法。
+4. Batch 与 Head 只是前导维，任何运算都不能把它们混在一起。
+5. 非四维输入、不同 Shape、空 Batch/Head/Token/Head Width 必须抛出 `ValueError`。
+6. 本练习只返回逐 Head Output 与 Weight，不合并 Head。
+
+### 建议步骤
+
+先关闭实现文件，在 [`docs/gates/M2.md`](./docs/gates/M2.md) 中写出 Score、Mask、Weight、Output 的 Shape 和 Softmax Axis。然后在 `tests/test_multi_head.py` 中写一个不调用生产函数的标量 Oracle，保存第一次失败，再完成 `TODO`。
+
+如果需要提示，请按这个顺序展开：
+
+- Hint 1：`np.matmul` 把最后两个轴当矩阵，前面的 `[B,H]` 是独立的堆叠维度。
+- Hint 2：严格未来位置可由 `np.triu(..., k=1)` 标出。
+- Hint 3：应用 Mask 后再做 Softmax；最大值、求和都必须保留最后一维以便广播。
+- Hint 4：先让 `make m2-b` 的 Shape 和契约错误消失，再处理数值 Oracle 与隔离性。
+
+完成后应该看到：
+
+<pre>
+$ <kbd>make m2-b</kbd>
+Ran 5 tests
+OK
+== m2-b: PASS (60/60) ==
+
+Score: 60/60
+All selected exercises passed.
+</pre>
+
+## 完成检查
+
+<div class="warning">
+<p><strong>M2-B 定向评分通过后，运行整份作业和历史回归：</strong></p>
+<pre>
+$ <kbd>make grade</kbd>
+$ <kbd>make test</kbd>
+$ <kbd>git diff --check</kbd>
+</pre>
+<p>最终评分必须是 <code>Score: 100/100</code>。然后回到 <a href="/labs/kv-cache-batch/read/docs/gates/M2/">M2 工作表</a>填写第一次失败、修正规则与闭卷解释；只有验收清单全部完成，才进入 M2-C Cached MHA。</p>
+</div>
+
+## 文件布局
 
 ```text
 kv-cache-batch/
-├── lab.json              # 公开白名单、证据门禁与当前进度
-├── docs/
-│   ├── PLAN.md           # 阶段 2 的逐步执行与验收手册
-│   └── gates/            # P0、M1、M2 的独立证据记录
-├── examples/
-│   └── numpy_array_semantics.py # NumPy View、Copy、Stride 与分配练习
+├── Makefile                  # setup、回归与单项评分入口
+├── grade-lab-kv-cache        # 类 6.828 的公开评分脚本
+├── grader_tests/
+│   └── test_m2_b.py          # M2-B 公开验收测试
 ├── src/kv_cache_lab/
-│   ├── attention.py       # Attention、KV Cache 与 Batched Decode 实现
-│   ├── benchmark.py       # 正确性门禁、计时和原始 CSV 输出
-│   ├── multi_head.py      # MHA/GQA 的 Shape 与投影契约
-│   └── summarize_batch_size.py # Batch Size 汇总、曲线和 Knee 分析
-├── tests/
-│   ├── test_attention.py  # 独立数值与 Shape 测试
-│   ├── test_multi_head.py # M2 Head 轴与投影契约测试
-│   └── test_summarize_batch_size.py # 汇总公式与 Knee 判定测试
-└── results/
-    ├── batch-length-scan/
-    │   └── raw.csv        # 固定 B=2 的 300 条长度扫描原始样本
-    └── batch-size-scan/
-        ├── raw.csv        # M1 Batch Size Scan 的 240 条原始样本
-        ├── summary.csv    # C3 汇总与相邻吞吐增幅
-        ├── batch-latency-percentiles.svg # C4 Batch P50/P95 曲线
-        ├── positions-throughput.svg # C4 Positions/s 曲线
-        └── knee-analysis.md # C5 Knee 与证据边界
+│   ├── multi_head.py         # M2-A1/A2 实现与 M2-B TODO
+│   ├── attention.py          # 已完成的单 Head / KV Cache 实验
+│   └── benchmark.py          # 计时与原始 CSV 输出
+├── tests/                    # 已完成任务的回归测试
+├── docs/
+│   ├── PLAN.md               # 阶段 2 总路线
+│   └── gates/M2.md           # 预测、记录与验收工作表
+└── results/                  # 已完成实验的原始数据与图表
 ```
 
-实现入口：
+## 已完成实验：实现路径与证据
 
-- [`attention.py`](./src/kv_cache_lab/attention.py)
-- [`benchmark.py`](./src/kv_cache_lab/benchmark.py)
-- [`summarize_batch_size.py`](./src/kv_cache_lab/summarize_batch_size.py)
-- [`test_attention.py`](./tests/test_attention.py)
-- [`test_summarize_batch_size.py`](./tests/test_summarize_batch_size.py)
-- [`batch-length-scan/raw.csv`](./results/batch-length-scan/raw.csv)
-- [`batch-size-scan/raw.csv`](./results/batch-size-scan/raw.csv)
-- [`batch-size-scan/summary.csv`](./results/batch-size-scan/summary.csv)
-- [`batch-size-scan/knee-analysis.md`](./results/batch-size-scan/knee-analysis.md)
-
-## 实现路径
+下面保留 M0、P0 与 M1 的实验设计和原始证据，供完成 M2 后比较；它们不是 M2-B 的答案。
 
 ### 单 Sequence Cache 实验
 
@@ -100,26 +219,26 @@ Cache Strategy 与 Batch Length 实验扫描 Sequence Length；Batch Size 实验
 
 ## 复现
 
-```bash
-cd labs/kv-cache-batch
-uv sync
+<pre>
+$ <kbd>cd labs/kv-cache-batch</kbd>
+$ <kbd>uv sync</kbd>
 
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  uv run python -m unittest discover -s tests -v
+$ <kbd>OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  uv run python -m unittest discover -s tests -v</kbd>
 
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+$ <kbd>OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   uv run kv-cache-batch \
   --experiment batch-size \
-  --csv results/batch-size-scan/raw.csv
+  --csv results/batch-size-scan/raw.csv</kbd>
 
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+$ <kbd>OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   uv run kv-cache-batch-summary \
   --input results/batch-size-scan/raw.csv \
   --output-dir results/batch-size-scan \
   --sequence-length 128 \
   --dtype float64 \
-  --blas-threads 1
-```
+  --blas-threads 1</kbd>
+</pre>
 
 正确性测试刻意使用 `d_k=3`、`d_v=5`，避免 K/V Shape 错误被相同维度掩盖。Benchmark 在计时前还会分别以完整前缀重算作为 Oracle：
 

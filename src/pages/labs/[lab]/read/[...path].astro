@@ -3,8 +3,11 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createMarkdownProcessor, parseFrontmatter } from '@astrojs/markdown-remark';
+import rehypeKatex from 'rehype-katex';
+import remarkMath from 'remark-math';
 import MitLabMarkdown from '../../../../layouts/MitLabMarkdown.astro';
 import rehypeLabArtifactLinks from '../../../../plugins/rehype-lab-artifact-links.mjs';
+import rehypeLabCommands from '../../../../plugins/rehype-lab-commands.mjs';
 import {
 	collectLabArtifacts,
 	discoverLabs,
@@ -40,7 +43,12 @@ const renderer = await createMarkdownProcessor({
 	gfm: true,
 	smartypants: false,
 	syntaxHighlight: false,
-	rehypePlugins: [[rehypeLabArtifactLinks, { labName, artifactPath }]],
+	remarkPlugins: [remarkMath],
+	rehypePlugins: [
+		rehypeKatex,
+		rehypeLabCommands,
+		[rehypeLabArtifactLinks, { labName, artifactPath }],
+	],
 });
 const rendered = await renderer.render(content, {
 	fileURL: pathToFileURL(sourcePath),
