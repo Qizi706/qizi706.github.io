@@ -1,47 +1,46 @@
-import CourseRoute from '../../components/CourseRoute.astro';
+import LabRoute from '../../components/LabRoute.astro';
 import PageLayout from '../../layouts/PageLayout.astro';
-import { learningPhases, phase2 } from '../../data/learning-course';
-import kvCacheLab from '../../../labs/kv-cache-batch/lab.json';
+import { learningPhases, phase2, phase2Progress } from '../../data/lab-roadmap';
 import { getLabArtifactDisplayHref } from '../../utils/lab-artifacts.mjs';
-import '../../styles/learning-course.css';
+import '../../styles/lab-roadmap.css';
 
-export const current = kvCacheLab.progress.current;
+export const current = phase2Progress.current;
 export const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', current.document);
 export const description =
 	'从阶段 1 的 LLM Serving 请求链路与本地基线，到阶段 2 的 Attention、KV Cache、调度与 vLLM 性能工程：按依赖、实验和 Checkoff 递进的完整学习路线。';
 
-<PageLayout title="AI Infra 学习路线" description={description} mainClass="learning-course-page">
+<PageLayout title="AI Infra 学习路线" description={description} mainClass="learning-roadmap-page">
 
-<header class="course-hero">
-	<p class="course-status">课程总览 · 阶段 1 已完成，阶段 2 进行中</p>
+<header class="roadmap-hero">
+	<p class="roadmap-status">实验路线总览 · 阶段 1 已完成，阶段 2 进行中</p>
 	<h1>从一条请求，到一个可解释的推理系统</h1>
-	<p class="course-lead">
-		这是一门以 Lab 为主线的自学课程。阶段 1 先观察真实 Serving，建立请求链路与测量纪律；阶段 2
+	<p class="roadmap-lead">
+		这是一条以 Lab 为主线的自学与实验路线。阶段 1 先观察真实 Serving，建立请求链路与测量纪律；阶段 2
 		再从最小 Attention Oracle 逐层进入 KV Cache、MHA/GQA、vLLM
 		调度与真实性能实验。每一层都必须交付可运行产物并通过 Checkoff，才能解锁下一层。
 	</p>
-	<p class="course-actions">
-		<a class="course-action course-action--primary" href="/learning/phase-2/#current">
+	<p class="roadmap-actions">
+		<a class="roadmap-action roadmap-action--primary" href="/learning/phase-2/#current">
 			继续当前任务 · {current.id}
 		</a>
-		<a class="course-action" href={currentDocumentHref}>
+		<a class="roadmap-action" href={currentDocumentHref}>
 			打开当前工作表
 		</a>
-		<a class="course-action" href="/learning/phase-1/">
+		<a class="roadmap-action" href="/learning/phase-1/">
 			从 Phase 1 开始
 		</a>
 	</p>
 </header>
 
-<nav class="course-section-nav" aria-label="课程页目录">
-	<a href="#contract">课程契约</a>
+<nav class="roadmap-section-nav" aria-label="实验路线目录">
+	<a href="#contract">路线契约</a>
 	<a href="#method">学习循环</a>
 	<a href="#route">完整路线</a>
 	<a href="#materials">材料关系</a>
 	<a href="#checkoff">完成标准</a>
 </nav>
 
-<section id="contract" class="course-section">
+<section id="contract" class="roadmap-section">
 
 ## 先看依赖，再开始编码
 
@@ -56,7 +55,7 @@ export const description =
 
 </section>
 
-<section id="method" class="course-section">
+<section id="method" class="roadmap-section">
 
 ## 所有 Lab 使用同一个闭环
 
@@ -71,7 +70,7 @@ export const description =
 
 </section>
 
-<section id="route" class="course-section">
+<section id="route" class="roadmap-section">
 
 ## 完整路线：Phase 1 → Phase 2
 
@@ -79,19 +78,20 @@ export const description =
 
 {learningPhases.map((phase) => (
 
-	<section class={`phase-overview is-${phase.status}`}>
-		<h3>阶段 {Number(phase.number)}：{phase.title}</h3>
-		<p><strong>状态：</strong>{phase.status === 'done' ? '已通过' : '进行中'} · <strong>学习周期：</strong>{phase.period}</p>
-		<p>{phase.goal}</p>
-		<CourseRoute units={phase.units} compact label={`${phase.title}模块路线`} />
-		<a class="phase-overview__link" href={phase.path}>进入阶段 {Number(phase.number)} 课程页 →</a>
+    <section class={`phase-overview is-${phase.status}`}>
+      <h3>阶段 {Number(phase.number)}：{phase.title}</h3>
+      <p><strong>状态：</strong>{phase.status === 'done' ? '已通过' : '进行中'} · <strong>学习周期：</strong>{phase.period}</p>
+      <p>{phase.goal}</p>
+      <LabRoute units={phase.units} compact label={`${phase.title}模块路线`} />
+      <a class="phase-overview__link" href={phase.path}>进入阶段 {Number(phase.number)} 路线 →</a>
 
-	</section>
+    </section>
+
 ))}
 
 </section>
 
-<section id="materials" class="course-section">
+<section id="materials" class="roadmap-section">
 
 ## 每种材料只承担一种职责
 
@@ -107,7 +107,7 @@ export const description =
 
 </section>
 
-<section id="checkoff" class="course-section">
+<section id="checkoff" class="roadmap-section">
 
 ## 什么才算真正完成？
 
@@ -118,7 +118,7 @@ export const description =
 
 </section>
 
-<footer class="course-boundary">
+<footer class="roadmap-boundary">
 	当前唯一行动：进入 <a href="/learning/phase-2/#current">Phase 2 · {current.id}</a>。Phase 1
 	已完成的内容用于复习和 Checkoff，不与当前 Lab 并行重做。
 </footer>

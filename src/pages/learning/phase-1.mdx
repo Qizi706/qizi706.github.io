@@ -1,37 +1,37 @@
-import CourseRoute from '../../components/CourseRoute.astro';
+import LabRoute from '../../components/LabRoute.astro';
 import PageLayout from '../../layouts/PageLayout.astro';
-import { phase1 } from '../../data/learning-course';
-import '../../styles/learning-course.css';
+import { phase1 } from '../../data/lab-roadmap';
+import '../../styles/lab-roadmap.css';
 
 export const description =
 	'阶段 1 完整学习路线：从模型、推理与 Serving 的边界出发，追踪请求链路，启动本地服务，并建立可复现的长度实验基线。';
 
-<PageLayout title={`阶段 1：${phase1.title}`} description={description} mainClass="phase-course-page">
+<PageLayout title={`阶段 1：${phase1.title}`} description={description} mainClass="phase-roadmap-page">
 
-<nav class="course-breadcrumbs" aria-label="课程层级">
+<nav class="roadmap-breadcrumbs" aria-label="实验路线层级">
 	<a href="/learning/">AI Infra 学习路线</a>
 	<span aria-hidden="true">/</span>
 	<span>Phase 1</span>
 </nav>
 
-<header class="course-hero">
-	<p class="course-status">阶段 1 · 已完成 · {phase1.period}</p>
+<header class="roadmap-hero">
+	<p class="roadmap-status">阶段 1 · 已完成 · {phase1.period}</p>
 	<h1>{phase1.title}</h1>
-	<p class="course-lead">{phase1.goal}</p>
-	<p class="course-actions">
-		<a class="course-action course-action--primary" href="#route">
+	<p class="roadmap-lead">{phase1.goal}</p>
+	<p class="roadmap-actions">
+		<a class="roadmap-action roadmap-action--primary" href="#route">
 			查看完整 Lab 路线
 		</a>
-		<a class="course-action" href="/labs/serving-baseline/read/README/">
+		<a class="roadmap-action" href="/labs/serving-baseline/read/README/">
 			打开复现包说明
 		</a>
-		<a class="course-action" href="/learning/phase-2/">
+		<a class="roadmap-action" href="/learning/phase-2/">
 			进入 Phase 2
 		</a>
 	</p>
 </header>
 
-<nav class="course-section-nav" aria-label="阶段 1 目录">
+<nav class="roadmap-section-nav" aria-label="阶段 1 目录">
 	<a href="#contract">阶段契约</a>
 	<a href="#route">Lab 路线</a>
 	<a href="#evidence">证据</a>
@@ -39,7 +39,7 @@ export const description =
 	<a href="#transition">进入阶段 2</a>
 </nav>
 
-<section id="contract" class="course-section">
+<section id="contract" class="roadmap-section">
 
 ## 先学会观察系统，再解释优化
 
@@ -50,17 +50,17 @@ export const description =
 
 </section>
 
-<section id="route" class="course-section">
+<section id="route" class="roadmap-section">
 
 ## 六个 Gate，按依赖逐层解锁
 
 这不是六篇并列阅读。前一个 Gate 产生的系统模型或实验能力，是后一个 Gate 的输入。历史学习时间保持不变；这里按更清晰的教学依赖重新组织。
 
-<CourseRoute units={phase1.units} label="阶段 1 Lab 路线" />
+<LabRoute units={phase1.units} label="阶段 1 Lab 路线" />
 
 </section>
 
-<section id="evidence" class="course-section">
+<section id="evidence" class="roadmap-section">
 
 ## 每条结论都能回到原始产物
 
@@ -75,7 +75,7 @@ export const description =
 
 </section>
 
-<section id="checkoff" class="course-section">
+<section id="checkoff" class="roadmap-section">
 
 ## Phase 1 通过标准
 
@@ -88,7 +88,7 @@ export const description =
 
 </section>
 
-<section id="transition" class="course-section">
+<section id="transition" class="roadmap-section">
 
 ## Phase 1 留下问题，Phase 2 用实现回答
 
@@ -98,7 +98,7 @@ export const description =
 
 </section>
 
-<footer class="course-boundary">
+<footer class="roadmap-boundary">
 	Phase 1 状态为 Completed。复习时按 Checkoff 缺口回到具体模块，不重新把整份阅读清单从头读一遍。
 </footer>
 

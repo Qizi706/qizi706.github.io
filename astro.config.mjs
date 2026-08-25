@@ -6,7 +6,6 @@ import sitemap from '@astrojs/sitemap';
 import { defineConfig, fontProviders } from 'astro/config';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
-import kvCacheLab from './labs/kv-cache-batch/lab.json';
 import labDevServer from './src/integrations/lab-dev-server.mjs';
 import rehypeCallouts from './src/plugins/rehype-callouts.mjs';
 import { legacyPostRedirects } from './src/legacy-post-redirects.mjs';
@@ -14,8 +13,7 @@ import { pygmentsDefaultTheme } from './src/themes/pygments-default.mjs';
 
 /** @param {string} pathname */
 const normalizePathname = (pathname) => pathname.replace(/\/$/, '');
-const phase2Preview = kvCacheLab.progress.preview;
-const unlistedPathnames = new Set([phase2Preview.path].map(normalizePathname));
+const unlistedPathnames = new Set(['/learning/phase-2/'].map(normalizePathname));
 
 /** @param {string} pathname */
 const isUnlistedPathname = (pathname) => {

@@ -16,6 +16,8 @@ const excludedEntryNames = new Set([
 	'__pycache__',
 ]);
 
+const privatePublishEntryNames = new Set(['.work', 'private', 'solution', 'solutions']);
+
 const viewableExtensions = new Set([
 	'.c',
 	'.cc',
@@ -86,7 +88,11 @@ function normalizeRelativePath(relativePath, label = 'path') {
 }
 
 function isExcludedEntry(entryName) {
-	return entryName.startsWith('.') || excludedEntryNames.has(entryName);
+	return (
+		entryName.startsWith('.') ||
+		excludedEntryNames.has(entryName) ||
+		privatePublishEntryNames.has(entryName.toLowerCase())
+	);
 }
 
 function formatModifiedDate(date) {
@@ -162,6 +168,14 @@ async function walkPublishPath(labRoot, relativePath) {
 
 function assertManifest(manifest, expectedSlug) {
 	if (!manifest || typeof manifest !== 'object') throw new Error('Lab manifest must be an object.');
+	if (manifest.schemaVersion !== 1) {
+		throw new Error(`${expectedSlug}: schemaVersion must be 1.`);
+	}
+	if ('progress' in manifest || 'current' in manifest) {
+		throw new Error(
+			`${expectedSlug}: website progress belongs in src/data/lab-roadmap, not lab.json.`,
+		);
+	}
 	assertLabName(manifest.slug);
 	if (manifest.slug !== expectedSlug) {
 		throw new Error(`Manifest slug ${manifest.slug} does not match directory ${expectedSlug}.`);
@@ -179,7 +193,17 @@ function assertManifest(manifest, expectedSlug) {
 	if (!Array.isArray(manifest.publish) || manifest.publish.length === 0) {
 		throw new Error(`${expectedSlug}: publish must be a non-empty array.`);
 	}
-	manifest.publish.forEach((publishPath) => normalizeRelativePath(publishPath, 'publish path'));
+	manifest.publish.forEach((publishPath) => {
+		const normalizedPath = normalizeRelativePath(publishPath, 'publish path');
+		const segments = normalizedPath.split('/');
+		if (
+			segments.some(
+				(segment) => segment.startsWith('.') || privatePublishEntryNames.has(segment.toLowerCase()),
+			)
+		) {
+			throw new Error(`${expectedSlug}: private path cannot be published: ${normalizedPath}`);
+		}
+	});
 }
 
 export function getLabSourceRoot(labName) {
@@ -269,6 +293,24 @@ export async function validateLab(labName) {
 			throw new Error(
 				`${labName}: ${normalizedPath} has ${actualRows} rows; expected ${expectedRows}.`,
 			);
+		}
+	}
+
+	for (const [starterPath, requiredSnippets] of Object.entries(
+		manifest.checks?.starterContains ?? {},
+	)) {
+		const normalizedPath = normalizeRelativePath(starterPath, 'Starter path');
+		if (!artifactPaths.has(normalizedPath)) {
+			throw new Error(`${labName}: checked Starter is not published: ${normalizedPath}`);
+		}
+		if (!Array.isArray(requiredSnippets) || requiredSnippets.length === 0) {
+			throw new Error(`${labName}: Starter check needs at least one snippet: ${normalizedPath}`);
+		}
+		const starterContent = await readFile(resolveLabArtifactPath(labName, normalizedPath), 'utf8');
+		for (const snippet of requiredSnippets) {
+			if (typeof snippet !== 'string' || snippet === '' || !starterContent.includes(snippet)) {
+				throw new Error(`${labName}: public Starter contract changed: ${normalizedPath}`);
+			}
 		}
 	}
 

@@ -197,7 +197,7 @@ $$
 `SlideCard` 是项目内置的文章卡片组件。使用组件的文章必须采用 `.mdx` 后缀：
 
 ```text
-src/content/blog/course-notes.mdx
+src/content/blog/lab-notes.mdx
 ```
 
 在 MDX 中可以直接使用组件，不需要手动 `import`：

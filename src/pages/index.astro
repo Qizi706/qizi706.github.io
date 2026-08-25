@@ -2,8 +2,9 @@
 import { getCollection } from 'astro:content';
 import FormattedDate from '../components/FormattedDate.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
+import { phase2Progress } from '../data/lab-roadmap';
 import PageLayout from '../layouts/PageLayout.astro';
-import { getLabArtifactDisplayHref, getLabManifest } from '../utils/lab-artifacts.mjs';
+import { getLabArtifactDisplayHref } from '../utils/lab-artifacts.mjs';
 import { getCategoryUrl, getDraftPostUrl, getPostUrl } from '../utils/posts';
 
 const allPosts = await getCollection('blog');
@@ -56,10 +57,9 @@ const categories = [...categorySummaries.values()].sort(
 );
 const featuredPost = posts.find((post) => post.id === 'conjecture-verification-practice');
 const systemBuildingPost = posts.find((post) => post.id === 'build-a-complete-system-from-scratch');
-const kvCacheLab = await getLabManifest('kv-cache-batch');
-const learningProgress = kvCacheLab.progress;
-const learningMilestone = learningProgress.milestone;
-const currentStage = learningProgress.current;
+const labProgress = phase2Progress;
+const labMilestone = labProgress.milestone;
+const currentStage = labProgress.current;
 const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', currentStage.document);
 ---
 
@@ -184,16 +184,16 @@ const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', currentS
 	}
 
 	<section class="tomorrow-section" aria-labelledby="tomorrow-heading">
-		<h2 id="tomorrow-heading">当前学习</h2>
+		<h2 id="tomorrow-heading">当前实验</h2>
 		<div class="tomorrow-milestone" aria-label="当前阶段目标">
-			<p><strong>{learningMilestone.title}</strong> · {learningMilestone.goal}</p>
+			<p><strong>{labMilestone.title}</strong> · {labMilestone.goal}</p>
 			<dl>
 				<dt>核心路线</dt>
-				<dd>{learningMilestone.coreRoute}</dd>
+				<dd>{labMilestone.coreRoute}</dd>
 				<dt>最终产出</dt>
-				<dd>{learningMilestone.finalArtifact}</dd>
+				<dd>{labMilestone.finalArtifact}</dd>
 			</dl>
-			<a class="course-overview-link" href="/learning/">查看 Phase 1 → Phase 2 完整课程路线 →</a>
+			<a class="roadmap-overview-link" href="/learning/">查看 Phase 1 → Phase 2 完整实验路线 →</a>
 		</div>
 
 		<div class="current-learning">
@@ -206,7 +206,7 @@ const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', currentS
 				<dt>验收</dt>
 				<dd>{currentStage.acceptance}</dd>
 			</dl>
-			<nav aria-label="当前学习入口">
+			<nav aria-label="当前实验入口">
 				<a href="/learning/phase-2/#current">进入当前 Lab</a>
 				<a href={currentDocumentHref}>填写工作表</a>
 			</nav>
@@ -396,7 +396,7 @@ const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', currentS
 		line-height: 1.5;
 	}
 
-	.course-overview-link {
+	.roadmap-overview-link {
 		display: inline-block;
 		margin-top: 0.7rem;
 		font-size: 0.86rem;

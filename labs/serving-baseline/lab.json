@@ -1,10 +1,11 @@
 {
+	"schemaVersion": 1,
 	"slug": "serving-baseline",
 	"title": "Phase 1 · 本地 LLM Serving 基线",
 	"description": "阶段 1 已完成复现包：请求链路、本地服务 Bring-up、测量脚本、原始日志、响应与长度扫描数据",
 	"parent": {
 		"href": "/learning/phase-1/",
-		"label": "阶段 1 课程页"
+		"label": "阶段 1 实验路线"
 	},
 	"publish": ["lab.json", "README.md", "logs", "responses", "results", "scripts"],
 	"notes": [

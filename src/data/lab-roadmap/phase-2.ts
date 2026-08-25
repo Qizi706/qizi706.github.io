@@ -1,137 +1,6 @@
-export type CourseStatus = 'done' | 'active' | 'pending' | 'optional';
+import type { LabPhase, LabUnit } from './types';
 
-export interface CoursePart {
-	id: string;
-	title: string;
-	status: CourseStatus;
-	checkoff: string;
-}
-
-export interface CourseUnit {
-	id: string;
-	title: string;
-	status: CourseStatus;
-	duration: string;
-	dependsOn: string;
-	question: string;
-	work: string;
-	artifact: string;
-	acceptance: string;
-	unlocks: string;
-	href?: string;
-	parts?: CoursePart[];
-}
-
-export interface CoursePhase {
-	id: 'phase-1' | 'phase-2';
-	number: string;
-	title: string;
-	shortTitle: string;
-	status: 'done' | 'active';
-	period: string;
-	goal: string;
-	entryCheck: string;
-	completion: string;
-	path: string;
-	units: CourseUnit[];
-}
-
-export const phase1: CoursePhase = {
-	id: 'phase-1',
-	number: '01',
-	title: 'LLM Serving 请求链路与可复现基线',
-	shortTitle: '从模型调用到可测量的服务',
-	status: 'done',
-	period: '2026.07.27 — 2026.08.11',
-	goal: '先观察一个真实的单机推理服务，建立请求链路、阶段划分、指标口径和实验边界，再进入机制实现。',
-	entryCheck:
-		'能够使用终端、Git 和 Python 脚本；理解进程、HTTP 请求和基本矩阵乘法。暂时不要求理解 vLLM 调度器或 Attention 内核。',
-	completion:
-		'能够闭卷画出请求链路，独立启动服务、复跑长度扫描，并用环境、负载、指标和原始证据限定结论。',
-	path: '/learning/phase-1/',
-	units: [
-		{
-			id: 'P1-L0',
-			title: '区分模型、推理与 Serving',
-			status: 'done',
-			duration: '45–60 min',
-			dependsOn: '课程入口检查',
-			question: '为什么“能生成文本的模型”还不是“可以稳定接收请求的服务”？',
-			work: '比较训练、离线推理和在线 Serving 的输入、状态与系统目标；画出 API、引擎和资源三层边界。',
-			artifact: '一张三层系统图，以及每层各一句职责说明。',
-			acceptance: '不看文章解释模型权重、推理引擎和 API Server 为什么不能混为一谈。',
-			unlocks: 'P1-L1 请求全链路',
-			href: '/blog/llm-inference-request-lifecycle/',
-		},
-		{
-			id: 'P1-L1',
-			title: '追踪一条请求的完整生命周期',
-			status: 'done',
-			duration: '90–120 min',
-			dependsOn: 'P1-L0',
-			question: 'Prompt 从 HTTP 输入到流式 Token 返回，中间依次发生什么？',
-			work: '按 API → Chat Template → Tokenizer → Scheduler → Prefill → KV Cache → Decode → Streaming 追踪状态变化。',
-			artifact: '请求链路图、Prefill/Decode 对照表和 KV Cache 状态说明。',
-			acceptance: '能指出每个阶段的输入、输出、持久状态和可能等待的位置。',
-			unlocks: 'P1-L2 本地服务 Bring-up',
-			href: '/blog/llm-inference-request-lifecycle/',
-		},
-		{
-			id: 'P1-L2',
-			title: '启动本地推理服务并冻结环境',
-			status: 'done',
-			duration: '90–120 min',
-			dependsOn: 'P1-L1',
-			question: '怎样证明请求确实经过了预期 Runtime、模型和 Backend？',
-			work: '启动 Ollama 与 vLLM Metal，保存安装/启动日志、完整命令和一份 OpenAI-compatible 响应。',
-			artifact: '安装脚本、服务日志、环境说明和原始 JSON 响应。',
-			acceptance: '从干净终端复现服务，并从日志中定位模型、Backend、KV Cache 预算和端点。',
-			unlocks: 'P1-L3 测量契约',
-			href: '/labs/serving-baseline/read/README/',
-		},
-		{
-			id: 'P1-L3',
-			title: '建立可信的测量契约',
-			status: 'done',
-			duration: '60–90 min',
-			dependsOn: 'P1-L2',
-			question: '怎样避免把一次请求的偶然耗时写成系统结论？',
-			work: '冻结模型、Prompt、输出长度、Warmup、重复次数与计时边界；区分近似 TPOT、严格 ITL、TTFT 和 E2E。',
-			artifact: '可重复运行的 Benchmark 脚本与实验契约。',
-			acceptance: '每个结果都能回答环境、负载、控制变量、统计口径和原始数据位置。',
-			unlocks: 'P1-L4 Length Scan',
-			href: '/labs/serving-baseline/scripts/benchmark_ollama_input_length.py',
-		},
-		{
-			id: 'P1-L4',
-			title: '执行 Input / Output Length Scan',
-			status: 'done',
-			duration: '2 × 120 min',
-			dependsOn: 'P1-L3',
-			question: '输入长度和输出长度分别怎样影响 Prefill、Decode 与端到端耗时？',
-			work: '先写趋势预测，再一次只改变一个长度变量；运行 Warmup 和重复测量，保存 CSV，并解释异常与 Backend 边界。',
-			artifact: '两版长度扫描 CSV、实验文章和可追溯到脚本的结论。',
-			acceptance: '能从原始 CSV 重建结论，并明确哪些指标只是 Runtime 提供的近似值。',
-			unlocks: 'P1-F 阶段验收',
-			href: '/blog/llm-inference-request-lifecycle-practice/',
-		},
-		{
-			id: 'P1-F',
-			title: 'Phase 1 Checkoff',
-			status: 'done',
-			duration: '45–60 min',
-			dependsOn: 'P1-L0 — P1-L4',
-			question: '是否已经拥有进入机制实现所需的系统模型和证据纪律？',
-			work: '闭卷重画请求链路；复跑一个扫描点；从日志、响应、脚本和 CSV 各解释一条证据；列出尚未验证的并发与尾延迟结论。',
-			artifact: '两篇阶段文章与完整 serving-baseline 复现包。',
-			acceptance: '链路解释、复跑和证据边界三项同时通过；只完成阅读不算通过。',
-			unlocks: 'Phase 2 · P0 NumPy 语义热身',
-			href: '/learning/phase-1/#checkoff',
-		},
-	],
-};
-
-export const phase2: CoursePhase = {
+export const phase2: LabPhase = {
 	id: 'phase-2',
 	number: '02',
 	title: '推理机制、调度与 vLLM 性能工程',
@@ -197,7 +66,7 @@ export const phase2: CoursePhase = {
 			acceptance:
 				'Full Recompute 与 Cached Decode 等价，GQA 映射和容量公式通过测试，闭卷完成 Shape 推导。',
 			unlocks: 'S0 冻结真实 vLLM 环境',
-			href: '/labs/kv-cache-batch/read/docs/gates/M2/',
+			href: '/labs/kv-cache-batch/read/docs/gates/m2/b/',
 			parts: [
 				{
 					id: 'M2-A1',
@@ -248,7 +117,7 @@ export const phase2: CoursePhase = {
 			artifact: '不可变环境快照、端点样本与能力矩阵。',
 			acceptance: '任何后续结果都能回指同一环境；不沿用 Phase 1 的旧快照。',
 			unlocks: 'S1 单并发稳态基线',
-			href: '/labs/kv-cache-batch/read/docs/PLAN/#gate-s0冻结真实-vllm-环境',
+			href: '/labs/kv-cache-batch/read/docs/roadmap/#gate-s0冻结真实-vllm-环境',
 		},
 		{
 			id: 'S1',
@@ -261,7 +130,7 @@ export const phase2: CoursePhase = {
 			artifact: '三轮 Raw 结果、稳定性检查与显存组成表。',
 			acceptance: 'P50/P95/P99 可重建；轮间差异可解释；客户端与服务端时间口径不混淆。',
 			unlocks: 'S2 Input Length',
-			href: '/labs/kv-cache-batch/read/docs/PLAN/#gate-s1单并发稳态基线',
+			href: '/labs/kv-cache-batch/read/docs/roadmap/#gate-s1单并发稳态基线',
 		},
 		{
 			id: 'S2',
@@ -274,7 +143,7 @@ export const phase2: CoursePhase = {
 			artifact: '输入长度曲线、Raw 样本和异常点复测。',
 			acceptance: '只对测量范围内趋势下结论，并用状态量或服务端指标排除竞争解释。',
 			unlocks: 'S3 Client Concurrency',
-			href: '/labs/kv-cache-batch/read/docs/PLAN/#gate-s2input-length',
+			href: '/labs/kv-cache-batch/read/docs/roadmap/#gate-s2input-length',
 		},
 		{
 			id: 'S3',
@@ -287,7 +156,7 @@ export const phase2: CoursePhase = {
 			artifact: '吞吐—延迟曲线、饱和点和服务端状态对照。',
 			acceptance: '区分 Client Concurrency、Active Sequences 和实际 Scheduler Batch。',
 			unlocks: 'S4 Scheduler Budget',
-			href: '/labs/kv-cache-batch/read/docs/PLAN/#gate-s3client-concurrency',
+			href: '/labs/kv-cache-batch/read/docs/roadmap/#gate-s3client-concurrency',
 		},
 		{
 			id: 'S4',
@@ -300,7 +169,7 @@ export const phase2: CoursePhase = {
 			artifact: '两组单变量扫描、实际批量对照和配置边界表。',
 			acceptance: '不能仅凭客户端相关性声称 Scheduler 因果；配置值、实际行为和结果三者能够对应。',
 			unlocks: 'F0 核心综合',
-			href: '/labs/kv-cache-batch/read/docs/PLAN/#gate-s4scheduler-budget',
+			href: '/labs/kv-cache-batch/read/docs/roadmap/#gate-s4scheduler-budget',
 		},
 		{
 			id: 'F0',
@@ -314,12 +183,12 @@ export const phase2: CoursePhase = {
 			acceptance:
 				'所有核心 Gate 通过；原始数据可重建；文章中的每条性能结论都有明确证据和适用范围。',
 			unlocks: 'Core Complete；再按问题选择进阶扩展',
-			href: '/labs/kv-cache-batch/read/docs/PLAN/#gate-f0原始阶段产出与核心完成',
+			href: '/labs/kv-cache-batch/read/docs/roadmap/#gate-f0原始阶段产出与核心完成',
 		},
 	],
 };
 
-export const phase2Extensions: CourseUnit[] = [
+export const phase2Extensions: LabUnit[] = [
 	{
 		id: 'S5',
 		title: 'Mixed Prefill / Decode 与 Chunked Prefill',
@@ -369,5 +238,3 @@ export const phase2Extensions: CourseUnit[] = [
 		unlocks: '跨环境可推广结论',
 	},
 ];
-
-export const learningPhases = [phase1, phase2];

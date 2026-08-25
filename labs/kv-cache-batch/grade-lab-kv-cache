@@ -118,9 +118,16 @@ def main() -> int:
     earned_points = 0
     failed = []
     environment = os.environ.copy()
-    source_path = str(LAB_ROOT / "src")
+    source_directory = environment.get("LAB_SOURCE_DIR", "src")
+    source_path = (LAB_ROOT / source_directory).resolve()
+    try:
+        source_path.relative_to(LAB_ROOT)
+    except ValueError as error:
+        raise SystemExit("LAB_SOURCE_DIR must stay inside the Lab directory") from error
+    if not source_path.is_dir():
+        raise SystemExit(f"Lab source directory does not exist: {source_path}")
     environment["PYTHONPATH"] = os.pathsep.join(
-        filter(None, (source_path, environment.get("PYTHONPATH")))
+        filter(None, (str(source_path), environment.get("PYTHONPATH")))
     )
     environment.setdefault("OPENBLAS_NUM_THREADS", "1")
     environment.setdefault("OMP_NUM_THREADS", "1")

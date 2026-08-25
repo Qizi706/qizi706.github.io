@@ -1,10 +1,11 @@
 {
+	"schemaVersion": 1,
 	"slug": "kv-cache-batch",
 	"title": "LLM 推理机制 Lab",
-	"description": "从 KV Cache、Batched Decode 到 MHA/GQA 的 NumPy 实验包；当前任务为 M2-B",
+	"description": "从 KV Cache、Batched Decode 到 MHA/GQA 的 NumPy 实验 Starter 与可复查证据",
 	"parent": {
 		"href": "/learning/phase-2/",
-		"label": "阶段 2 课程入口"
+		"label": "阶段 2 实验路线"
 	},
 	"publish": [
 		"lab.json",
@@ -13,6 +14,7 @@
 		"grade-lab-kv-cache",
 		"pyproject.toml",
 		"uv.lock",
+		"assignments",
 		"src",
 		"tests",
 		"grader_tests",
@@ -21,19 +23,23 @@
 		"results"
 	],
 	"notes": [
-		"Directories open one level at a time. Markdown documents open in reading mode; code, data, and other files open the original published artifact.",
-		"Generated caches, virtual environments, and hidden repository files are excluded."
+		"The published src directory is the intentionally unfinished Starter, not the maintainer's local implementation.",
+		"The ignored .work directory is never published.",
+		"Markdown opens in reading mode; code, data, and other artifacts open as published files."
 	],
 	"checks": {
 		"required": [
 			"README.md",
+			"assignments/m2-b.md",
 			"Makefile",
 			"grade-lab-kv-cache",
 			"grader_tests/test_m2_b.py",
-			"docs/PLAN.md",
+			"docs/roadmap.md",
 			"docs/gates/P0.md",
 			"docs/gates/M1.md",
-			"docs/gates/M2.md",
+			"docs/gates/m2/a1.md",
+			"docs/gates/m2/a2.md",
+			"docs/gates/m2/b.md",
 			"src/kv_cache_lab/attention.py",
 			"src/kv_cache_lab/multi_head.py",
 			"tests/test_attention.py",
@@ -44,178 +50,12 @@
 		"csvRows": {
 			"results/batch-length-scan/raw.csv": 300,
 			"results/batch-size-scan/raw.csv": 240
-		}
-	},
-	"progress": {
-		"milestone": {
-			"period": "2026.08.12 — 2026.09.12",
-			"title": "阶段 2 · LLM 推理核心知识与 vLLM 性能实验",
-			"goal": "理解推理系统的核心矛盾，并用真实 vLLM 实验解释调度、显存、Batching 与 KV Cache 如何共同决定吞吐和延迟。",
-			"coreRoute": "P0 → M0 → M1 → M2 → S0 → S1 → S2 → S3 → S4 → F0",
-			"finalArtifact": "《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》",
-			"advancedRoute": "S5 Mixed Prefill/Decode · S6 Prefix Reuse · R0 源码追踪 · T0 跨环境迁移"
 		},
-		"preview": {
-			"path": "/learning/phase-2/",
-			"documents": [
-				{
-					"label": "现在做什么",
-					"title": "当前实验任务书 · M2-B",
-					"description": "当前练习的操作入口：只保留任务范围、实现要求、提示和评分命令。",
-					"path": "README.md"
-				},
-				{
-					"label": "它位于哪里",
-					"title": "阶段 2 总路线与验收",
-					"description": "只在审计 P0 到 F0 的详细依赖、实验协议、阶段验收和停止条件时使用。",
-					"path": "docs/PLAN.md"
-				},
-				{
-					"label": "实际做了什么",
-					"title": "M2 预测与验收工作表",
-					"description": "边做边填写预测、第一次失败、修正规则、测试结果和下一决策。",
-					"path": "docs/gates/M2.md"
-				},
-				{
-					"label": "历史工作表",
-					"title": "P0 · NumPy View / Copy 记录",
-					"description": "已完成 Gate 的预测、观察与验收记录，不是当前任务说明。",
-					"path": "docs/gates/P0.md"
-				},
-				{
-					"label": "历史工作表",
-					"title": "M1 · Batch Size 扫描记录",
-					"description": "已完成 Gate 的设计、运行记录与验收过程，不是当前任务说明。",
-					"path": "docs/gates/M1.md"
-				},
-				{
-					"label": "结果证据",
-					"title": "Batch Knee 分析",
-					"description": "从原始 CSV 重建的派生结论；原始样本仍以 results 目录为准。",
-					"path": "results/batch-size-scan/knee-analysis.md"
-				}
-			],
-			"articles": [
-				{
-					"id": "llm-inference-optimization-system-view",
-					"role": "机制模型：解释 KV Cache、Prefill、Decode、Batching 与调度之间的关系",
-					"status": "draft"
-				},
-				{
-					"id": "vllm-inference-performance-lab",
-					"role": "中间证据：记录 Toy Attention 实验、可复现结果与证据边界",
-					"status": "draft"
-				},
-				{
-					"id": "python-for-llm-inference",
-					"role": "前置能力：补齐完成推理实验需要的最小 Python/NumPy 语义",
-					"status": "published"
-				},
-				{
-					"id": "build-a-complete-system-from-scratch",
-					"role": "方法论：把阶段任务组织成可验证、可重构、可交付的完整项目",
-					"status": "published"
-				}
-			],
-			"experiments": [
-				{
-					"id": "M0",
-					"title": "KV Cache、预分配与固定 B=2 Length Scan",
-					"summary": "保存 300 条长度扫描样本；Cache 路径均通过 Full Recompute Oracle。Cache Strategy 的历史结论保留，但缺少逐样本复现数据的部分继续标为 Inconclusive。",
-					"href": "/labs/kv-cache-batch/results/batch-length-scan/"
-				},
-				{
-					"id": "P0",
-					"title": "NumPy View/Copy 与轴语义",
-					"summary": "六个小实验保留预测、实际结果、差异解释和断言，并映射回 Attention/KV Cache。",
-					"href": "/labs/kv-cache-batch/docs/gates/P0.md"
-				},
-				{
-					"id": "M1",
-					"title": "B=1/2/4/8 Batch Size Scan",
-					"summary": "保存 240 条原始样本，从 Raw CSV 重建汇总与两张曲线，按预设阈值得到 Knee=B=8。",
-					"href": "/labs/kv-cache-batch/results/batch-size-scan/"
-				}
+		"starterContains": {
+			"src/kv_cache_lab/multi_head.py": [
+				"M2-B TODO: implement scaled dot-product causal attention",
+				"raise NotImplementedError"
 			]
-		},
-		"completed": [
-			{
-				"id": "M0",
-				"period": "2026.08.12 — 2026.08.18",
-				"title": "KV Cache、预分配与固定 Batch 机制闭环",
-				"summary": "No Cache、Dynamic Cache、Preallocated Cache 与固定 B=2 Batched Decode 均通过 Oracle，并保存 300 条 Length Scan 样本。"
-			},
-			{
-				"id": "P0",
-				"period": "2026.08.19",
-				"title": "NumPy View/Copy 与轴语义闭环",
-				"summary": "六个 Case 均保留预测、观察、判定与断言；能够区分 Binding、View、Copy、Stride 与 Buffer 分配。",
-				"featured": true
-			},
-			{
-				"id": "M1",
-				"period": "2026.08.20",
-				"title": "Batch Size 曲线",
-				"summary": "B=1/2/4/8 均通过正确性检查，保存 240 条原始样本并得到 Knee=B=8。"
-			},
-			{
-				"id": "M2-A1",
-				"period": "2026.08.20 · 120 min",
-				"title": "只完成 Query Head 轴变换",
-				"summary": "split_heads 已通过 Shape、非零坐标元素映射和内存共享三项测试；完整 9 项回归测试通过。",
-				"featured": true
-			},
-			{
-				"id": "M2-A2",
-				"period": "2026.08.22 — 2026.08.25",
-				"title": "Q/K/V 投影与输入契约",
-				"summary": "project_qkv 已通过 Shape、两个非零坐标 Oracle 和五类非法配置测试；A2 定向 6 项与完整 12 项回归测试通过，并完成闭卷 Shape 推导。",
-				"featured": true
-			}
-		],
-		"current": {
-			"id": "M2-B",
-			"period": "2026.08.25 · 120 min",
-			"title": "无 Cache MHA Oracle",
-			"objective": "在 H_q=H_kv 条件下，让每个 Batch、每个 Head 独立完成 Scaled Dot-Product Causal Attention，并用独立 Oracle 证明 Score 轴、Mask、Softmax 轴和输出元素都正确。",
-			"question": "给定 Q/K/V=[B,H,T,D_head]，怎样证明批量矩阵乘法没有混合 Batch 或 Head，并且每个位置只能对历史 Token 归一化？",
-			"prediction": "固定 B=2、H=3、T=4、D_head=5 时，Score/Weight=[2,3,4,4]、逐 Head 输出=[2,3,4,5]；修改未来 Token、其他 Head 或其他 Batch 不应污染目标位置。",
-			"preRead": [
-				{
-					"label": "NumPy matmul stacked matrices",
-					"href": "https://numpy.org/doc/stable/reference/generated/numpy.matmul.html"
-				},
-				{
-					"label": "NumPy swapaxes",
-					"href": "https://numpy.org/doc/stable/reference/generated/numpy.swapaxes.html"
-				},
-				{
-					"label": "NumPy triu",
-					"href": "https://numpy.org/doc/stable/reference/generated/numpy.triu.html"
-				}
-			],
-			"artifact": "multi_head.py、test_multi_head.py，以及 M2 工作表中的 Shape 推导、独立标量 Oracle、首次失败和闭卷解释。",
-			"acceptance": "Score、Weight 与逐 Head 输出 Shape 正确；至少两个非零坐标匹配独立标量 Oracle；因果性、Batch/Head 隔离、输入契约与完整回归全部通过；关闭代码后能解释缩放与 Softmax 轴。",
-			"steps": [
-				"10 min：关闭实现，填写 Q@K^T、Mask、Softmax 与 Output 的 Shape/轴预测。",
-				"15 min：只读 matmul、swapaxes 与 triu 的相关段落，各留一句确认或修正。",
-				"30 min：先写独立标量 Oracle、Future Token、Head/Batch 隔离和非法 Shape 测试，保存第一次失败。",
-				"30 min：实现无 Cache MHA 核心，只返回逐 Head Output 与 Weight，不合并 Head。",
-				"15 min：只依据失败信息修正 Score、Mask 或 Softmax Axis。",
-				"10 min：运行 M2-B 定向测试与完整回归测试。",
-				"10 min：关闭代码重做坐标推导，并解释为什么除以 sqrt(D_head)。"
-			],
-			"nextDecision": "M2-B 全部门禁通过后进入 M2-C Cached MHA；任一项失败就继续修正 B，不提前实现 Cache、GQA Head 映射或 Output Projection。",
-			"document": "docs/gates/M2.md"
-		},
-		"next": {
-			"id": "M2-C",
-			"title": "Cached MHA"
-		},
-		"evidence": {
-			"tests": 12,
-			"rawSamples": 540,
-			"summary": "A2 projection contracts · 300 length-scan + 240 batch-size samples · rebuildable aggregates · two figures · Knee analysis"
 		}
 	}
 }

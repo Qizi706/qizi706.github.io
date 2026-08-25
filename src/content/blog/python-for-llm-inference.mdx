@@ -801,7 +801,7 @@ finish_ns       stream finishes or fails
 
 ### 9.1 P0：对象与 ndarray 语义
 
-**Status：Completed。** 六类实验的预测、实际结果、差异解释和闭卷口述已经保存在 [P0 记录](/labs/kv-cache-batch/docs/gates/P0.md)；后续不再为“复习 Python”增加脱离主线的练习。
+**Status：Completed。** 六类实验的预测、实际结果、差异解释和闭卷口述已经保存在 [P0 记录](/labs/kv-cache-batch/read/docs/gates/P0/)；后续不再为“复习 Python”增加脱离主线的练习。
 
 **Question：** 哪些操作共享状态，哪些操作复制数据？
 
@@ -838,7 +838,7 @@ finish_ns       stream finishes or fails
 
 **Action：** A1/A2 已完成 Head 拆分、Q/K/V 投影和输入契约；B 先写独立标量 Oracle、Future Token 与 Head/Batch 隔离测试，再实现 `H_q=H_kv` 的无 Cache MHA。
 
-**Artifact：** `multi_head.py`、`test_multi_head.py` 与 [M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md)。
+**Artifact：** `multi_head.py`、`test_multi_head.py` 与 [M2-B 工作表](/labs/kv-cache-batch/read/docs/gates/m2/b/)。
 
 **Acceptance：** Score/Weight、逐 Head Output Shape 和两个非零坐标 Oracle 通过；Future Token 不可见、Weight 沿历史 Token Axis 归一化，Head/Batch 互不污染；A2 与完整回归无退化。
 
@@ -865,7 +865,7 @@ B=2, H_q=H_kv=3, T=4, D_head=5
 Q/K/V=[2,3,4,5]
 ```
 
-在 [M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md) 中填写 K 转置、Score、Mask、Weight 与 Output 的 Shape，指出 Softmax Axis，再手算至少两个非零坐标。还要预测修改 Future Token、一个 Head 或一个 Batch 分别会影响哪些输出。
+在 [M2-B 工作表](/labs/kv-cache-batch/read/docs/gates/m2/b/) 中填写 K 转置、Score、Mask、Weight 与 Output 的 Shape，指出 Softmax Axis，再手算至少两个非零坐标。还要预测修改 Future Token、一个 Head 或一个 Batch 分别会影响哪些输出。
 
 ### 10.2 15 分钟：只读当天会用到的文档
 

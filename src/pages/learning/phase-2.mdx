@@ -1,22 +1,21 @@
-import CourseRoute from '../../components/CourseRoute.astro';
+import LabRoute from '../../components/LabRoute.astro';
 import LearningTaskPanel from '../../components/LearningTaskPanel.astro';
 import PageLayout from '../../layouts/PageLayout.astro';
-import { phase2, phase2Extensions } from '../../data/learning-course';
-import kvCacheLab from '../../../labs/kv-cache-batch/lab.json';
+import { phase2, phase2Extensions, phase2Progress } from '../../data/lab-roadmap';
 import { getLabArtifactDisplayHref } from '../../utils/lab-artifacts.mjs';
-import '../../styles/learning-course.css';
+import '../../styles/lab-roadmap.css';
 
-export const progress = kvCacheLab.progress;
+export const progress = phase2Progress;
 export const current = progress.current;
 export const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', current.document);
-export const labInstructionsHref = getLabArtifactDisplayHref('kv-cache-batch', 'README.md');
-export const planHref = getLabArtifactDisplayHref('kv-cache-batch', 'docs/PLAN.md');
+export const labInstructionsHref = getLabArtifactDisplayHref('kv-cache-batch', current.assignment);
+export const planHref = getLabArtifactDisplayHref('kv-cache-batch', 'docs/roadmap.md');
 export const description =
 	'阶段 2 完整学习路线：从 NumPy 语义、KV Cache、Batching 与 MHA/GQA Oracle，逐层进入真实 vLLM 环境、输入长度、并发、调度和最终性能报告。';
 
-<PageLayout title={`阶段 2：${phase2.title}`} description={description} mainClass="phase2-course-page" noindex>
+<PageLayout title={`阶段 2：${phase2.title}`} description={description} mainClass="phase2-roadmap-page" noindex>
 
-<nav class="course-breadcrumbs" aria-label="课程层级">
+<nav class="roadmap-breadcrumbs" aria-label="实验路线层级">
 	<a href="/learning/">AI Infra 学习路线</a>
 	<span aria-hidden="true">/</span>
 	<a href="/learning/phase-1/">Phase 1</a>
@@ -24,28 +23,28 @@ export const description =
 	<span>Phase 2</span>
 </nav>
 
-<header class="course-hero">
-	<p class="course-status">阶段 2 · 进行中 · {phase2.period}</p>
+<header class="roadmap-hero">
+	<p class="roadmap-status">阶段 2 · 进行中 · {phase2.period}</p>
 	<h1>{phase2.title}</h1>
-	<p class="course-lead">{phase2.goal}</p>
+	<p class="roadmap-lead">{phase2.goal}</p>
 	<p class="current-position">
 		<strong>当前位置：</strong>
 		{current.id} · {current.title}。只有当前 Gate 的 Checkoff 通过，才进入 {progress.next.id}。
 	</p>
-	<p class="course-actions">
-		<a class="course-action course-action--primary" href="#current">
+	<p class="roadmap-actions">
+		<a class="roadmap-action roadmap-action--primary" href="#current">
 			开始当前任务
 		</a>
-		<a class="course-action" href={labInstructionsHref}>
-			打开 Lab Handout
+		<a class="roadmap-action" href={labInstructionsHref}>
+			打开当前任务书
 		</a>
-		<a class="course-action" href={currentDocumentHref}>
+		<a class="roadmap-action" href={currentDocumentHref}>
 			填写当前工作表
 		</a>
 	</p>
 </header>
 
-<nav class="course-section-nav" aria-label="阶段 2 目录">
+<nav class="roadmap-section-nav" aria-label="阶段 2 目录">
 	<a href="#contract">阶段契约</a>
 	<a href="#route">核心路线</a>
 	<a href="#current">当前任务</a>
@@ -56,7 +55,7 @@ export const description =
 	<a href="#files">文件</a>
 </nav>
 
-<section id="contract" class="course-section">
+<section id="contract" class="roadmap-section">
 
 ## 先在最小系统中证明，再进入真实系统测量
 
@@ -69,25 +68,25 @@ M 系列回答“机制在数值和状态上是否正确”；S 系列回答“�
 
 </section>
 
-<section id="route" class="course-section">
+<section id="route" class="roadmap-section">
 
 ## 十个核心 Gate，严格按依赖推进
 
 每个模块都给出前置条件、唯一问题、实际工作、交付物和 Checkoff。M2 内部继续拆为六个小 Gate；当前只做 M2-B，不提前实现 Cache 或 GQA。
 
-<CourseRoute units={phase2.units} label="阶段 2 核心 Lab 路线" />
+<LabRoute units={phase2.units} label="阶段 2 核心 Lab 路线" />
 
 </section>
 
 <LearningTaskPanel task={current} documentHref={currentDocumentHref} />
 
-<section id="materials" class="course-section">
+<section id="materials" class="roadmap-section">
 
-## 课程页定位，Handout 执行，工作表留痕
+## 路线页定位，任务书执行，工作表留痕
 
-正常执行链固定为：课程页定位 Gate → README 执行 → Gate 工作表记录 → 测试与 results 验收。当前行动不需要同时打开所有文档。
+正常执行链固定为：路线页定位 Gate → Assignment 执行 → Gate 工作表记录 → 测试与 results 验收。当前行动不需要同时打开所有文档。
 
-- <strong>当前任务书：</strong> <a href={labInstructionsHref}>Lab Handout · README</a>
+- <strong>当前任务书：</strong> <a href={labInstructionsHref}>Assignment · {current.id}</a>
   只回答现在做什么、允许编辑哪里、怎样测试和评分。
 - <strong>当前工作表：</strong> <a href={currentDocumentHref}>{current.id} 预测与验收记录</a>
   保存预测、第一次失败、修正规则、结果和闭卷解释。
@@ -99,7 +98,7 @@ M 系列回答“机制在数值和状态上是否正确”；S 系列回答“�
 
 </section>
 
-<section id="evidence" class="course-section">
+<section id="evidence" class="roadmap-section">
 
 ## 已通过的 Gate 与可复查证据
 
@@ -126,7 +125,7 @@ M 系列回答“机制在数值和状态上是否正确”；S 系列回答“�
 
 </section>
 
-<section id="writing" class="course-section">
+<section id="writing" class="roadmap-section">
 
 ## 先读机制，再用实验文章审查证据边界
 
@@ -143,21 +142,21 @@ M 系列回答“机制在数值和状态上是否正确”；S 系列回答“�
 
 </section>
 
-<section id="extensions" class="course-section">
+<section id="extensions" class="roadmap-section">
 
 ## Core Complete 之后，按问题选择进阶路线
 
 S5、S6、R0、T0 不阻塞 F0。只有核心实验产生了对应问题，才选择其中一项；不要把源码追踪或更多变量扫描当成主线进度。
 
-<CourseRoute units={phase2Extensions} label="阶段 2 进阶路线" />
+<LabRoute units={phase2Extensions} label="阶段 2 进阶路线" />
 
 </section>
 
-<section id="files" class="course-section">
+<section id="files" class="roadmap-section">
 
 ## 完整可审计文件
 
-课程页决定学习顺序；Lab 目录只用于审计源码、测试、工作表和原始结果，不作为学习起点。
+路线页决定实验顺序；Lab 目录只用于审计 Starter、测试、工作表和原始结果，不作为学习起点。
 
 - [浏览 kv-cache-batch 全部文件](/labs/kv-cache-batch/)
 - <a href={labInstructionsHref}>阅读当前任务书</a>
@@ -165,7 +164,7 @@ S5、S6、R0、T0 不阻塞 F0。只有核心实验产生了对应问题，才�
 
 </section>
 
-<footer class="course-boundary">
+<footer class="roadmap-boundary">
 	当前只执行 <strong>{current.id}</strong>。文章写清楚只代表 Explained；测试通过代表
 	Implemented；原始数据可重建才代表 Measured；完成闭卷解释才通过 Checkoff。
 </footer>

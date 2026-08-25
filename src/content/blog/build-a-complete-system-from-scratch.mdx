@@ -381,7 +381,7 @@ q[b, h, t, d]
 
 ### 第一遍：跟着一条窄路径做出来
 
-只阅读当前步骤所需的最小材料，写下运行前预测，然后实现一条能被测试的路径。[M2 工作表](/labs/kv-cache-batch/docs/gates/M2.md) 已经保存 A1/A2 的 Head 轴与 Q/K/V 投影证据；当前 B 只增加无 Cache Score、Mask、Softmax、逐 Head Output 和隔离性测试，不顺手完成 Cached MHA 或 GQA。
+只阅读当前步骤所需的最小材料，写下运行前预测，然后实现一条能被测试的路径。[M2-A1](/labs/kv-cache-batch/read/docs/gates/m2/a1/) 与 [M2-A2](/labs/kv-cache-batch/read/docs/gates/m2/a2/) 工作表已经保存 Head 轴与 Q/K/V 投影证据；当前 B 只增加无 Cache Score、Mask、Softmax、逐 Head Output 和隔离性测试，不顺手完成 Cached MHA 或 GQA。
 
 这一遍练的是“把知识变成行为”。
 
@@ -397,7 +397,7 @@ q[b, h, t, d]
 
 这一遍练的是迁移。能够修改一个条件而不推倒重来，才说明脑中形成了机制，而不是记住了文件。
 
-<CodeCard title="一次 120 分钟练习应该留下什么？" path="labs/kv-cache-batch/docs/gates/M2.md">
+<CodeCard title="一次 120 分钟练习应该留下什么？" path="labs/kv-cache-batch/docs/gates/m2/b.md">
 
 ```text
 Question:
@@ -418,7 +418,7 @@ Feedback:
   unittest 的第一个失败 + 手算 Score/Output 坐标 + 完整回归
 
 Artifact:
-  multi_head.py、test_multi_head.py、docs/gates/M2.md
+  multi_head.py、test_multi_head.py、docs/gates/m2/b.md
 
 Transfer:
   关闭代码后重做推导；下一轮进入 Cached MHA

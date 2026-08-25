@@ -1,11 +1,9 @@
 ---
-import { phase1, phase2 } from '../data/learning-course';
+import { phase1, phase2, phase2Progress } from '../data/lab-roadmap';
 import Layout from '../layouts/BlogPost.astro';
-import { getLabManifest } from '../utils/lab-artifacts.mjs';
 import '../styles/global.css';
 
-const kvCacheLab = await getLabManifest('kv-cache-batch');
-const currentGate = kvCacheLab.progress.current;
+const currentGate = phase2Progress.current;
 ---
 
 <Layout
@@ -80,8 +78,8 @@ const currentGate = kvCacheLab.progress.current;
 	<section class="about-section" aria-labelledby="learning-title">
 		<h2 id="learning-title">AI Infra 学习路线</h2>
 		<p class="section-intro">
-			完整课程已经从 About 独立出来，统一按“Prerequisite → Question → Work → Artifact → Checkoff →
-			Unlocks”组织。这里仅保留状态摘要，避免出现第二份路线图。
+			完整实验路线已经从 About 独立出来，统一按“Prerequisite → Question → Work → Artifact → Checkoff
+			→ Unlocks”组织。这里仅保留状态摘要，避免出现第二份路线图。
 		</p>
 
 		<ol class="roadmap-summary" aria-label="AI Infra 阶段摘要">
@@ -90,7 +88,7 @@ const currentGate = kvCacheLab.progress.current;
 				<p><strong>状态：</strong>已通过 · <strong>学习周期：</strong>{phase1.period}</p>
 				<p>{phase1.goal}</p>
 				<p class="roadmap-route">P1-L0 → P1-L1 → P1-L2 → P1-L3 → P1-L4 → P1-F</p>
-				<a href={phase1.path}>查看阶段 1 课程与证据 →</a>
+				<a href={phase1.path}>查看阶段 1 路线与证据 →</a>
 			</li>
 			<li class="is-active">
 				<h3>阶段 2：{phase2.title}</h3>
@@ -104,7 +102,7 @@ const currentGate = kvCacheLab.progress.current;
 			</li>
 		</ol>
 
-		<a class="course-link" href="/learning/">打开完整 AI Infra 课程路线 →</a>
+		<a class="roadmap-link" href="/learning/">打开完整 AI Infra 实验路线 →</a>
 	</section>
 
 	<section class="about-section principles-section" aria-labelledby="principles-title">
@@ -302,11 +300,11 @@ const currentGate = kvCacheLab.progress.current;
 	}
 
 	.roadmap-summary a,
-	.course-link {
+	.roadmap-link {
 		font-size: 0.86rem;
 	}
 
-	.course-link {
+	.roadmap-link {
 		display: inline-block;
 		margin-top: 0.85rem;
 		font-family: var(--font-mono);
