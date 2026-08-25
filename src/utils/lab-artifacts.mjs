@@ -190,6 +190,23 @@ function assertManifest(manifest, expectedSlug) {
 	) {
 		throw new Error(`${expectedSlug}: parent href and label are required.`);
 	}
+	if (
+		!manifest.usage ||
+		!['starter', 'evidence'].includes(manifest.usage.mode) ||
+		typeof manifest.usage.readme !== 'string'
+	) {
+		throw new Error(`${expectedSlug}: usage mode and README path are required.`);
+	}
+	if (
+		manifest.usage.mode === 'starter' &&
+		(typeof manifest.usage.currentTask !== 'string' ||
+			typeof manifest.usage.publicSource !== 'string' ||
+			typeof manifest.usage.privateSource !== 'string')
+	) {
+		throw new Error(
+			`${expectedSlug}: Starter usage requires currentTask, publicSource, and privateSource.`,
+		);
+	}
 	if (!Array.isArray(manifest.publish) || manifest.publish.length === 0) {
 		throw new Error(`${expectedSlug}: publish must be a non-empty array.`);
 	}
@@ -271,6 +288,40 @@ export async function validateLab(labName) {
 	const artifacts = await collectLabArtifacts(labName);
 	const artifactPaths = new Set(artifacts.map(({ path: artifactPath }) => artifactPath));
 	const requiredPaths = manifest.checks?.required ?? [];
+	const readmePath = normalizeRelativePath(manifest.usage.readme, 'usage README path');
+
+	if (!artifactPaths.has(readmePath)) {
+		throw new Error(`${labName}: usage README is not published: ${readmePath}`);
+	}
+
+	if (manifest.usage.mode === 'starter') {
+		const currentTaskPath = normalizeRelativePath(manifest.usage.currentTask, 'current task path');
+		const publicSourcePath = normalizeRelativePath(
+			manifest.usage.publicSource,
+			'public source path',
+		);
+		const privateSourcePath = normalizeRelativePath(
+			manifest.usage.privateSource,
+			'private source path',
+		);
+		const hasPublicSource = artifacts.some(({ path: artifactPath }) =>
+			artifactPath.startsWith(`${publicSourcePath}/`),
+		);
+		const publishesPrivateSource = artifacts.some(
+			({ path: artifactPath }) =>
+				artifactPath === privateSourcePath || artifactPath.startsWith(`${privateSourcePath}/`),
+		);
+
+		if (!artifactPaths.has(currentTaskPath)) {
+			throw new Error(`${labName}: current task is not published: ${currentTaskPath}`);
+		}
+		if (!hasPublicSource) {
+			throw new Error(`${labName}: public Starter source is not published: ${publicSourcePath}`);
+		}
+		if (publishesPrivateSource) {
+			throw new Error(`${labName}: private implementation was published: ${privateSourcePath}`);
+		}
+	}
 
 	for (const requiredPath of requiredPaths) {
 		const normalizedPath = normalizeRelativePath(requiredPath, 'required path');

@@ -31,6 +31,7 @@
 每个 `labs/<slug>/` 必须提供只描述发布契约的 `lab.json`：
 
 - `publish` 是公开文件白名单；未列出的目录默认不发布。
+- `usage` 驱动网站 Lab 首页：`evidence` 展示复现包用法，`starter` 额外声明当前任务、公开源码与私人源码边界。
 - `checks.required` 声明构建前必须存在的证据。
 - `checks.csvRows` 固定关键原始数据的行数。
 - 路线、当前状态和页面展示数据统一放在 `src/data/lab-roadmap/`，禁止写入 `lab.json`。
@@ -57,8 +58,8 @@ npm run build
 ## 新增 Lab
 
 1. 先在实验路线中定义 Prerequisite、Question、Artifact、Checkoff 和 Unlocks。
-2. 建立 `labs/<slug>/lab.json`、稳定的 `README.md` 与 `assignments/`。
+2. 建立 `labs/<slug>/lab.json`、稳定的 `README.md` 与 `assignments/`，在 `usage` 中声明网站使用入口。
 3. 只把明确可公开的顶层路径加入 `publish`。
 4. 为关键脚本、原始数据和说明文件增加 `checks.required`。
 5. 运行 `npm run labs:check && npm run labs:publish`。
-6. 打开 `/labs/<slug>/`；发布器会生成目录页和整包下载，Markdown 由通用 `read` 路由渲染，其余文件直接打开原始产物。
+6. 打开 `/labs/<slug>/`；发布器会生成使用说明、目录页和整包下载，Markdown 由通用 `read` 路由渲染，其余文件直接打开原始产物。

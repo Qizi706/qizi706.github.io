@@ -39,6 +39,11 @@
 	line-height: 1.8;
 }
 
+.roadmap-lead p,
+.current-position p {
+	margin: 0;
+}
+
 .roadmap-actions {
 	display: flex;
 	flex-wrap: wrap;
@@ -249,7 +254,82 @@
 	font-size: 0.88rem;
 }
 
+.lab-usage-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+	margin-top: 1rem;
+}
+
+.lab-usage-grid article {
+	padding: 1rem;
+	border: 1px solid #e2e8f0;
+	border-radius: 0.55rem;
+	background: #f8fafc;
+}
+
+.lab-usage-grid h3 {
+	margin: 0.2rem 0 0.55rem;
+	font-size: 1rem;
+}
+
+.lab-usage-grid article > p,
+.lab-usage-copy p {
+	color: #475569;
+	font-size: 0.9rem;
+	line-height: 1.65;
+}
+
+.lab-usage-copy p {
+	margin: 0.55rem 0;
+}
+
+.lab-usage-copy p:last-child,
+.lab-publication-boundary p:last-child {
+	margin-bottom: 0;
+}
+
+.lab-usage-grid pre {
+	margin: 0.8rem 0 0;
+	padding: 0.8rem;
+	overflow-x: auto;
+	border: 1px solid #e2e8f0;
+	border-radius: 0.4rem;
+	background: #fff;
+	font-size: 0.78rem;
+	line-height: 1.6;
+}
+
+.lab-usage-label {
+	margin: 0;
+	color: #4f46e5 !important;
+	font-size: 0.78rem !important;
+	font-weight: 800;
+	letter-spacing: 0.06em;
+}
+
+.lab-usage-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem 1rem;
+	margin-bottom: 0;
+}
+
+.lab-publication-boundary {
+	margin: 1rem 0 0;
+	padding: 0.8rem 1rem;
+	border-left: 3px solid #6366f1;
+	background: #eef2ff;
+	color: #3730a3;
+	font-size: 0.9rem;
+	line-height: 1.65;
+}
+
 @media (max-width: 720px) {
+	.lab-usage-grid {
+		grid-template-columns: 1fr;
+	}
+
 	.roadmap-contract-grid {
 		grid-template-columns: 1fr;
 		gap: 0.1rem;

@@ -7,6 +7,13 @@
 		"href": "/learning/phase-2/",
 		"label": "阶段 2 实验路线"
 	},
+	"usage": {
+		"mode": "starter",
+		"readme": "README.md",
+		"currentTask": "assignments/m2-b.md",
+		"publicSource": "src",
+		"privateSource": ".work/src"
+	},
 	"publish": [
 		"lab.json",
 		"README.md",

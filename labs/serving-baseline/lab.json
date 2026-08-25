@@ -7,6 +7,10 @@
 		"href": "/learning/phase-1/",
 		"label": "阶段 1 实验路线"
 	},
+	"usage": {
+		"mode": "evidence",
+		"readme": "README.md"
+	},
 	"publish": ["lab.json", "README.md", "logs", "responses", "results", "scripts"],
 	"notes": [
 		"This is a completed Phase 1 evidence package; start from /learning/phase-1/ for the module order and checkoffs.",

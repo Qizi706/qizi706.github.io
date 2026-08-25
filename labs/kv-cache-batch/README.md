@@ -2,6 +2,8 @@
 
 这是一个可下载、可评分、可复查的 AI Infra 实验包。公开目录中的 `src/` 始终是 **Starter**：它只包含开始当前任务所需的基础实现和刻意保留的 `TODO`，不会从维护者的本地实现自动更新。
 
+网站入口为 [Lab 文件与使用方法](/labs/kv-cache-batch/)；这里同时保留可复制的完整命令和稳定文件契约。
+
 当前任务是 [M2-B · Multi-Head Causal Attention](assignments/m2-b.md)。完整依赖与状态从 [AI Infra 实验路线](/learning/)进入。
 
 ## 下载者：直接使用公开 Starter

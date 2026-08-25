@@ -9,7 +9,10 @@ export const progress = phase2Progress;
 export const current = progress.current;
 export const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', current.document);
 export const labInstructionsHref = getLabArtifactDisplayHref('kv-cache-batch', current.assignment);
+export const labReadmeHref = getLabArtifactDisplayHref('kv-cache-batch', 'README.md');
 export const planHref = getLabArtifactDisplayHref('kv-cache-batch', 'docs/roadmap.md');
+export const labHomeHref = '/labs/kv-cache-batch/';
+export const labArchiveHref = '/labs/kv-cache-batch.tar.gz';
 export const description =
 	'阶段 2 完整学习路线：从 NumPy 语义、KV Cache、Batching 与 MHA/GQA Oracle，逐层进入真实 vLLM 环境、输入长度、并发、调度和最终性能报告。';
 
@@ -27,27 +30,31 @@ export const description =
 	<p class="roadmap-status">阶段 2 · 进行中 · {phase2.period}</p>
 	<h1>{phase2.title}</h1>
 	<p class="roadmap-lead">{phase2.goal}</p>
-	<p class="current-position">
+	<div class="current-position">
 		<strong>当前位置：</strong>
 		{current.id} · {current.title}。只有当前 Gate 的 Checkoff 通过，才进入 {progress.next.id}。
-	</p>
-	<p class="roadmap-actions">
+	</div>
+	<nav class="roadmap-actions" aria-label="当前任务操作">
 		<a class="roadmap-action roadmap-action--primary" href="#current">
-			开始当前任务
+			<span>开始当前任务</span>
 		</a>
 		<a class="roadmap-action" href={labInstructionsHref}>
-			打开当前任务书
+			<span>打开当前任务书</span>
 		</a>
 		<a class="roadmap-action" href={currentDocumentHref}>
-			填写当前工作表
+			<span>填写当前工作表</span>
 		</a>
-	</p>
+		<a class="roadmap-action" href={labArchiveHref} download>
+			<span>下载公开 Starter</span>
+		</a>
+	</nav>
 </header>
 
 <nav class="roadmap-section-nav" aria-label="阶段 2 目录">
 	<a href="#contract">阶段契约</a>
 	<a href="#route">核心路线</a>
 	<a href="#current">当前任务</a>
+	<a href="#lab-files">使用 Lab 文件</a>
 	<a href="#materials">材料关系</a>
 	<a href="#evidence">完成证据</a>
 	<a href="#writing">文章</a>
@@ -80,6 +87,61 @@ M 系列回答“机制在数值和状态上是否正确”；S 系列回答“�
 
 <LearningTaskPanel task={current} documentHref={currentDocumentHref} />
 
+<section id="lab-files" class="roadmap-section">
+
+## 下载者和仓库维护者使用不同的源码目录
+
+<div class="lab-usage-grid">
+	<article>
+		<p class="lab-usage-label">下载者</p>
+		<h3>下载公开 Starter，直接修改 `src/`</h3>
+		<div class="lab-usage-copy">
+			压缩包只包含公开白名单中的任务书、Starter、测试和实验材料。M2-B
+			保留未实现入口，完成后运行公开评分。
+		</div>
+		<pre>
+			<code>{`curl -LO https://zqwiki.cn/labs/kv-cache-batch.tar.gz
+tar -xzf kv-cache-batch.tar.gz
+cd kv-cache-batch
+make setup
+make grade`}</code>
+		</pre>
+		<p class="lab-usage-links">
+			<a href={labArchiveHref} download>
+				<span>下载完整 Starter</span>
+			</a>
+			<a href={labInstructionsHref}>阅读当前任务书</a>
+		</p>
+	</article>
+	<article>
+		<p class="lab-usage-label">仓库维护者</p>
+		<h3>在 `.work/src/` 实现，不修改公开答案</h3>
+		<div class="lab-usage-copy">
+			首次运行 `make private-setup` 复制 Starter；此后 Makefile 自动使用私有源码。`.work/` 被 Git
+			和发布器排除。
+		</div>
+		<pre>
+			<code>{`cd labs/kv-cache-batch
+make setup
+make private-setup
+make source-status
+make test
+make grade`}</code>
+		</pre>
+		<p class="lab-usage-links">
+			<a href={labReadmeHref}>阅读完整使用说明</a>
+			<a href={labHomeHref}>检查公开文件边界</a>
+		</p>
+	</article>
+</div>
+
+<div class="lab-publication-boundary">
+	<strong>发布边界：</strong>网站和下载包中的 `src/` 始终是公开 Starter；个人实现只保存在
+	`.work/src/`。Markdown 进入阅读页，源码、测试、CSV、日志和图表显示发布原文。
+</div>
+
+</section>
+
 <section id="materials" class="roadmap-section">
 
 ## 路线页定位，任务书执行，工作表留痕
@@ -95,6 +157,8 @@ M 系列回答“机制在数值和状态上是否正确”；S 系列回答“�
 - <strong>事实证据：</strong>
   [测试、原始数据与结果目录](/labs/kv-cache-batch/results/)证明契约与实验事实；派生结果必须可以从
   Raw 重建。
+- <strong>文件用法：</strong> <a href={labHomeHref}>Lab 文件首页</a>
+  提供下载、解压、评分和维护者私有工作区命令；<a href={labReadmeHref}>README</a>保存稳定使用契约。
 
 </section>
 
@@ -158,7 +222,8 @@ S5、S6、R0、T0 不阻塞 F0。只有核心实验产生了对应问题，才�
 
 路线页决定实验顺序；Lab 目录只用于审计 Starter、测试、工作表和原始结果，不作为学习起点。
 
-- [浏览 kv-cache-batch 全部文件](/labs/kv-cache-batch/)
+- <a href={labHomeHref}>查看使用方法并浏览全部公开文件</a>
+- [下载公开 Starter 压缩包](/labs/kv-cache-batch.tar.gz)
 - <a href={labInstructionsHref}>阅读当前任务书</a>
 - <a href={planHref}>阅读阶段总计划</a>
 

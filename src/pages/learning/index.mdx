@@ -6,6 +6,7 @@ import '../../styles/lab-roadmap.css';
 
 export const current = phase2Progress.current;
 export const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', current.document);
+export const currentLabHref = '/labs/kv-cache-batch/';
 export const description =
 	'从阶段 1 的 LLM Serving 请求链路与本地基线，到阶段 2 的 Attention、KV Cache、调度与 vLLM 性能工程：按依赖、实验和 Checkoff 递进的完整学习路线。';
 
@@ -14,22 +15,25 @@ export const description =
 <header class="roadmap-hero">
 	<p class="roadmap-status">实验路线总览 · 阶段 1 已完成，阶段 2 进行中</p>
 	<h1>从一条请求，到一个可解释的推理系统</h1>
-	<p class="roadmap-lead">
+	<div class="roadmap-lead">
 		这是一条以 Lab 为主线的自学与实验路线。阶段 1 先观察真实 Serving，建立请求链路与测量纪律；阶段 2
 		再从最小 Attention Oracle 逐层进入 KV Cache、MHA/GQA、vLLM
 		调度与真实性能实验。每一层都必须交付可运行产物并通过 Checkoff，才能解锁下一层。
-	</p>
-	<p class="roadmap-actions">
+	</div>
+	<nav class="roadmap-actions" aria-label="实验路线操作">
 		<a class="roadmap-action roadmap-action--primary" href="/learning/phase-2/#current">
-			继续当前任务 · {current.id}
+			<span>继续当前任务 · {current.id}</span>
 		</a>
 		<a class="roadmap-action" href={currentDocumentHref}>
-			打开当前工作表
+			<span>打开当前工作表</span>
+		</a>
+		<a class="roadmap-action" href={currentLabHref}>
+			<span>使用 Lab 文件</span>
 		</a>
 		<a class="roadmap-action" href="/learning/phase-1/">
-			从 Phase 1 开始
+			<span>从 Phase 1 开始</span>
 		</a>
-	</p>
+	</nav>
 </header>
 
 <nav class="roadmap-section-nav" aria-label="实验路线目录">
@@ -97,13 +101,29 @@ export const description =
 
 - <strong>Syllabus — 学习总路线：</strong>
   回答“先学什么、为什么、通过后解锁什么”；本页是唯一跨阶段入口。
-- <strong>Assignment — Lab README：</strong> 只回答当前任务的准备、边界、实现要求、提示和评分命令。
+- <strong>Lab README — 使用入口：</strong> 稳定说明怎样下载、启动、评分以及公开 Starter
+  与本地实现分别位于哪里。
+- <strong>Assignment — 当前任务书：</strong> 只回答当前 Gate
+  的准备、边界、实现要求、提示和评分命令。
 - <strong>Notebook — Gate 工作表：</strong> 保存预测、第一次失败、修正规则、结果与
   Checkoff，不重复任务说明。
 - <strong>Evidence — 测试与 results：</strong>
   保存自动验收、原始样本和可重建结果，是实验结论的事实源。
 - <strong>Textbook — 机制文章：</strong> 建立稳定概念模型；阅读用于形成预测，但不能替代 Lab。
 - <strong>Report — 实验文章：</strong> 只总结已经产生的证据、失败和适用边界，不承担进度追踪。
+
+</section>
+
+<section class="roadmap-section">
+
+## 当前 Lab 文件怎样使用？
+
+公开下载者从 [`kv-cache-batch.tar.gz`](/labs/kv-cache-batch.tar.gz) 获得未完成 Starter，解压后直接修改
+`src/`；仓库维护者运行 `make private-setup`，只在被忽略的 `.work/src/` 中保存个人实现。两者使用同一套测试与评分入口，但私人源码不会进入网站或下载包。
+
+- <a href={currentLabHref}>查看完整使用方法和公开文件</a>
+- [直接下载当前 Starter](/labs/kv-cache-batch.tar.gz)
+- [进入 Phase 2 当前任务](/learning/phase-2/#current)
 
 </section>
 
