@@ -414,7 +414,7 @@ hr {
 	line-height: 1.25rem;
 }
 
-.prose :is(.code-card, .note).title-underline h1 {
+.prose :is(.code-card, .note).title-underline .card-title {
 	text-decoration: none;
 }
 
@@ -428,9 +428,9 @@ hr {
 	text-decoration: none;
 }
 
-.prose .note.title-underline h1,
-.prose .code-card.title-underline h1:not(:has(a)),
-.prose .code-card.title-underline h1 > a {
+.prose .note.title-underline .card-title,
+.prose .code-card.title-underline .card-title:not(:has(a)),
+.prose .code-card.title-underline .card-title > a {
 	text-decoration-line: underline;
 	text-decoration-thickness: 1px;
 	text-underline-offset: 0.28em;
@@ -457,7 +457,7 @@ hr {
 	content: none;
 }
 
-.prose :is(.code-card, .note) h1 {
+.prose :is(.code-card, .note) .card-title {
 	display: inline;
 	margin: 0;
 	padding: 0;
@@ -469,7 +469,7 @@ hr {
 	text-decoration: none;
 }
 
-.prose :is(.code-card, .note) h1::before {
+.prose :is(.code-card, .note) .card-title::before {
 	float: left;
 	margin-right: 0.75rem;
 	font-family: sans-serif;
@@ -478,26 +478,26 @@ hr {
 	line-height: 2.5rem;
 }
 
-.prose .code-card h1::before {
+.prose .code-card .card-title::before {
 	content: '💻';
 }
 
-.prose .note h1::before {
+.prose .note .card-title::before {
 	content: '📝';
 }
 
-.prose :is(.code-card, .note) h1::after {
+.prose :is(.code-card, .note) .card-title::after {
 	content: ': ';
 }
 
-.prose :is(.code-card, .note) h1 + p {
+.prose :is(.code-card, .note) .card-title + p {
 	display: inline;
 	margin: 0;
 	padding: 0;
 	text-indent: 0;
 }
 
-.prose :is(.code-card, .note) h1 + p::first-letter {
+.prose :is(.code-card, .note) .card-title + p::first-letter {
 	float: none;
 	margin: 0;
 	color: inherit;
@@ -609,7 +609,7 @@ hr {
 	overflow: visible;
 }
 
-.prose .slideshow h1 {
+.prose .slideshow .slide-title {
 	margin: 0;
 	padding: 0.5rem 0;
 	border-bottom: 1px solid rgb(203 213 225);
@@ -663,7 +663,7 @@ hr {
 	text-transform: uppercase;
 }
 
-.prose .slideshow h1 + h2 {
+.prose .slideshow .slide-title + h2 {
 	padding-top: 0.5rem;
 }
 
@@ -671,12 +671,12 @@ hr {
 	padding-top: 0;
 }
 
-.prose .slideshow h1 + p {
+.prose .slideshow .slide-title + p {
 	margin-top: 0.5rem;
 	text-indent: 0;
 }
 
-.prose .slideshow h1 + p::first-letter {
+.prose .slideshow .slide-title + p::first-letter {
 	float: left;
 	margin-right: 0.5rem;
 	color: rgb(15 23 42);
@@ -685,7 +685,7 @@ hr {
 	line-height: 1;
 }
 
-.prose .slideshow h1 + p::first-line {
+.prose .slideshow .slide-title + p::first-line {
 	letter-spacing: 0.1em;
 	text-transform: uppercase;
 }

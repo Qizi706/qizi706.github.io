@@ -137,20 +137,20 @@ const description =
 			</div>
 			<span>{labDocuments.length} DOCS</span>
 		</div>
-		<ul class="document-grid">
+		<DefinitionGrid as="div" class="document-grid" variant="elevated" collapseAt="720">
 			{
 				labDocuments.map((document) => (
-					<li>
+					<div>
 						<a href={document.href}>
 							<span>{document.label}</span>
 							<strong>{document.title}</strong>
 							<p>{document.description}</p>
 							<small>{document.path} · READ →</small>
 						</a>
-					</li>
+					</div>
 				))
 			}
-		</ul>
+		</DefinitionGrid>
 	</section>
 
 	<section id="start" class="section-block">
@@ -308,9 +308,9 @@ const description =
 			>、
 			<code>docs/</code> 或 <code>results/</code>，再查看其中内容；不会在这里铺开所有文件名。
 		</p>
-		<SurfaceCard class="file-listing" padding="compact">
+		<div class="file-listing">
 			<LabDirectoryListing {labName} entries={rootEntries} parentHref={labHref} />
-		</SurfaceCard>
+		</div>
 	</section>
 
 	<footer class="page-boundary">
@@ -414,7 +414,7 @@ const description =
 	.section-block {
 		padding: 2rem 0;
 		border-bottom: 1px solid #e2e8f0;
-		scroll-margin-top: 1rem;
+		scroll-margin-top: 4.5rem;
 	}
 
 	.section-heading {
@@ -525,29 +525,19 @@ const description =
 	}
 
 	.document-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.7rem;
 		margin: 0;
-		padding: 0;
-		list-style: none;
 	}
 
 	.document-grid a {
 		display: block;
 		height: 100%;
-		padding: 0.9rem;
-		border: 1px solid #e2e8f0;
-		border-radius: var(--card-radius);
 		color: inherit;
-		background: #fff;
 		text-decoration: none;
 	}
 
-	.document-grid a:hover,
-	.document-grid a:focus-visible {
-		border-color: #94a3b8;
-		background: #f8fafc;
+	.document-grid a:hover strong,
+	.document-grid a:focus-visible strong {
+		color: var(--accent);
 	}
 
 	.document-grid span,
@@ -708,10 +698,6 @@ const description =
 		.lab-launch__main {
 			border-right: 0;
 			border-bottom: 1px dashed #cbd5e1;
-		}
-
-		.document-grid {
-			grid-template-columns: 1fr;
 		}
 
 		.experiment-grid {

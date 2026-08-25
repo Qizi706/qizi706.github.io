@@ -10,7 +10,7 @@ const { title, name, class: className } = Astro.props;
 
 <div class:list={['note', className]} data-name={name}>
 	<div>
-		{title && <h1>{title}</h1>}
+		{title && <h2 class="card-title">{title}</h2>}
 		<slot />
 	</div>
 </div>

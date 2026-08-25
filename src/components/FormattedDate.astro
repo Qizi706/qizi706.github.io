@@ -4,14 +4,16 @@ interface Props {
 }
 
 const { date } = Astro.props;
+const formattedDate = new Intl.DateTimeFormat('zh-CN', {
+	year: 'numeric',
+	month: '2-digit',
+	day: '2-digit',
+	timeZone: 'Asia/Shanghai',
+})
+	.format(date)
+	.replaceAll('/', '.');
 ---
 
 <time datetime={date.toISOString()}>
-	{
-		date.toLocaleDateString('en-us', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric',
-		})
-	}
+	{formattedDate}
 </time>

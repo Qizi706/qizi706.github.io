@@ -39,7 +39,7 @@ const archiveDateFormatter = new Intl.DateTimeFormat('zh-CN', {
 	day: '2-digit',
 	timeZone: 'Asia/Shanghai',
 });
-const formatArchiveDate = (date: Date) => archiveDateFormatter.format(date).replaceAll('/', '-');
+const formatArchiveDate = (date: Date) => archiveDateFormatter.format(date).replaceAll('/', '.');
 const firstPublishedAt = posts.at(0)?.data.pubDate;
 const lastPublishedAt = posts.at(-1)?.data.pubDate;
 const archiveRange =

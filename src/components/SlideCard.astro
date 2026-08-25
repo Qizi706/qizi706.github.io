@@ -9,7 +9,7 @@ const { title, class: className } = Astro.props;
 
 <div class:list={['slideshow', className]}>
 	<div>
-		{title && <h1>{title}</h1>}
+		{title && <h2 class="slide-title">{title}</h2>}
 		<slot />
 	</div>
 </div>

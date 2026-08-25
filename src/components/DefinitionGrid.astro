@@ -2,6 +2,7 @@
 import type { HTMLAttributes } from 'astro/types';
 
 interface Props extends Omit<HTMLAttributes<'dl'>, 'class'> {
+	as?: 'dl' | 'div';
 	variant?: 'plain' | 'outlined' | 'elevated' | 'ledger';
 	columns?: 1 | 2 | 3;
 	collapseAt?: 'none' | '520' | '620' | '720';
@@ -9,6 +10,7 @@ interface Props extends Omit<HTMLAttributes<'dl'>, 'class'> {
 }
 
 const {
+	as: Tag = 'dl',
 	variant = 'plain',
 	columns = 2,
 	collapseAt = 'none',
@@ -17,7 +19,7 @@ const {
 } = Astro.props;
 ---
 
-<dl
+<Tag
 	class:list={[
 		'definition-grid',
 		`definition-grid--${variant}`,
@@ -28,7 +30,7 @@ const {
 	{...attributes}
 >
 	<slot />
-</dl>
+</Tag>
 
 <style>
 	.definition-grid {

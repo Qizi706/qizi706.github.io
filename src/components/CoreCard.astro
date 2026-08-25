@@ -12,7 +12,7 @@ const { title, href, path, class: className } = Astro.props;
 <div class:list={['code-card', className]} data-path={path}>
 	<div>
 		<div>
-			{title && <h1>{href ? <a href={href}>{title}</a> : title}</h1>}
+			{title && <h2 class="card-title">{href ? <a href={href}>{title}</a> : title}</h2>}
 			<slot />
 		</div>
 	</div>

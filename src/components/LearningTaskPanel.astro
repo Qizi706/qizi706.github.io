@@ -44,7 +44,7 @@ const { task, documentHref, anchorId = 'current', eyebrow = '01 / CURRENT' } = A
 	</div>
 
 	<div class="learning-task-panel__grid">
-		<SurfaceCard surface="soft">
+		<SurfaceCard class="learning-task-panel__subcard">
 			<h3>前置阅读 · 15 min</h3>
 			<ul>
 				{
@@ -57,7 +57,7 @@ const { task, documentHref, anchorId = 'current', eyebrow = '01 / CURRENT' } = A
 			</ul>
 			<p>每篇只记录一句：它确认或修正了哪条预测。</p>
 		</SurfaceCard>
-		<SurfaceCard surface="soft">
+		<SurfaceCard class="learning-task-panel__subcard">
 			<h3>交付与门禁</h3>
 			<p><strong>Artifact：</strong>{task.artifact}</p>
 			<p><strong>Acceptance：</strong>{task.acceptance}</p>
@@ -78,7 +78,7 @@ const { task, documentHref, anchorId = 'current', eyebrow = '01 / CURRENT' } = A
 		margin: 2rem 0;
 		padding: 2rem 1rem;
 		overflow: hidden;
-		scroll-margin-top: 1rem;
+		scroll-margin-top: 4.5rem;
 	}
 
 	.learning-task-panel__heading {
@@ -108,6 +108,11 @@ const { task, documentHref, anchorId = 'current', eyebrow = '01 / CURRENT' } = A
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.8rem;
 		margin-top: 1rem;
+	}
+
+	.learning-task-panel__grid :global(.learning-task-panel__subcard) {
+		height: 100%;
+		background: #fff;
 	}
 
 	.learning-task-panel__grid :global(h3) {
