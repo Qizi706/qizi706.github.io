@@ -1,0 +1,125 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends Omit<HTMLAttributes<'details'>, 'class' | 'open' | 'title'> {
+	title?: string;
+	meta?: string;
+	open?: boolean;
+	surface?: 'outlined' | 'elevated';
+	stackOnMobile?: boolean;
+	class?: string;
+}
+
+const {
+	title,
+	meta,
+	open = false,
+	surface = 'outlined',
+	stackOnMobile = false,
+	class: className,
+	...attributes
+} = Astro.props;
+const hasCustomSummary = Astro.slots.has('summary');
+---
+
+<details
+	class:list={[
+		'disclosure-card',
+		`disclosure-card--${surface}`,
+		{ 'disclosure-card--stack-mobile': stackOnMobile },
+		className,
+	]}
+	{open}
+	{...attributes}
+>
+	<summary>
+		{
+			hasCustomSummary ? (
+				<slot name="summary" />
+			) : (
+				<>
+					<span class="disclosure-card__title">{title}</span>
+					{meta && <span class="disclosure-card__meta">{meta}</span>}
+				</>
+			)
+		}
+	</summary>
+	<div class="disclosure-card__body">
+		<slot />
+	</div>
+</details>
+
+<style>
+	.disclosure-card {
+		margin: 0.8rem 0;
+		border-radius: var(--card-radius);
+		background: rgb(255 255 255 / 28%);
+	}
+
+	.disclosure-card--outlined {
+		border: 1px solid rgb(var(--gray-light));
+	}
+
+	.disclosure-card--elevated {
+		border: 0;
+		box-shadow: var(
+			--elevated-card-shadow,
+			0 -2px 5px -2px rgb(15 23 42 / 16%),
+			0 4px 6px -1px rgb(0 0 0 / 10%),
+			0 2px 4px -2px rgb(0 0 0 / 10%)
+		);
+	}
+
+	summary {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.8rem 0.95rem;
+		cursor: pointer;
+		list-style: none;
+	}
+
+	summary::-webkit-details-marker {
+		display: none;
+	}
+
+	summary::before {
+		content: '>';
+		flex: 0 0 auto;
+		color: var(--accent);
+		font-family: var(--font-mono);
+	}
+
+	.disclosure-card[open] summary::before {
+		content: 'v';
+	}
+
+	.disclosure-card__title {
+		flex: 1;
+		font-family: var(--font-heading);
+		font-weight: 700;
+	}
+
+	.disclosure-card__meta {
+		color: rgb(var(--gray));
+		font-family: var(--font-mono);
+		font-size: 0.68rem;
+		font-weight: 400;
+	}
+
+	.disclosure-card__body {
+		border-top: 1px dashed rgb(var(--gray-light));
+	}
+
+	@media (max-width: 620px) {
+		summary {
+			align-items: flex-start;
+		}
+
+		.disclosure-card--stack-mobile summary {
+			flex-direction: column;
+			gap: 0.25rem;
+		}
+	}
+</style>

@@ -1,4 +1,6 @@
 ---
+import DisclosureCard from './DisclosureCard.astro';
+
 interface Props {
 	period: string;
 	title: string;
@@ -10,56 +12,20 @@ const { period, title, status = 'pending', open = false } = Astro.props;
 const statusLabel = status === 'done' ? '已完成' : status === 'active' ? '进行中' : '待开始';
 ---
 
-<details class:list={['learning-stage', `is-${status}`]} {open}>
-	<summary>
+<DisclosureCard class={`learning-stage is-${status}`} surface="elevated" {open}>
+	<Fragment slot="summary">
 		<span class="summary-main">
 			<span class="period">{period}</span>
 			<strong>{title}</strong>
 		</span>
-		<span class="status">{statusLabel}</span>
-	</summary>
+		<span class:list={['status', `is-${status}`]}>{statusLabel}</span>
+	</Fragment>
 	<div class="stage-body">
 		<slot />
 	</div>
-</details>
+</DisclosureCard>
 
 <style>
-	.learning-stage {
-		margin: 0.8rem 0;
-		border: 0;
-		border-radius: var(--card-radius);
-		background: rgb(255 255 255 / 28%);
-		box-shadow:
-			0 -2px 5px -2px rgb(15 23 42 / 16%),
-			0 4px 6px -1px rgb(0 0 0 / 10%),
-			0 2px 4px -2px rgb(0 0 0 / 10%);
-	}
-
-	summary {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.8rem 0.95rem;
-		cursor: pointer;
-		list-style: none;
-	}
-
-	summary::-webkit-details-marker {
-		display: none;
-	}
-
-	summary::before {
-		content: '>';
-		flex: 0 0 auto;
-		color: var(--accent);
-		font-family: var(--font-mono);
-	}
-
-	.learning-stage[open] summary::before {
-		content: 'v';
-	}
-
 	.summary-main {
 		display: flex;
 		flex: 1;
@@ -93,28 +59,23 @@ const statusLabel = status === 'done' ? '已完成' : status === 'active' ? '进
 		white-space: nowrap;
 	}
 
-	.is-done .status {
+	.status.is-done {
 		color: #15803d;
 	}
 
-	.is-active .status {
+	.status.is-active {
 		color: var(--accent);
 	}
 
-	.is-pending .status {
+	.status.is-pending {
 		color: rgb(var(--gray));
 	}
 
 	.stage-body {
 		padding: 0 1rem 1rem;
-		border-top: 1px dashed rgb(var(--gray-light));
 	}
 
 	@media (max-width: 620px) {
-		summary {
-			align-items: flex-start;
-		}
-
 		.summary-main {
 			align-items: flex-start;
 			flex-direction: column;

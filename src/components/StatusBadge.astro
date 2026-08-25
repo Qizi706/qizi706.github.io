@@ -1,0 +1,41 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends Omit<HTMLAttributes<'span'>, 'class'> {
+	tone?: 'draft' | 'published' | 'neutral';
+	class?: string;
+}
+
+const { tone = 'neutral', class: className, ...attributes } = Astro.props;
+---
+
+<span class:list={['status-badge', `status-badge--${tone}`, className]} {...attributes}>
+	<slot />
+</span>
+
+<style>
+	.status-badge {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.08rem 0.35rem;
+		border-radius: var(--card-radius);
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+		line-height: 1.4;
+	}
+
+	.status-badge--neutral {
+		color: #475569;
+		background: #f1f5f9;
+	}
+
+	.status-badge--draft {
+		color: #7c3aed;
+		background: #f5f3ff;
+	}
+
+	.status-badge--published {
+		color: #15803d;
+		background: #f0fdf4;
+	}
+</style>

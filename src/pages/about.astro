@@ -1,4 +1,6 @@
 ---
+import DefinitionGrid from '../components/DefinitionGrid.astro';
+import DisclosureCard from '../components/DisclosureCard.astro';
 import Layout from '../layouts/BlogPost.astro';
 import LearningStage from '../components/LearningStage.astro';
 import '../styles/global.css';
@@ -28,7 +30,7 @@ const phase2Evidence = phase2Progress.evidence;
 			中完成虚拟内存、文件系统、缓冲池、并发索引、查询执行与 MVCC
 			等核心模块；当前将这些系统能力迁移到单机 LLM Serving，聚焦请求链路、KV Cache、调度与性能工程。
 		</p>
-		<dl class="profile-ledger">
+		<DefinitionGrid class="profile-ledger" variant="ledger" collapseAt="620">
 			<div>
 				<dt>focus</dt>
 				<dd>AI Infrastructure / Systems</dd>
@@ -45,18 +47,20 @@ const phase2Evidence = phase2Progress.evidence;
 				<dt>method</dt>
 				<dd>implement → benchmark → source trace → write</dd>
 			</div>
-		</dl>
+		</DefinitionGrid>
 	</section>
 
 	<section class="about-section" aria-labelledby="projects-title">
 		<div class="section-label">01 / implemented systems</div>
 		<h2 id="projects-title">系统项目</h2>
 
-		<details class="project" open>
-			<summary>
-				<span>MIT 6.S081</span>
-				<small>RISC-V · xv6 · C · Linux</small>
-			</summary>
+		<DisclosureCard
+			title="MIT 6.S081"
+			meta="RISC-V · xv6 · C · Linux"
+			surface="elevated"
+			stackOnMobile
+			open
+		>
 			<div class="project-body">
 				<p class="project-meta">2026.02 — 2026.04 · independent implementation</p>
 				<p>
@@ -71,13 +75,15 @@ const phase2Evidence = phase2Progress.evidence;
 					<li>扩展 xv6 文件系统，支持三级间接索引、软链接、mmap/munmap 与按需映射回写。</li>
 				</ul>
 			</div>
-		</details>
+		</DisclosureCard>
 
-		<details class="project" open>
-			<summary>
-				<span>CMU 15-445</span>
-				<small>BusTub · C++ · Linux</small>
-			</summary>
+		<DisclosureCard
+			title="CMU 15-445"
+			meta="BusTub · C++ · Linux"
+			surface="elevated"
+			stackOnMobile
+			open
+		>
 			<div class="project-body">
 				<p class="project-meta">2025.11 — 2025.12 · independent implementation</p>
 				<p>
@@ -97,7 +103,7 @@ const phase2Evidence = phase2Progress.evidence;
 					<li>基于版本链和 undo log 实现 MVCC，支持快照隔离下的并发读写。</li>
 				</ul>
 			</div>
-		</details>
+		</DisclosureCard>
 	</section>
 
 	<section class="about-section" aria-labelledby="learning-title">
@@ -121,7 +127,12 @@ const phase2Evidence = phase2Progress.evidence;
 				<span class="quest-state is-done" aria-hidden="true">[done]</span>
 			</div>
 
-			<dl class="phase-ledger" aria-label="阶段一证据摘要">
+			<DefinitionGrid
+				class="phase-ledger"
+				variant="ledger"
+				collapseAt="620"
+				aria-label="阶段一证据摘要"
+			>
 				<div>
 					<dt>scope</dt>
 					<dd>single-node · single-request · 4B quantized model</dd>
@@ -138,7 +149,7 @@ const phase2Evidence = phase2Progress.evidence;
 					<dt>boundary</dt>
 					<dd>no streaming concurrency or tail-latency claim</dd>
 				</div>
-			</dl>
+			</DefinitionGrid>
 
 			<div class="learning-grid">
 				<div>
@@ -169,8 +180,12 @@ const phase2Evidence = phase2Progress.evidence;
 				</div>
 			</div>
 
-			<details class="reading-list">
-				<summary>reading queue <span>展开阅读清单</span></summary>
+			<DisclosureCard
+				title="reading queue"
+				meta="展开阅读清单"
+				stackOnMobile
+				style="margin-top: 1.25rem"
+			>
 				<div class="reading-columns">
 					<div>
 						<h3>理解 LLM 和 Transformer</h3>
@@ -250,7 +265,7 @@ const phase2Evidence = phase2Progress.evidence;
 						</ul>
 					</div>
 				</div>
-			</details>
+			</DisclosureCard>
 
 			<pre
 				class="pipeline"
@@ -281,7 +296,12 @@ constraint: KV Cache consumes GPU memory</code></pre>
 			</div>
 			<p>{phase2Milestone.goal}</p>
 
-			<dl class="phase-ledger" aria-label="阶段二实验契约">
+			<DefinitionGrid
+				class="phase-ledger"
+				variant="ledger"
+				collapseAt="620"
+				aria-label="阶段二实验契约"
+			>
 				<div>
 					<dt>current</dt>
 					<dd>{currentGate.id} · {currentGate.title}</dd>
@@ -306,7 +326,7 @@ constraint: KV Cache consumes GPU memory</code></pre>
 					<dt>final output</dt>
 					<dd>{phase2Milestone.finalArtifact}</dd>
 				</div>
-			</dl>
+			</DefinitionGrid>
 
 			<div class="learning-grid">
 				<div>
@@ -388,8 +408,12 @@ constraint: KV Cache consumes GPU memory</code></pre>
 				Decoding、Prefix Caching 与 Chunked Prefill 的基本思想属于核心口述范围；S5/S6 实验、源码追踪、跨环境迁移和分布式并行不阻塞本月交付。
 			</p>
 
-			<details class="reading-list">
-				<summary>reference set <span>核心材料 / 按需扩展</span></summary>
+			<DisclosureCard
+				title="reference set"
+				meta="核心材料 / 按需扩展"
+				stackOnMobile
+				style="margin-top: 1.25rem"
+			>
 				<div class="reading-columns">
 					<div>
 						<h3>core / 机制与系统</h3>
@@ -505,7 +529,7 @@ constraint: KV Cache consumes GPU memory</code></pre>
 						</ul>
 					</div>
 				</div>
-			</details>
+			</DisclosureCard>
 
 			<pre
 				class="pipeline"
@@ -635,54 +659,6 @@ scope: backend + hardware + model + version + workload</code></pre>
 		line-height: 1.85;
 	}
 
-	.profile-ledger,
-	.phase-ledger {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		margin: 0;
-		border-top: 1px solid rgb(var(--gray-light));
-		border-bottom: 1px solid rgb(var(--gray-light));
-		font-size: 0.72rem;
-	}
-
-	.profile-ledger > div,
-	.phase-ledger > div {
-		display: grid;
-		grid-template-columns: 6.5rem minmax(0, 1fr);
-		gap: 0.65rem;
-		padding: 0.5rem 0.65rem;
-		border-bottom: 1px dashed rgb(var(--gray-light));
-	}
-
-	.profile-ledger > div:nth-child(odd),
-	.phase-ledger > div:nth-child(odd) {
-		border-right: 1px dashed rgb(var(--gray-light));
-	}
-
-	.profile-ledger > div:nth-last-child(-n + 2),
-	.phase-ledger > div:nth-last-child(-n + 2) {
-		border-bottom: 0;
-	}
-
-	.profile-ledger dt,
-	.profile-ledger dd,
-	.phase-ledger dt,
-	.phase-ledger dd {
-		margin: 0;
-	}
-
-	.profile-ledger dt,
-	.phase-ledger dt {
-		color: var(--accent);
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-	}
-
-	.profile-ledger dd,
-	.phase-ledger dd {
-		color: rgb(var(--gray));
-	}
-
 	.about-section > h2 {
 		margin-top: 0;
 	}
@@ -703,69 +679,8 @@ scope: backend + hardware + model + version + workload</code></pre>
 		margin-bottom: 1rem;
 	}
 
-	.project,
-	.reading-list {
-		margin: 0.8rem 0;
-		border: 1px solid rgb(var(--gray-light));
-		border-radius: var(--card-radius);
-		background: rgb(255 255 255 / 28%);
-	}
-
-	.project {
-		border: 0;
-		box-shadow:
-			0 -2px 5px -2px rgb(15 23 42 / 16%),
-			0 4px 6px -1px rgb(0 0 0 / 10%),
-			0 2px 4px -2px rgb(0 0 0 / 10%);
-	}
-
-	.project summary,
-	.reading-list summary {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.8rem 0.95rem;
-		cursor: pointer;
-		list-style: none;
-		font-family: var(--font-heading);
-		font-weight: 700;
-	}
-
-	.project summary::-webkit-details-marker,
-	.reading-list summary::-webkit-details-marker {
-		display: none;
-	}
-
-	.project summary::before,
-	.reading-list summary::before {
-		content: '>';
-		margin-right: 0.2rem;
-		color: var(--accent);
-		font-family: var(--font-mono);
-	}
-
-	.project[open] summary::before,
-	.reading-list[open] summary::before {
-		content: 'v';
-	}
-
-	.project summary span,
-	.reading-list summary {
-		flex: 1;
-	}
-
-	.project summary small,
-	.reading-list summary span {
-		color: rgb(var(--gray));
-		font-family: var(--font-mono);
-		font-size: 0.68rem;
-		font-weight: 400;
-	}
-
 	.project-body {
 		padding: 0 1rem 1rem;
-		border-top: 1px dashed rgb(var(--gray-light));
 	}
 
 	.project-meta {
@@ -875,13 +790,8 @@ scope: backend + hardware + model + version + workload</code></pre>
 		font-size: 0.95rem;
 	}
 
-	.reading-list {
-		margin-top: 1.25rem;
-	}
-
 	.reading-columns {
 		padding: 0 1rem 1rem;
-		border-top: 1px dashed rgb(var(--gray-light));
 	}
 
 	.reading-columns h3 {
@@ -1117,37 +1027,11 @@ scope: backend + hardware + model + version + workload</code></pre>
 	}
 
 	@media (max-width: 620px) {
-		.project summary,
-		.reading-list summary {
-			align-items: flex-start;
-			flex-direction: column;
-			gap: 0.25rem;
-		}
-
 		.learning-grid,
 		.reading-columns,
 		.month-plan {
 			grid-template-columns: 1fr;
 			gap: 0.75rem;
-		}
-
-		.profile-ledger,
-		.phase-ledger {
-			grid-template-columns: 1fr;
-		}
-
-		.profile-ledger > div,
-		.profile-ledger > div:nth-child(odd),
-		.phase-ledger > div,
-		.phase-ledger > div:nth-child(odd) {
-			grid-template-columns: 5.8rem minmax(0, 1fr);
-			border-right: 0;
-			border-bottom: 1px dashed rgb(var(--gray-light));
-		}
-
-		.profile-ledger > div:nth-last-child(2),
-		.phase-ledger > div:nth-last-child(2) {
-			border-bottom: 1px dashed rgb(var(--gray-light));
 		}
 
 		.review-window {

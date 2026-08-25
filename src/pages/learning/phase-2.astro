@@ -1,8 +1,13 @@
 ---
 import type { CollectionEntry } from 'astro:content';
 import { getCollection } from 'astro:content';
+import DefinitionGrid from '../../components/DefinitionGrid.astro';
 import FormattedDate from '../../components/FormattedDate.astro';
 import LabDirectoryListing from '../../components/LabDirectoryListing.astro';
+import LearningTaskPanel from '../../components/LearningTaskPanel.astro';
+import NoticeBanner from '../../components/NoticeBanner.astro';
+import StatusBadge from '../../components/StatusBadge.astro';
+import SurfaceCard from '../../components/SurfaceCard.astro';
 import PageLayout from '../../layouts/PageLayout.astro';
 import {
 	collectLabArtifacts,
@@ -63,11 +68,11 @@ const description =
 			这不是完成后的成果陈列，而是一条可以中途加入的学习路线。你可以看到我现在做到哪里、为什么这样安排，下载同一份
 			Lab，并按相同的预测、实现、测量和验收过程跟着做。
 		</p>
-		<div class="release-note" role="note">
+		<NoticeBanner layout="wrap">
 			<strong>[灰度共学]</strong>
 			<span>共学页面会随学习进度变化，不出现在主页、文章归档、RSS 或 sitemap。</span>
 			<span>未完成的文章草稿仅通过未收录的 <code>/draft</code> 路由预览。</span>
-		</div>
+		</NoticeBanner>
 	</header>
 
 	<nav class="section-nav" aria-label="阶段共学页目录">
@@ -85,7 +90,7 @@ const description =
 			<h2>从这里开始</h2>
 		</div>
 
-		<dl class="milestone-ledger">
+		<DefinitionGrid class="milestone-ledger" variant="elevated" collapseAt="720">
 			<div>
 				<dt>period</dt>
 				<dd>{milestone.period}</dd>
@@ -102,7 +107,7 @@ const description =
 				<dt>final output</dt>
 				<dd>{milestone.finalArtifact}</dd>
 			</div>
-		</dl>
+		</DefinitionGrid>
 
 		<ol class="follow-steps">
 			<li>
@@ -126,46 +131,7 @@ const description =
 		</ol>
 	</section>
 
-	<section id="current" class="section-block current-block">
-		<div class="section-heading">
-			<p>01 / CURRENT</p>
-			<h2>现在跟做：{current.id} · {current.title}</h2>
-		</div>
-
-		<div class="current-summary">
-			<p><strong>时间：</strong>{current.period}</p>
-			<p><strong>唯一目标：</strong>{current.objective}</p>
-			<p><strong>问题：</strong>{current.question}</p>
-			<p><strong>运行前预测：</strong>{current.prediction}</p>
-		</div>
-
-		<div class="current-grid">
-			<div>
-				<h3>前置阅读 · 15 min</h3>
-				<ul>
-					{
-						current.preRead.map((reference: { label: string; href: string }) => (
-							<li>
-								<a href={reference.href}>{reference.label}</a>
-							</li>
-						))
-					}
-				</ul>
-				<p>每篇只记录一句：它确认或修正了哪条预测。</p>
-			</div>
-			<div>
-				<h3>交付与门禁</h3>
-				<p><strong>Artifact：</strong>{current.artifact}</p>
-				<p><strong>Acceptance：</strong>{current.acceptance}</p>
-				<p><a href={currentDocumentHref}>打开当前工作表 →</a></p>
-			</div>
-		</div>
-
-		<ol class="task-steps">
-			{current.steps.map((step: string) => <li>{step}</li>)}
-		</ol>
-		<p class="next-decision"><strong>下一步判断：</strong>{current.nextDecision}</p>
-	</section>
+	<LearningTaskPanel task={current} documentHref={currentDocumentHref} />
 
 	<section id="completed" class="section-block">
 		<div class="section-heading">
@@ -202,12 +168,12 @@ const description =
 			{
 				preview.experiments.map(
 					(experiment: { id: string; title: string; summary: string; href: string }) => (
-						<article>
+						<SurfaceCard as="article">
 							<span>{experiment.id} · evidence</span>
 							<h3>{experiment.title}</h3>
 							<p>{experiment.summary}</p>
 							<a href={experiment.href}>查看记录与原始文件 →</a>
-						</article>
+						</SurfaceCard>
 					),
 				)
 			}
@@ -227,7 +193,7 @@ const description =
 					{draftArticles.map(({ article, post }) => (
 						<li>
 							<div>
-								<span class="status draft">DRAFT · DEV ONLY</span>
+								<StatusBadge tone="draft">DRAFT · DEV ONLY</StatusBadge>
 								<a href={getDraftPostUrl(post)}>{post.data.title}</a>
 							</div>
 							<p>{article.role}</p>
@@ -238,9 +204,9 @@ const description =
 					))}
 				</ul>
 			) : (
-				<p class="draft-local-notice">
+				<NoticeBanner tone="draft">
 					文章草稿不在此处展示，可通过未收录的 <a href="/draft/">草稿预览</a>访问。
-				</p>
+				</NoticeBanner>
 			)
 		}
 
@@ -250,7 +216,7 @@ const description =
 				publishedArticles.map(({ article, post }) => (
 					<li>
 						<div>
-							<span class="status published">PUBLISHED</span>
+							<StatusBadge tone="published">PUBLISHED</StatusBadge>
 							<a href={getPostUrl(post)}>{post.data.title}</a>
 						</div>
 						<p>{article.role}</p>
@@ -274,9 +240,9 @@ const description =
 			>、
 			<code>docs/</code> 或 <code>results/</code>，再查看其中内容；不会在这里铺开所有文件名。
 		</p>
-		<div class="file-listing">
+		<SurfaceCard class="file-listing" padding="compact">
 			<LabDirectoryListing {labName} entries={rootEntries} parentHref={labHref} />
-		</div>
+		</SurfaceCard>
 	</section>
 
 	<footer class="page-boundary">
@@ -326,20 +292,6 @@ const description =
 		line-height: 1.8;
 	}
 
-	.release-note {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.25rem 0.8rem;
-		margin-top: 1rem;
-		padding: 0.7rem 0.8rem;
-		border: 1px dashed #94a3b8;
-		border-radius: var(--card-radius);
-		background: #f8fafc;
-		color: #475569;
-		font-size: 0.78rem;
-		line-height: 1.55;
-	}
-
 	.section-nav {
 		display: flex;
 		flex-wrap: wrap;
@@ -365,25 +317,9 @@ const description =
 		font-size: 1.35rem;
 	}
 
-	.milestone-ledger {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.75rem;
-		margin: 0;
-	}
-
-	.milestone-ledger div,
-	.current-grid > div,
-	.experiment-grid article {
-		padding: 0.85rem 0.95rem;
-		border: 1px solid #dbe3ec;
-		border-radius: var(--card-radius);
-		background: #f8fafc;
-	}
-
 	.milestone-ledger dt,
 	.record-meta,
-	.experiment-grid article > span {
+	.experiment-grid :global(article > span) {
 		color: #64748b;
 		font-family: var(--font-mono);
 		font-size: 0.7rem;
@@ -396,37 +332,23 @@ const description =
 		line-height: 1.6;
 	}
 
-	.follow-steps,
-	.task-steps {
+	.follow-steps {
 		margin: 1.25rem 0 0;
 		padding-left: 1.4rem;
 		line-height: 1.75;
 	}
 
-	.follow-steps li,
-	.task-steps li {
+	.follow-steps li {
 		margin: 0.55rem 0;
 	}
 
-	.current-block {
-		padding-right: 1rem;
-		padding-left: 1rem;
-		border-right: 2px solid #a5b4fc;
-		border-left: 2px solid #a5b4fc;
-		border-radius: var(--card-radius);
-		background: linear-gradient(90deg, #f8fafc 0, transparent 18%, transparent 82%, #f8fafc 100%);
-	}
-
-	.current-summary p,
-	.current-grid p,
-	.experiment-grid p,
+	.experiment-grid :global(p),
 	.article-list p,
 	.section-block > p,
 	.page-boundary p {
 		line-height: 1.65;
 	}
 
-	.current-grid,
 	.experiment-grid {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -434,21 +356,9 @@ const description =
 		margin-top: 1rem;
 	}
 
-	.current-grid h3,
-	.experiment-grid h3 {
+	.experiment-grid :global(h3) {
 		margin: 0 0 0.55rem;
 		font-size: 1rem;
-	}
-
-	.current-grid ul {
-		margin: 0;
-		padding-left: 1.2rem;
-	}
-
-	.next-decision {
-		margin: 1rem 0 0;
-		padding-top: 0.75rem;
-		border-top: 1px dashed #cbd5e1;
 	}
 
 	.evidence-line {
@@ -492,7 +402,7 @@ const description =
 		color: #475569;
 	}
 
-	.experiment-grid article a {
+	.experiment-grid :global(article a) {
 		font-family: var(--font-mono);
 		font-size: 0.75rem;
 	}
@@ -518,30 +428,8 @@ const description =
 		font-family: var(--font-mono);
 	}
 
-	.status {
-		padding: 0.08rem 0.35rem;
-		border: 1px solid #cbd5e1;
-		border-radius: var(--card-radius);
-		font-family: var(--font-mono);
-		font-size: 0.65rem;
-	}
-
-	.status.draft {
-		color: #7c3aed;
-		background: #f5f3ff;
-	}
-
-	.status.published {
-		color: #15803d;
-		background: #f0fdf4;
-	}
-
 	.file-listing {
 		margin-top: 1rem;
-		padding: 0.8rem;
-		border: 1px solid #cbd5e1;
-		border-radius: var(--card-radius);
-		background: #fff;
 	}
 
 	.page-boundary {
@@ -555,17 +443,8 @@ const description =
 	}
 
 	@media (max-width: 720px) {
-		.milestone-ledger,
-		.current-grid,
 		.experiment-grid {
 			grid-template-columns: 1fr;
-		}
-
-		.current-block {
-			margin-right: -0.4rem;
-			margin-left: -0.4rem;
-			padding-right: 0.8rem;
-			padding-left: 0.8rem;
 		}
 
 		.record-meta {

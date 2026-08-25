@@ -1,0 +1,152 @@
+---
+import SurfaceCard from './SurfaceCard.astro';
+
+interface Reference {
+	label: string;
+	href: string;
+}
+
+interface Task {
+	id: string;
+	title: string;
+	period: string;
+	objective: string;
+	question: string;
+	prediction: string;
+	preRead: Reference[];
+	artifact: string;
+	acceptance: string;
+	steps: string[];
+	nextDecision: string;
+}
+
+interface Props {
+	task: Task;
+	documentHref: string;
+	anchorId?: string;
+	eyebrow?: string;
+}
+
+const { task, documentHref, anchorId = 'current', eyebrow = '01 / CURRENT' } = Astro.props;
+---
+
+<SurfaceCard as="section" id={anchorId} class="learning-task-panel" padding="none">
+	<header class="learning-task-panel__heading">
+		<p>{eyebrow}</p>
+		<h2>现在跟做：{task.id} · {task.title}</h2>
+	</header>
+
+	<div class="learning-task-panel__summary">
+		<p><strong>时间：</strong>{task.period}</p>
+		<p><strong>唯一目标：</strong>{task.objective}</p>
+		<p><strong>问题：</strong>{task.question}</p>
+		<p><strong>运行前预测：</strong>{task.prediction}</p>
+	</div>
+
+	<div class="learning-task-panel__grid">
+		<SurfaceCard surface="soft">
+			<h3>前置阅读 · 15 min</h3>
+			<ul>
+				{
+					task.preRead.map((reference) => (
+						<li>
+							<a href={reference.href}>{reference.label}</a>
+						</li>
+					))
+				}
+			</ul>
+			<p>每篇只记录一句：它确认或修正了哪条预测。</p>
+		</SurfaceCard>
+		<SurfaceCard surface="soft">
+			<h3>交付与门禁</h3>
+			<p><strong>Artifact：</strong>{task.artifact}</p>
+			<p><strong>Acceptance：</strong>{task.acceptance}</p>
+			<p><a href={documentHref}>打开当前工作表 →</a></p>
+		</SurfaceCard>
+	</div>
+
+	<ol class="learning-task-panel__steps">
+		{task.steps.map((step) => <li>{step}</li>)}
+	</ol>
+	<p class="learning-task-panel__decision">
+		<strong>下一步判断：</strong>{task.nextDecision}
+	</p>
+</SurfaceCard>
+
+<style>
+	.learning-task-panel {
+		margin: 2rem 0;
+		padding: 2rem 1rem;
+		overflow: hidden;
+		scroll-margin-top: 1rem;
+	}
+
+	.learning-task-panel__heading {
+		margin-bottom: 1rem;
+	}
+
+	.learning-task-panel__heading p {
+		margin: 0;
+		color: #64748b;
+		font-family: var(--font-mono);
+		font-size: 0.72rem;
+		letter-spacing: 0.08em;
+	}
+
+	.learning-task-panel__heading h2 {
+		margin: 0.25rem 0 0;
+		font-size: 1.35rem;
+	}
+
+	.learning-task-panel__summary p,
+	.learning-task-panel__grid :global(p) {
+		line-height: 1.65;
+	}
+
+	.learning-task-panel__grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.8rem;
+		margin-top: 1rem;
+	}
+
+	.learning-task-panel__grid :global(h3) {
+		margin: 0 0 0.55rem;
+		font-size: 1rem;
+	}
+
+	.learning-task-panel__grid :global(ul) {
+		margin: 0;
+		padding-left: 1.2rem;
+	}
+
+	.learning-task-panel__steps {
+		margin: 1.25rem 0 0;
+		padding-left: 1.4rem;
+		line-height: 1.75;
+	}
+
+	.learning-task-panel__steps li {
+		margin: 0.55rem 0;
+	}
+
+	.learning-task-panel__decision {
+		margin: 1rem 0 0;
+		padding-top: 0.75rem;
+		border-top: 1px dashed #cbd5e1;
+		line-height: 1.65;
+	}
+
+	@media (max-width: 720px) {
+		.learning-task-panel {
+			margin-right: -0.4rem;
+			margin-left: -0.4rem;
+			padding-right: 0.8rem;
+			padding-left: 0.8rem;
+		}
+
+		.learning-task-panel__grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

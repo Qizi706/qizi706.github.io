@@ -1,5 +1,6 @@
 ---
 import { getCollection } from 'astro:content';
+import DefinitionGrid from '../components/DefinitionGrid.astro';
 import FormattedDate from '../components/FormattedDate.astro';
 import LearningStage from '../components/LearningStage.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
@@ -190,7 +191,7 @@ const currentStage = learningProgress.current;
 		<h2 id="tomorrow-heading">明日学习</h2>
 		<div class="tomorrow-milestone" aria-label="当前阶段目标">
 			<p><strong>{learningMilestone.title}</strong> · {learningMilestone.goal}</p>
-			<dl>
+			<DefinitionGrid collapseAt="520">
 				<div>
 					<dt>core route</dt>
 					<dd>{learningMilestone.coreRoute}</dd>
@@ -199,7 +200,7 @@ const currentStage = learningProgress.current;
 					<dt>final output</dt>
 					<dd>{learningMilestone.finalArtifact}</dd>
 				</div>
-			</dl>
+			</DefinitionGrid>
 		</div>
 		{
 			featuredCompletedStages.map(
@@ -225,7 +226,12 @@ const currentStage = learningProgress.current;
 				{currentStage.objective}
 			</p>
 
-			<dl class="tomorrow-contract" aria-label="明日学习契约">
+			<DefinitionGrid
+				class="tomorrow-contract"
+				variant="elevated"
+				collapseAt="520"
+				aria-label="明日学习契约"
+			>
 				<div>
 					<dt>question</dt>
 					<dd>{currentStage.question}</dd>
@@ -260,7 +266,7 @@ const currentStage = learningProgress.current;
 					<dt>gate</dt>
 					<dd>{currentStage.acceptance}</dd>
 				</div>
-			</dl>
+			</DefinitionGrid>
 
 			<ol class="tomorrow-steps">
 				{currentStage.steps.map((step: string) => <li>{step}</li>)}
@@ -435,10 +441,7 @@ const currentStage = learningProgress.current;
 		border: 0;
 		border-radius: var(--card-radius);
 		background: rgb(248 250 252 / 60%);
-		box-shadow:
-			0 -2px 5px -2px rgb(15 23 42 / 16%),
-			0 4px 6px -1px rgb(0 0 0 / 10%),
-			0 2px 4px -2px rgb(0 0 0 / 10%);
+		box-shadow: var(--elevated-card-shadow);
 	}
 
 	.tomorrow-milestone p {
@@ -446,13 +449,6 @@ const currentStage = learningProgress.current;
 		color: #334155;
 		font-size: 0.86rem;
 		line-height: 1.6;
-	}
-
-	.tomorrow-milestone dl {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.75rem;
-		margin: 0;
 	}
 
 	.tomorrow-milestone dt {
@@ -468,24 +464,6 @@ const currentStage = learningProgress.current;
 		color: #334155;
 		font-size: 0.8rem;
 		line-height: 1.5;
-	}
-
-	.tomorrow-contract {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.55rem;
-		margin: 0.8rem 0;
-	}
-
-	.tomorrow-contract div {
-		padding: 0.55rem 0.65rem;
-		border: 0;
-		border-radius: var(--card-radius);
-		background: rgb(248 250 252 / 60%);
-		box-shadow:
-			0 -2px 5px -2px rgb(15 23 42 / 16%),
-			0 4px 6px -1px rgb(0 0 0 / 10%),
-			0 2px 4px -2px rgb(0 0 0 / 10%);
 	}
 
 	.tomorrow-contract dt {
@@ -655,11 +633,6 @@ const currentStage = learningProgress.current;
 	}
 
 	@media (max-width: 520px) {
-		.tomorrow-milestone dl,
-		.tomorrow-contract {
-			grid-template-columns: 1fr;
-		}
-
 		.draft-heading {
 			align-items: flex-start;
 			flex-direction: column;

@@ -1,0 +1,65 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends Omit<HTMLAttributes<'div'>, 'class'> {
+	as?: 'div' | 'article' | 'aside' | 'section';
+	surface?: 'elevated' | 'outlined' | 'soft';
+	padding?: 'none' | 'compact' | 'regular';
+	class?: string;
+}
+
+const {
+	as: Tag = 'div',
+	surface = 'elevated',
+	padding = 'regular',
+	class: className,
+	...attributes
+} = Astro.props;
+---
+
+<Tag
+	class:list={[
+		'surface-card',
+		`surface-card--${surface}`,
+		`surface-card--padding-${padding}`,
+		className,
+	]}
+	{...attributes}
+>
+	<slot />
+</Tag>
+
+<style>
+	.surface-card {
+		border-radius: var(--card-radius);
+	}
+
+	.surface-card--elevated {
+		border: 0;
+		background: rgb(248 250 252 / 60%);
+		box-shadow: var(
+			--elevated-card-shadow,
+			0 -2px 5px -2px rgb(15 23 42 / 16%),
+			0 4px 6px -1px rgb(0 0 0 / 10%),
+			0 2px 4px -2px rgb(0 0 0 / 10%)
+		);
+	}
+
+	.surface-card--outlined {
+		border: 1px solid rgb(var(--gray-light));
+		background: #f8fafc;
+	}
+
+	.surface-card--soft {
+		border: 0;
+		background: #f1f5f9;
+	}
+
+	.surface-card--padding-compact {
+		padding: 0.7rem 0.8rem;
+	}
+
+	.surface-card--padding-regular {
+		padding: 0.85rem 0.95rem;
+	}
+</style>

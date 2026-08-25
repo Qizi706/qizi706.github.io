@@ -1,0 +1,57 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends Omit<HTMLAttributes<'div'>, 'class'> {
+	tone?: 'neutral' | 'draft';
+	layout?: 'block' | 'wrap';
+	class?: string;
+}
+
+const {
+	tone = 'neutral',
+	layout = 'block',
+	class: className,
+	role = 'note',
+	...attributes
+} = Astro.props;
+---
+
+<div
+	class:list={['notice-banner', `notice-banner--${tone}`, `notice-banner--${layout}`, className]}
+	{role}
+	{...attributes}
+>
+	<slot />
+</div>
+
+<style>
+	.notice-banner {
+		margin-top: 1rem;
+		padding: 0.7rem 0.8rem;
+		border-radius: var(--card-radius);
+		font-size: 0.78rem;
+		line-height: 1.55;
+	}
+
+	.notice-banner--wrap {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.8rem;
+	}
+
+	.notice-banner--neutral {
+		color: #475569;
+		background: #f8fafc;
+		box-shadow: var(
+			--elevated-card-shadow,
+			0 -2px 5px -2px rgb(15 23 42 / 16%),
+			0 4px 6px -1px rgb(0 0 0 / 10%),
+			0 2px 4px -2px rgb(0 0 0 / 10%)
+		);
+	}
+
+	.notice-banner--draft {
+		color: #6d28d9;
+		background: #f5f3ff;
+	}
+</style>
