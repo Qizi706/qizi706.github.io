@@ -51,10 +51,10 @@ bash -o pipefail scripts/install_vllm_metal.sh 2>&1 |
 
 只有同时完成下面四项，才把 Phase 1 标记为通过：
 
-1. 闭卷画出 API → Tokenizer → Scheduler → Prefill → KV Cache → Decode → Response。
-2. 从干净终端启动一个本地服务，并保存可以确认模型、Runtime 和 Backend 的日志与响应。
-3. 复跑至少一个长度扫描点，解释 Warmup、重复次数、控制变量和计时边界。
-4. 明确 Ollama 的 `eval_duration / eval_count` 只是近似 TPOT，不是严格流式 ITL；不外推并发或尾延迟结论。
+- 闭卷画出 API → Tokenizer → Scheduler → Prefill → KV Cache → Decode → Response。
+- 从干净终端启动一个本地服务，并保存可以确认模型、Runtime 和 Backend 的日志与响应。
+- 复跑至少一个长度扫描点，解释 Warmup、重复次数、控制变量和计时边界。
+- 明确 Ollama 的 `eval_duration / eval_count` 只是近似 TPOT，不是严格流式 ITL；不外推并发或尾延迟结论。
 
 ## 已冻结的实验边界
 

@@ -2,7 +2,7 @@
 
 状态：**Current**。当前任务与评分命令以 [assignments/m2-b.md](../../../assignments/m2-b.md) 为准；阶段依赖与停止条件见 [docs/roadmap.md](../../roadmap.md)。
 
-### 1. 学习合同
+### 学习合同
 
 ```text
 Question: 给定 Q/K/V=[B,H,T,D_head]，怎样证明批量矩阵乘法没有混合 Batch 或 Head，并且每个位置只能读取历史 Token？
@@ -23,14 +23,14 @@ Feedback: unittest 的第一次失败、手算非零坐标、完整回归和闭�
 Next decision: 全部通过后进入 M2-C Cached MHA；否则只修正 M2-B。
 ```
 
-### 2. 本轮边界
+### 本轮边界
 
 - 只处理 `H_q = H_kv`，不做 GQA Head 映射。
 - 输入使用 M2-A2 已产生的四维 Q/K/V，不重复实现投影。
 - 返回逐 Head Output 与 Weight，不合并 Head，不做 Output Projection。
 - 不创建或追加 KV Cache，不计时，不讨论性能收益。
 
-### 3. 固定输入与运行前预测
+### 固定输入与运行前预测
 
 固定互不相等的关键维度：
 
@@ -61,33 +61,33 @@ Score[b=?,h=?,i=?,j=?] =
 Output[b=?,h=?,i=?,d=?] =
 ```
 
-### 4. 15 分钟前置阅读
+### 15 分钟前置阅读
 
 只读本轮第一段实现会使用的内容，每处留一句确认或修正：
 
-1. NumPy [`matmul`](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html)：只看 N 维数组如何把最后两维当矩阵，并广播前导维。
-2. NumPy [`swapaxes`](https://numpy.org/doc/stable/reference/generated/numpy.swapaxes.html)：只看交换最后两个轴后的 Shape。
-3. NumPy [`triu`](https://numpy.org/doc/stable/reference/generated/numpy.triu.html)：只看 `k=1` 如何选出严格上三角。
+- Harvard [The Annotated Transformer](https://nlp.seas.harvard.edu/annotated-transformer/)：只看 Scaled Dot-Product Attention 的缩放原因、Mask 位置、Softmax 轴，以及 Multi-Head Attention 第 2 步。
+- NumPy [`matmul`](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html)：只看 stacks of matrices 如何把最后两维当矩阵，并保留 `[B,H]` 前导维。
+- NumPy [`triu`](https://numpy.org/doc/stable/reference/generated/numpy.triu.html)：只看 `k=1` 如何选出严格上三角。
 
 ```text
+Annotated Transformer 确认或修正了：
 matmul 确认或修正了：
-swapaxes 确认或修正了：
 triu 确认或修正了：
 ```
 
-### 5. 先写会失败的测试
+### 先写会失败的测试
 
 在 `tests/test_multi_head.py` 新增测试，Oracle 不得调用待测函数或生产 `softmax`：
 
-1. Shape：检查 Score/Weight 与逐 Head Output 的 Shape。
-2. 元素：用标量循环独立计算至少两个非零坐标的 Score、Weight 与 Output。
-3. Causal：检查 Weight 严格上三角为 0；修改 Future K/V 后，当前位置及之前的 Output 不变。
-4. 隔离：修改一个 Head 或一个 Batch，只允许对应切片变化。
-5. 契约：用表驱动测试覆盖输入不是四维、Q/K/V 的 Batch/Head/Token/D_head 不匹配，以及空 Token/Head Width，并断言在矩阵乘法前抛出 `ValueError`。
+- Shape：检查 Score/Weight 与逐 Head Output 的 Shape。
+- 元素：用标量循环独立计算至少两个非零坐标的 Score、Weight 与 Output。
+- Causal：检查 Weight 严格上三角为 0；修改 Future K/V 后，当前位置及之前的 Output 不变。
+- 隔离：修改一个 Head 或一个 Batch，只允许对应切片变化。
+- 契约：用表驱动测试覆盖输入不是四维、Q/K/V 的 Batch/Head/Token/D_head 不匹配，以及空 Token/Head Width，并断言在矩阵乘法前抛出 `ValueError`。
 
 第一次失败必须原样保存在“运行后记录”，不能在实现通过后补写一个更好看的错误。
 
-### 6. 最小实现边界
+### 最小实现边界
 
 先实现一个可观察的教育接口：
 
@@ -111,7 +111,7 @@ Output              [B,H,T,D_head]
 
 必须使用数值稳定 Softmax：先减去最后一维最大值，再 `exp` 和归一化。不要加入 Cached Decode、GQA 映射、`merge_heads` 或 Output Projection。
 
-### 7. 120 分钟执行顺序
+### 120 分钟执行顺序
 
 - **10 min**：填写 Shape、坐标、Softmax Axis 与隔离性预测。
 - **15 min**：完成三处定向阅读，各留一句确认或修正。
@@ -121,7 +121,7 @@ Output              [B,H,T,D_head]
 - **10 min**：运行 M2-B 定向测试与完整回归。
 - **10 min**：关闭代码，重做坐标推导并解释缩放与归一化轴。
 
-### 8. 验证命令
+### 验证命令
 
 先运行当前练习的公开评分：
 
@@ -140,7 +140,7 @@ make test
 `make GRADEFLAGS=m2-b grade` 等价。公开评分器固定 BLAS 线程并从
 `grader_tests/test_m2_b.py` 验证 Shape、标量 Oracle、Mask、归一化、隔离性和输入契约。
 
-### 9. 运行后记录
+### 运行后记录
 
 ```text
 实际 Score/Weight/Output Shape：
@@ -156,7 +156,7 @@ Head/Batch 是否隔离：
 闭卷解释：为什么除以 sqrt(D_head)，Softmax 为什么沿最后一个 Axis：
 ```
 
-### 10. M2-B 验收
+### M2-B 验收
 
 **待完成**
 

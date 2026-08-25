@@ -871,8 +871,8 @@ Q/K/V=[2,3,4,5]
 
 阅读范围固定，不展开教程：
 
-- NumPy [`matmul`](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html)：只看 N 维数组如何把最后两维当矩阵，并广播前导维；
-- NumPy [`swapaxes`](https://numpy.org/doc/stable/reference/generated/numpy.swapaxes.html)：只看交换最后两轴后的 Shape；
+- Harvard [The Annotated Transformer](https://nlp.seas.harvard.edu/annotated-transformer/)：只看 Scaled Dot-Product Attention 的缩放、Mask、Softmax，以及 Multi-Head Attention 第 2 步；
+- NumPy [`matmul`](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html)：只看 stacks of matrices 如何保留 `[B,H]` 前导维；
 - NumPy [`triu`](https://numpy.org/doc/stable/reference/generated/numpy.triu.html)：只看 `k=1` 如何选择严格上三角。
 
 每份材料只留一句“它确认或修正了哪条预测”。预测必须在阅读前保存，15 分钟到点后立即进入测试。

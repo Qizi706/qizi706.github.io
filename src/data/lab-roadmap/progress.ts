@@ -26,16 +26,19 @@ const taskDetails = {
 			'固定 B=2、H=3、T=4、D_head=5 时，Score/Weight=[2,3,4,4]、逐 Head 输出=[2,3,4,5]；修改未来 Token、其他 Head 或其他 Batch 不应污染目标位置。',
 		preRead: [
 			{
-				label: 'NumPy matmul stacked matrices',
+				label: 'Harvard · Scaled Dot-Product Attention',
+				href: 'https://nlp.seas.harvard.edu/annotated-transformer/',
+				focus: '只看缩放原因、Mask 位置、Softmax 轴和 MHA 第 2 步。',
+			},
+			{
+				label: 'NumPy · matmul',
 				href: 'https://numpy.org/doc/stable/reference/generated/numpy.matmul.html',
+				focus: '只看 stacks of matrices 的最后两轴规则。',
 			},
 			{
-				label: 'NumPy swapaxes',
-				href: 'https://numpy.org/doc/stable/reference/generated/numpy.swapaxes.html',
-			},
-			{
-				label: 'NumPy triu',
+				label: 'NumPy · triu',
 				href: 'https://numpy.org/doc/stable/reference/generated/numpy.triu.html',
+				focus: '只看 k=1 如何选择严格未来位置。',
 			},
 		],
 		artifact:
@@ -44,7 +47,7 @@ const taskDetails = {
 			'Score、Weight 与逐 Head 输出 Shape 正确；至少两个非零坐标匹配独立标量 Oracle；因果性、Batch/Head 隔离、输入契约与完整回归全部通过；关闭代码后能解释缩放与 Softmax 轴。',
 		steps: [
 			'10 min：关闭实现，填写 Q@K^T、Mask、Softmax 与 Output 的 Shape/轴预测。',
-			'15 min：只读 matmul、swapaxes 与 triu 的相关段落，各留一句确认或修正。',
+			'15 min：只读 Annotated Transformer、matmul 与 triu 的指定段落，各留一句确认或修正。',
 			'30 min：先写独立标量 Oracle、Future Token、Head/Batch 隔离和非法 Shape 测试，保存第一次失败。',
 			'30 min：实现无 Cache MHA 核心，只返回逐 Head Output 与 Weight，不合并 Head。',
 			'15 min：只依据失败信息修正 Score、Mask 或 Softmax Axis。',

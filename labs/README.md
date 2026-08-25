@@ -57,9 +57,9 @@ npm run build
 
 ## 新增 Lab
 
-1. 先在实验路线中定义 Prerequisite、Question、Artifact、Checkoff 和 Unlocks。
-2. 建立 `labs/<slug>/lab.json`、稳定的 `README.md` 与 `assignments/`，在 `usage` 中声明网站使用入口。
-3. 只把明确可公开的顶层路径加入 `publish`。
-4. 为关键脚本、原始数据和说明文件增加 `checks.required`。
-5. 运行 `npm run labs:check && npm run labs:publish`。
-6. 打开 `/labs/<slug>/`；发布器会生成使用说明、目录页和整包下载，Markdown 由通用 `read` 路由渲染，其余文件直接打开原始产物。
+- 先在实验路线中定义 Prerequisite、Question、Artifact、Checkoff 和 Unlocks。
+- 建立 `labs/<slug>/lab.json`、稳定的 `README.md` 与 `assignments/`，在 `usage` 中声明网站使用入口。
+- 只把明确可公开的顶层路径加入 `publish`。
+- 为关键脚本、原始数据和说明文件增加 `checks.required`。
+- 运行 `npm run labs:check && npm run labs:publish`。
+- 打开 `/labs/<slug>/`；发布器会生成使用说明、目录页和整包下载，Markdown 由通用 `read` 路由渲染，其余文件直接打开原始产物。

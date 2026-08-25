@@ -1,8 +1,5 @@
 ---
-interface Reference {
-	label: string;
-	href: string;
-}
+import type { LabReference } from '../data/lab-roadmap';
 
 interface Task {
 	id: string;
@@ -11,7 +8,7 @@ interface Task {
 	objective: string;
 	question: string;
 	prediction: string;
-	preRead: Reference[];
+	preRead: LabReference[];
 	artifact: string;
 	acceptance: string;
 	steps: string[];
@@ -47,6 +44,7 @@ const { task, documentHref, anchorId = 'current' } = Astro.props;
 			task.preRead.map((reference) => (
 				<li>
 					<a href={reference.href}>{reference.label}</a>
+					<span> — {reference.focus}</span>
 				</li>
 			))
 		}
@@ -54,9 +52,9 @@ const { task, documentHref, anchorId = 'current' } = Astro.props;
 	<p>每篇只记录一句：它确认或修正了哪条预测。<a href={documentHref}>打开当前工作表 →</a></p>
 
 	<h3>执行顺序</h3>
-	<ol>
+	<ul>
 		{task.steps.map((step) => <li>{step}</li>)}
-	</ol>
+	</ul>
 	<p><strong>下一步判断：</strong>{task.nextDecision}</p>
 </section>
 
@@ -99,15 +97,27 @@ const { task, documentHref, anchorId = 'current' } = Astro.props;
 		font-size: 0.95rem;
 	}
 
-	.learning-task-panel ul,
-	.learning-task-panel ol {
+	.learning-task-panel ul {
 		margin: 0;
-		padding-left: 1.3rem;
+		padding-left: 1.1rem;
+		list-style: none;
 		line-height: 1.7;
 	}
 
 	.learning-task-panel li {
+		position: relative;
 		margin: 0.25rem 0;
+	}
+
+	.learning-task-panel li::before {
+		position: absolute;
+		left: -1.1rem;
+		content: '-';
+		color: #64748b;
+	}
+
+	.learning-task-panel li span {
+		color: #64748b;
 	}
 
 	.learning-task-panel > p {

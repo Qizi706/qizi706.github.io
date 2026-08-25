@@ -18,7 +18,7 @@
 
 正常执行链是：**路线页定位当前 Gate → Assignment 执行 → Gate 工作表记录 → 测试与 results 验收**。系统文章解释机制，实验文章总结已经完成的证据；两者都不决定当前进度。
 
-## 0. 当前路线快照
+## 当前路线快照
 
 ### 已有证据
 
@@ -59,9 +59,9 @@ M2-B 通过验收前不进入 KV Cache 或 GQA 映射；M2 通过后立即进入
 M2 -> S0 -> S1 -> S2 -> S3 -> S4 -> F0
 ```
 
-## 1. 原始目标与两条完成线
+## 原始目标与两条完成线
 
-### 1.1 一个月核心目标
+### 一个月核心目标
 
 核心问题不是“哪个模型跑分最高”，而是：
 
@@ -73,7 +73,7 @@ M2 -> S0 -> S1 -> S2 -> S3 -> S4 -> F0
 
 标题中的 Batch Size 只是对外表达。实验内部必须区分 Client Concurrency、Active Sequences、`max_num_seqs`、`max_num_batched_tokens` 与每轮实际 Scheduled Sequences。
 
-### 1.2 十个核心知识点
+### 十个核心知识点
 
 | 原始要求                      | 当前证据                                          | 阶段末还要补什么                    |
 | ----------------------------- | ------------------------------------------------- | ----------------------------------- |
@@ -90,17 +90,17 @@ M2 -> S0 -> S1 -> S2 -> S3 -> S4 -> F0
 
 文章是 `Explained` 的证据，不自动等于掌握。F0 必须在不看文章时重新回答，并用 S0–S4 的真实产物校正概念模型。
 
-### 1.3 阶段 2 核心完成
+### 阶段 2 核心完成
 
 只有同时满足下面五项，才标记 **Phase 2 Core Complete**：
 
-1. **Explained**：闭卷解释上表十个核心知识点，以及 TTFT、TPOT、吞吐和显存指标。
-2. **Implemented**：M2 的 MHA/GQA、Cache 等价性和 KV 容量公式通过正确性门禁；到此停止扩展 Toy Transformer。
-3. **Measured**：完成 S0–S4，分别控制 Input Length、Client Concurrency 与 Scheduler Budget，保留每请求数据、服务端指标和内存记录。
-4. **Reviewed**：至少用内置 `bench serve`、独立复跑和原始数据重建挑战一次汇总结论。
-5. **Delivered**：完成最终 vLLM 性能文章；每条结论注明版本、模型、Backend、硬件、负载与证据边界。
+- **Explained**：闭卷解释上表十个核心知识点，以及 TTFT、TPOT、吞吐和显存指标。
+- **Implemented**：M2 的 MHA/GQA、Cache 等价性和 KV 容量公式通过正确性门禁；到此停止扩展 Toy Transformer。
+- **Measured**：完成 S0–S4，分别控制 Input Length、Client Concurrency 与 Scheduler Budget，保留每请求数据、服务端指标和内存记录。
+- **Reviewed**：至少用内置 `bench serve`、独立复跑和原始数据重建挑战一次汇总结论。
+- **Delivered**：完成最终 vLLM 性能文章；每条结论注明版本、模型、Backend、硬件、负载与证据边界。
 
-### 1.4 进阶扩展
+### 进阶扩展
 
 下面内容有价值，但不阻塞一个月核心交付：
 
@@ -111,7 +111,7 @@ M2 -> S0 -> S1 -> S2 -> S3 -> S4 -> F0
 
 `Reviewed` 的外部反馈和 `Transferred` 的跨环境验证在进阶扩展中继续提高证据等级，不能反向把尚未完成的 S0–S4 写成已掌握。
 
-## 2. 每次学习都使用同一个契约
+## 每次学习都使用同一个契约
 
 开始任何实验前，新建或补充一段记录：
 
@@ -161,7 +161,7 @@ question
 - 客户端相关性不能直接写成 Scheduler 因果。
 - 没有证据时使用 `Inconclusive` 或 `Not reached`。
 
-## 3. 总路线
+## 总路线
 
 ### 核心路线：一个月内完成
 
@@ -269,13 +269,13 @@ def test_batched_path_matches_oracle_for_batch_size_scan(self) -> None:
 
 **已完成**
 
-1. 构造最大输入 `[8, T, D_model]`。
-2. 依次取 `x[:1]`、`x[:2]`、`x[:4]`、`x[:8]`。
-3. 每个 B 使用 `decode_without_cache` 逐 Sequence 生成 Oracle。
-4. 调用 `batched_cached_attention`。
-5. 使用 `subTest(batch_size=B)` 标记当前 Case。
-6. 使用 `assert_allclose` 检查数值。
-7. 检查以下 Shape：
+- 构造最大输入 `[8, T, D_model]`。
+- 依次取 `x[:1]`、`x[:2]`、`x[:4]`、`x[:8]`。
+- 每个 B 使用 `decode_without_cache` 逐 Sequence 生成 Oracle。
+- 调用 `batched_cached_attention`。
+- 使用 `subTest(batch_size=B)` 标记当前 Case。
+- 使用 `assert_allclose` 检查数值。
+- 检查以下 Shape：
 
 ```text
 output:  [B, T, D_v]
@@ -479,8 +479,8 @@ B | Batch P50 | Batch P95 | P50/B | Positions/s | Sequential/Batch
 
 不要用双轴图隐藏尺度差异。分别画：
 
-1. `B -> Batch P50/P95`
-2. `B -> Positions/s`
+- `B -> Batch P50/P95`
+- `B -> Positions/s`
 
 如果需要 Matplotlib：
 
@@ -639,11 +639,11 @@ Output:       [2,3,4,5]
 
 **待完成**
 
-1. 用 `Q @ swapaxes(K, -1, -2) / sqrt(D_head)` 独立计算每个 Batch/Head 的 Score。
-2. 添加上三角 Causal Mask，让 Future Token 权重为零。
-3. 只沿最后一个历史 Token Axis 做稳定 Softmax。
-4. 用 `Weight @ V` 得到逐 Head Output。
-5. 返回逐 Head Output 与 Weight；本 Gate 不合并 Head。
+- 用 `Q @ swapaxes(K, -1, -2) / sqrt(D_head)` 独立计算每个 Batch/Head 的 Score。
+- 添加上三角 Causal Mask，让 Future Token 权重为零。
+- 只沿最后一个历史 Token Axis 做稳定 Softmax。
+- 用 `Weight @ V` 得到逐 Head Output。
+- 返回逐 Head Output 与 Weight；本 Gate 不合并 Head。
 
 先只实现 `H_q=H_kv`。
 
@@ -1104,18 +1104,18 @@ results/serving/
 
 不看文章回答：
 
-1. Transformer 推理的 Prefill 与 Decode 分别执行什么？
-2. Attention 为什么需要 KV Cache，它节省了什么又增加了什么？
-3. Prefill 为什么更容易利用并行计算？
-4. Decode 为什么更容易受内存带宽、Batching 和调度影响？
-5. Client Concurrency、Active Sequences、Scheduler Budget 与实际 Batch 有什么区别？
-6. Continuous Batching 怎样提高设备利用率，又会引入什么竞争？
-7. Prefix Caching 复用了什么，为什么主要影响重复 Prefill？
-8. Speculative Decoding 怎样提出并验证候选，收益取决于什么？
-9. Chunked Prefill 为什么可能改善 Decode ITL，又会付出什么代价？
-10. 模型权重、激活、KV Cache、临时 Buffer 与 Runtime 开销怎样组成显存占用？
-11. TTFT、TPOT、ITL、E2E 和三种 Throughput 分别测量什么？
-12. 为什么 LLM Serving 不是单纯“模型越快越好”？
+- Transformer 推理的 Prefill 与 Decode 分别执行什么？
+- Attention 为什么需要 KV Cache，它节省了什么又增加了什么？
+- Prefill 为什么更容易利用并行计算？
+- Decode 为什么更容易受内存带宽、Batching 和调度影响？
+- Client Concurrency、Active Sequences、Scheduler Budget 与实际 Batch 有什么区别？
+- Continuous Batching 怎样提高设备利用率，又会引入什么竞争？
+- Prefix Caching 复用了什么，为什么主要影响重复 Prefill？
+- Speculative Decoding 怎样提出并验证候选，收益取决于什么？
+- Chunked Prefill 为什么可能改善 Decode ITL，又会付出什么代价？
+- 模型权重、激活、KV Cache、临时 Buffer 与 Runtime 开销怎样组成显存占用？
+- TTFT、TPOT、ITL、E2E 和三种 Throughput 分别测量什么？
+- 为什么 LLM Serving 不是单纯“模型越快越好”？
 
 ## F0 Acceptance
 
@@ -1176,11 +1176,11 @@ long:  input=2048, output=32
 
 **待完成**
 
-1. 先让短请求稳定 Decode。
-2. 延迟注入一个长 Prompt。
-3. 保存长请求 Arrival。
-4. 对齐短请求 ITL 时间线。
-5. 独立重复至少三次。
+- 先让短请求稳定 Decode。
+- 延迟注入一个长 Prompt。
+- 保存长请求 Arrival。
+- 对齐短请求 ITL 时间线。
+- 独立重复至少三次。
 
 ### S5.4 Chunked Prefill 对照
 

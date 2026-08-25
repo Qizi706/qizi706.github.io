@@ -16,7 +16,7 @@ const statusLabels = {
 };
 ---
 
-<ol class:list={['roadmap-route', { 'roadmap-route--compact': compact }]} aria-label={label}>
+<ul class:list={['roadmap-route', { 'roadmap-route--compact': compact }]} aria-label={label}>
 	{
 		units.map((unit) => (
 			<li class:list={['roadmap-unit', `is-${unit.status}`]}>
@@ -34,20 +34,34 @@ const statusLabels = {
 				<p class="roadmap-unit__question">{unit.question}</p>
 
 				{!compact && (
-					<dl class="roadmap-unit__contract">
-						<dt>Prerequisite</dt>
-						<dd>{unit.dependsOn}</dd>
-						<dt>Work</dt>
-						<dd>{unit.work}</dd>
-						<dt>Artifact</dt>
-						<dd>{unit.artifact}</dd>
-						<dt>Checkoff</dt>
-						<dd>{unit.acceptance}</dd>
-					</dl>
+					<>
+						<dl class="roadmap-unit__contract">
+							<dt>Prerequisite</dt>
+							<dd>{unit.dependsOn}</dd>
+							<dt>Work</dt>
+							<dd>{unit.work}</dd>
+							<dt>Artifact</dt>
+							<dd>{unit.artifact}</dd>
+							<dt>Checkoff</dt>
+							<dd>{unit.acceptance}</dd>
+						</dl>
+						<details class="roadmap-reading">
+							<summary>前置阅读 · 不超过 15 min</summary>
+							<ul>
+								{unit.preRead.map((reference) => (
+									<li>
+										<a href={reference.href}>{reference.label}</a>
+										<span> — {reference.focus}</span>
+									</li>
+								))}
+							</ul>
+							<p>只记录它确认或修正了哪条运行前预测；读完立即进入任务。</p>
+						</details>
+					</>
 				)}
 
 				{!compact && unit.parts && (
-					<ol class="roadmap-parts" aria-label={`${unit.id} 子任务`}>
+					<ul class="roadmap-parts" aria-label={`${unit.id} 子任务`}>
 						{unit.parts.map((part) => (
 							<li>
 								<strong>
@@ -55,9 +69,20 @@ const statusLabels = {
 								</strong>
 								<span> — {part.checkoff}</span>
 								<span>（{statusLabels[part.status]}）</span>
+								<details class="roadmap-part-reading">
+									<summary>本任务前置阅读</summary>
+									<ul>
+										{part.preRead.map((reference) => (
+											<li>
+												<a href={reference.href}>{reference.label}</a>
+												<span> — {reference.focus}</span>
+											</li>
+										))}
+									</ul>
+								</details>
 							</li>
 						))}
-					</ol>
+					</ul>
 				)}
 
 				{compact ? (
@@ -74,7 +99,7 @@ const statusLabels = {
 			</li>
 		))
 	}
-</ol>
+</ul>
 
 <style>
 	.roadmap-route {
@@ -143,18 +168,68 @@ const statusLabels = {
 
 	.roadmap-parts {
 		margin: 0.75rem 0 0;
-		padding-left: 1.35rem;
+		padding-left: 1.1rem;
+		list-style: none;
 		color: #475569;
 		font-size: 0.88rem;
 		line-height: 1.65;
 	}
 
-	.roadmap-parts li {
+	.roadmap-parts > li,
+	.roadmap-reading li,
+	.roadmap-part-reading li {
+		position: relative;
 		margin: 0.25rem 0;
+	}
+
+	.roadmap-parts > li::before,
+	.roadmap-reading li::before,
+	.roadmap-part-reading li::before {
+		position: absolute;
+		left: -1.1rem;
+		content: '-';
+		color: #64748b;
 	}
 
 	.roadmap-parts span {
 		color: #64748b;
+	}
+
+	.roadmap-reading,
+	.roadmap-part-reading {
+		margin-top: 0.7rem;
+		color: #475569;
+		font-size: 0.86rem;
+		line-height: 1.6;
+	}
+
+	.roadmap-reading summary,
+	.roadmap-part-reading summary {
+		width: fit-content;
+		color: #334155;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.roadmap-reading ul,
+	.roadmap-part-reading ul {
+		margin: 0.45rem 0 0;
+		padding-left: 1.1rem;
+		list-style: none;
+	}
+
+	.roadmap-reading li span,
+	.roadmap-part-reading li span,
+	.roadmap-reading p {
+		color: #64748b;
+	}
+
+	.roadmap-reading p {
+		margin: 0.45rem 0 0;
+	}
+
+	.roadmap-part-reading {
+		margin: 0.2rem 0 0.55rem;
 	}
 
 	.roadmap-unit__next,

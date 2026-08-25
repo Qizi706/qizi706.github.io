@@ -140,12 +140,12 @@ output   [B,H,T,D_head]
 
 你的实现必须满足：
 
-1. Score 使用 `Q @ K^T`，并除以 `sqrt(D_head)`。
-2. 位置 `i` 只能看到 `0..i`，严格上三角的 Weight 必须为 0。
-3. Softmax 沿最后一个历史 Token 轴计算，并使用减最大值的稳定写法。
-4. Batch 与 Head 只是前导维，任何运算都不能把它们混在一起。
-5. 非四维输入、不同 Shape、空 Batch/Head/Token/Head Width 必须抛出 `ValueError`。
-6. 本练习只返回逐 Head Output 与 Weight，不合并 Head。
+- Score 使用 `Q @ K^T`，并除以 `sqrt(D_head)`。
+- 位置 `i` 只能看到 `0..i`，严格上三角的 Weight 必须为 0。
+- Softmax 沿最后一个历史 Token 轴计算，并使用减最大值的稳定写法。
+- Batch 与 Head 只是前导维，任何运算都不能把它们混在一起。
+- 非四维输入、不同 Shape、空 Batch/Head/Token/Head Width 必须抛出 `ValueError`。
+- 本练习只返回逐 Head Output 与 Weight，不合并 Head。
 
 ### 建议步骤
 

@@ -21,6 +21,18 @@ export const phase2: LabPhase = {
 			duration: '60–90 min',
 			dependsOn: 'Phase 1 Checkoff',
 			question: 'View、Copy、Stride、Broadcasting 与矩阵轴怎样影响正确性和测量？',
+			preRead: [
+				{
+					label: 'NumPy · Copies and views',
+					href: 'https://numpy.org/doc/stable/user/basics.copies.html',
+					focus: '只看基本切片、Advanced Indexing、reshape 与 base。',
+				},
+				{
+					label: 'NumPy · Broadcasting',
+					href: 'https://numpy.org/doc/stable/user/basics.broadcasting.html',
+					focus: '只看兼容规则以及不会复制不等于没有大中间结果。',
+				},
+			],
 			work: '对 Binding、浅复制、基础切片、Advanced Indexing、swapaxes 和 concatenate 先预测再运行。',
 			artifact: '六个可执行小实验、断言与预测/观察记录。',
 			acceptance: '能从 Buffer + Shape + Stride 解释六个 Case，并映射回 Attention 热路径。',
@@ -34,6 +46,18 @@ export const phase2: LabPhase = {
 			duration: '3 × 120 min',
 			dependsOn: 'P0',
 			question: 'KV Cache 复用了什么计算，动态追加又引入了什么数据移动？',
+			preRead: [
+				{
+					label: 'Hugging Face · Caching',
+					href: 'https://huggingface.co/docs/transformers/main/cache_explanation',
+					focus: '只看 Attention matrices 与 Cache update 两节。',
+				},
+				{
+					label: '站内 · LLM 推理优化的系统视角',
+					href: '/draft/llm-inference-optimization-system-view/',
+					focus: '只读 KV Cache 复用了什么，以及容量公式。',
+				},
+			],
 			work: '依次实现 Full Recompute、Dynamic Cache、Preallocated Cache 和固定 B=2 Batched Decode；先做 Oracle，再计时。',
 			artifact: '正确性测试、三条 Cache 路径和 300 条 Batch Length Scan 样本。',
 			acceptance:
@@ -48,6 +72,18 @@ export const phase2: LabPhase = {
 			duration: '3 × 90–150 min',
 			dependsOn: 'M0',
 			question: '固定长度时，Batch Wall Time、摊销成本和 Positions/s 怎样变化？',
+			preRead: [
+				{
+					label: 'Python · time.perf_counter',
+					href: 'https://docs.python.org/3/library/time.html#time.perf_counter',
+					focus: '只确认计时器是否单调、测量的是什么时间。',
+				},
+				{
+					label: 'NumPy · percentile',
+					href: 'https://numpy.org/doc/stable/reference/generated/numpy.percentile.html',
+					focus: '只看 q、axis 与 P50/P95 的计算口径。',
+				},
+			],
 			work: '验证 B=1/2/4/8 的独立性，随机化运行顺序，保留 240 条样本，从 Raw CSV 重建 P50/P95 和 Knee。',
 			artifact: '原始 CSV、汇总、两张曲线和 Knee 分析。',
 			acceptance: '正确性先于计时；曲线完全由原始数据生成；能区分摊销成本与请求延迟。',
@@ -61,6 +97,18 @@ export const phase2: LabPhase = {
 			duration: '6 × 120 min',
 			dependsOn: 'M1',
 			question: '怎样证明 Batch、Query Head、KV Head、Token 与 D_head 的轴语义及状态隔离？',
+			preRead: [
+				{
+					label: 'Harvard · The Annotated Transformer',
+					href: 'https://nlp.seas.harvard.edu/annotated-transformer/',
+					focus: '按当前子任务只读 Scaled Dot-Product Attention 或 Multi-Head Attention 对应小节。',
+				},
+				{
+					label: 'GQA paper',
+					href: 'https://arxiv.org/abs/2305.13245',
+					focus: '到 M2-D 时只读摘要、Figure 1 与 MHA/MQA/GQA Head 数关系。',
+				},
+			],
 			work: '按 A1 → A2 → B → C → D → E 推进；每次只增加一个可被独立 Oracle 否证的变换。',
 			artifact: 'multi_head.py、独立测试、M2 工作表与 MHA/GQA KV 容量表。',
 			acceptance:
@@ -73,36 +121,104 @@ export const phase2: LabPhase = {
 					title: '拆分 Head 轴',
 					status: 'done',
 					checkoff: 'Shape、非零坐标映射、共享 Buffer',
+					preRead: [
+						{
+							label: 'NumPy · Copies and views',
+							href: 'https://numpy.org/doc/stable/user/basics.copies.html',
+							focus: '只看 reshape/transpose 何时保持 View、何时可能复制。',
+						},
+					],
 				},
 				{
 					id: 'M2-A2',
 					title: 'Q/K/V 投影契约',
 					status: 'done',
 					checkoff: '投影 Shape、标量 Oracle、非法配置',
+					preRead: [
+						{
+							label: 'Harvard · Multi-Head Attention',
+							href: 'https://nlp.seas.harvard.edu/annotated-transformer/',
+							focus: '只看三个线性投影如何 reshape/transpose 成 Head 轴。',
+						},
+						{
+							label: 'NumPy · matmul',
+							href: 'https://numpy.org/doc/stable/reference/generated/numpy.matmul.html',
+							focus: '只看二维投影和矩阵内维契约。',
+						},
+					],
 				},
 				{
 					id: 'M2-B',
 					title: '无 Cache MHA Oracle',
 					status: 'active',
 					checkoff: 'Score、Mask、Softmax、Output、隔离性',
+					preRead: [
+						{
+							label: 'Harvard · Scaled Dot-Product Attention',
+							href: 'https://nlp.seas.harvard.edu/annotated-transformer/',
+							focus: '只看缩放原因、Mask 位置、Softmax 轴和 MHA 第 2 步。',
+						},
+						{
+							label: 'NumPy · matmul',
+							href: 'https://numpy.org/doc/stable/reference/generated/numpy.matmul.html',
+							focus: '只看 stacks of matrices 的最后两轴规则。',
+						},
+						{
+							label: 'NumPy · triu',
+							href: 'https://numpy.org/doc/stable/reference/generated/numpy.triu.html',
+							focus: '只看 k=1 如何选择严格未来位置。',
+						},
+					],
 				},
 				{
 					id: 'M2-C',
 					title: 'Cached MHA',
 					status: 'pending',
 					checkoff: '逐位置等价与 Cache Shape',
+					preRead: [
+						{
+							label: 'Hugging Face · Caching',
+							href: 'https://huggingface.co/docs/transformers/main/cache_explanation',
+							focus: '只看 Cache update、Attention mask 与逐 token Shape。',
+						},
+					],
 				},
 				{
 					id: 'M2-D',
 					title: 'GQA Head 映射',
 					status: 'pending',
 					checkoff: 'Query → KV Head 映射与非法配置',
+					preRead: [
+						{
+							label: 'GQA paper',
+							href: 'https://arxiv.org/abs/2305.13245',
+							focus: '只读摘要、Figure 1 和 GQA 定义。',
+						},
+						{
+							label: 'Qwen2 · num_key_value_heads',
+							href: 'https://huggingface.co/docs/transformers/main/model_doc/qwen2',
+							focus: '只看 MHA、MQA、GQA 与两个 Head 数的对应关系。',
+						},
+					],
 				},
 				{
 					id: 'M2-E',
 					title: 'KV 容量公式',
 					status: 'pending',
 					checkoff: '公式字节数与 nbytes 精确一致',
+					preRead: [
+						{
+							label: 'Qwen2 · Attention config',
+							href: 'https://huggingface.co/docs/transformers/main/model_doc/qwen2',
+							focus:
+								'只看 hidden_size、num_hidden_layers、num_attention_heads 与 num_key_value_heads。',
+						},
+						{
+							label: 'NumPy · ndarray memory attributes',
+							href: 'https://numpy.org/doc/stable/reference/arrays.ndarray.html',
+							focus: '只看 size、itemsize、nbytes 和 shape。',
+						},
+					],
 				},
 			],
 		},
@@ -113,6 +229,23 @@ export const phase2: LabPhase = {
 			duration: '1–2 × 120 min',
 			dependsOn: 'M2',
 			question: '当前 Backend 实际支持哪些配置、指标和端点？',
+			preRead: [
+				{
+					label: 'vLLM · Quickstart',
+					href: 'https://docs.vllm.ai/en/latest/getting_started/quickstart/',
+					focus: '只看当前硬件对应安装页和 Online Serving。',
+				},
+				{
+					label: 'vLLM · Architecture Overview',
+					href: 'https://docs.vllm.ai/en/latest/design/arch_overview/',
+					focus: '只看实际启用的 API Server、Engine Core 与 Worker 路径。',
+				},
+				{
+					label: 'vLLM · Production Metrics',
+					href: 'https://docs.vllm.ai/en/latest/usage/metrics/',
+					focus: '只确认当前版本 /metrics 暴露的指标名。',
+				},
+			],
 			work: '重新记录硬件、OS、Python、vLLM/插件/模型版本、启动命令、帮助输出和 Capability Matrix。',
 			artifact: '不可变环境快照、端点样本与能力矩阵。',
 			acceptance: '任何后续结果都能回指同一环境；不沿用 Phase 1 的旧快照。',
@@ -126,6 +259,18 @@ export const phase2: LabPhase = {
 			duration: '2 × 120 min',
 			dependsOn: 'S0',
 			question: '没有排队竞争时，系统的 TTFT、TPOT、吞吐和显存基线是什么？',
+			preRead: [
+				{
+					label: 'vLLM · Metrics',
+					href: 'https://docs.vllm.ai/en/latest/design/metrics/',
+					focus: '只看 TTFT、ITL、E2E、running/waiting 与 KV usage。',
+				},
+				{
+					label: 'vLLM · Benchmark CLI',
+					href: 'https://docs.vllm.ai/en/latest/benchmarking/cli/',
+					focus: '只看 vllm bench serve、固定 Shape 与保存详细结果。',
+				},
+			],
 			work: '固定单一负载，Warmup 后独立运行三轮，同时保存客户端指标和服务端内存/KV 指标。',
 			artifact: '三轮 Raw 结果、稳定性检查与显存组成表。',
 			acceptance: 'P50/P95/P99 可重建；轮间差异可解释；客户端与服务端时间口径不混淆。',
@@ -139,6 +284,18 @@ export const phase2: LabPhase = {
 			duration: '2 × 120 min',
 			dependsOn: 'S1',
 			question: 'Prompt 变长时，Prefill 工作、KV 状态和用户延迟怎样共同变化？',
+			preRead: [
+				{
+					label: 'vLLM · vllm bench serve',
+					href: 'https://docs.vllm.ai/en/latest/cli/bench/serve/',
+					focus: '只看 random-input-len、random-output-len 与请求数量参数。',
+				},
+				{
+					label: 'vLLM · Production Metrics',
+					href: 'https://docs.vllm.ai/en/latest/usage/metrics/',
+					focus: '只看 prompt token、prefill time、TTFT 和 KV usage。',
+				},
+			],
 			work: '固定输出长度与并发，只扫描输入长度；同步记录 TTFT、TPOT、E2E、吞吐、KV 使用与显存。',
 			artifact: '输入长度曲线、Raw 样本和异常点复测。',
 			acceptance: '只对测量范围内趋势下结论，并用状态量或服务端指标排除竞争解释。',
@@ -152,6 +309,18 @@ export const phase2: LabPhase = {
 			duration: '2–3 × 120 min',
 			dependsOn: 'S2',
 			question: '并发增加到哪里开始只增加排队和尾延迟，而不再增加有效吞吐？',
+			preRead: [
+				{
+					label: 'vLLM · vllm bench serve',
+					href: 'https://docs.vllm.ai/en/latest/cli/bench/serve/',
+					focus: '只看 request-rate、max-concurrency、percentile 与详细结果参数。',
+				},
+				{
+					label: 'vLLM · Metrics',
+					href: 'https://docs.vllm.ai/en/latest/design/metrics/',
+					focus: '只看 running、waiting、iteration tokens 与延迟指标。',
+				},
+			],
 			work: '固定请求 Shape 和服务端配置，扫描客户端并发；记录实际运行/等待请求、吞吐和延迟分位数。',
 			artifact: '吞吐—延迟曲线、饱和点和服务端状态对照。',
 			acceptance: '区分 Client Concurrency、Active Sequences 和实际 Scheduler Batch。',
@@ -165,6 +334,18 @@ export const phase2: LabPhase = {
 			duration: '2–3 × 120 min',
 			dependsOn: 'S3',
 			question: '序列上限和 Token Budget 分别怎样改变实际调度批量与吞吐—延迟权衡？',
+			preRead: [
+				{
+					label: 'vLLM · SchedulerConfig',
+					href: 'https://docs.vllm.ai/en/latest/api/vllm/config/scheduler/',
+					focus: '只看 max_num_seqs、max_num_batched_tokens 与单轮调度定义。',
+				},
+				{
+					label: 'vLLM · Optimization and Tuning',
+					href: 'https://docs.vllm.ai/en/latest/configuration/optimization/',
+					focus: '只看 Batch/Token Budget 对 TTFT、ITL 与吞吐的已声明权衡。',
+				},
+			],
 			work: '先只扫描 max_num_seqs，恢复后再只扫描 max_num_batched_tokens；每轮同时保留客户端和 Scheduler 证据。',
 			artifact: '两组单变量扫描、实际批量对照和配置边界表。',
 			acceptance: '不能仅凭客户端相关性声称 Scheduler 因果；配置值、实际行为和结果三者能够对应。',
@@ -178,6 +359,18 @@ export const phase2: LabPhase = {
 			duration: '2 × 120 min',
 			dependsOn: 'P0、M0–M2、S0–S4',
 			question: '能否把机制、实现、真实测量和结论边界连接成一条可复查的因果链？',
+			preRead: [
+				{
+					label: 'vLLM · Reproducibility',
+					href: 'https://docs.vllm.ai/en/latest/usage/reproducibility/',
+					focus: '只看版本、硬件、Seed 与批次不变性的适用边界。',
+				},
+				{
+					label: '站内 · 从零构建完整系统',
+					href: '/blog/build-a-complete-system-from-scratch/',
+					focus: '只复查证据链、失败记录、Release 与结论边界。',
+				},
+			],
 			work: '重建核心曲线，复测异常，完成十个知识点闭卷答辩，形成 Supported/Refuted/Inconclusive 结论矩阵。',
 			artifact: '复现包、结论矩阵与最终 vLLM 性能文章。',
 			acceptance:
@@ -196,6 +389,13 @@ export const phase2Extensions: LabUnit[] = [
 		duration: '按问题投入',
 		dependsOn: 'F0 或明确的混合负载问题',
 		question: '长 Prefill 怎样干扰 Decode ITL，Chunking 改变了什么？',
+		preRead: [
+			{
+				label: 'vLLM · Optimization and Tuning',
+				href: 'https://docs.vllm.ai/en/latest/configuration/optimization/',
+				focus: '只看 Chunked Prefill 的调度方式及 TTFT/ITL 权衡。',
+			},
+		],
 		work: '构造真实流式混合负载并保存时间线。',
 		artifact: 'Prefill/Decode 时间线与 Chunked Prefill 对照。',
 		acceptance: '能够区分改善 Decode 响应性与增加调度/执行开销。',
@@ -208,6 +408,13 @@ export const phase2Extensions: LabUnit[] = [
 		duration: '按问题投入',
 		dependsOn: 'F0 或重复前缀工作负载',
 		question: '共享前缀命中时复用了什么，主要改变哪个阶段？',
+		preRead: [
+			{
+				label: 'vLLM · Automatic Prefix Caching',
+				href: 'https://docs.vllm.ai/en/latest/design/prefix_caching/',
+				focus: '只看 Block Hash、Allocate、Free、Eviction 和示例。',
+			},
+		],
 		work: '构造命中/未命中对照，记录 TTFT、命中状态与额外管理成本。',
 		artifact: 'Prefix Hit 对照与证据边界。',
 		acceptance: '不把 Prefill 复用外推为 Decode、质量或整体吞吐必然同比提升。',
@@ -220,6 +427,13 @@ export const phase2Extensions: LabUnit[] = [
 		duration: '按问题投入',
 		dependsOn: '至少一个已经复现的 S 系列现象',
 		question: '哪个具体源码状态转换解释了已经观测到的现象？',
+		preRead: [
+			{
+				label: 'vLLM · Architecture Overview',
+				href: 'https://docs.vllm.ai/en/latest/design/arch_overview/',
+				focus: '只看与已观测现象相连的一条 Engine Core → Scheduler → Worker 路径。',
+			},
+		],
 		work: '固定 Commit，只追一条 Request/Scheduler/KV Cache 垂直切片，再回到实验验证。',
 		artifact: '调用链、状态机和验证性复跑。',
 		acceptance: '源码阅读产生新的可证伪预测，而不是停在函数名罗列。',
@@ -232,6 +446,18 @@ export const phase2Extensions: LabUnit[] = [
 		duration: '按问题投入',
 		dependsOn: 'F0',
 		question: '哪些趋势来自机制，哪些只属于当前环境？',
+		preRead: [
+			{
+				label: 'vLLM · Reproducibility',
+				href: 'https://docs.vllm.ai/en/latest/usage/reproducibility/',
+				focus: '只看跨版本、跨硬件时不能沿用的复现保证。',
+			},
+			{
+				label: 'vLLM · Benchmark CLI',
+				href: 'https://docs.vllm.ai/en/latest/benchmarking/cli/',
+				focus: '只看如何保存相同负载与详细结果。',
+			},
+		],
 		work: '迁移前预测差异，重新冻结第二环境，复跑基线和一个压力实验。',
 		artifact: '第二环境复现包与差异解释。',
 		acceptance: '明确 Supported、Changed 与 Inconclusive，不用一次迁移声称普遍规律。',

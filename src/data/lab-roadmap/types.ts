@@ -1,10 +1,17 @@
 export type LabStatus = 'done' | 'active' | 'pending' | 'optional';
 
+export interface LabReference {
+	label: string;
+	href: string;
+	focus: string;
+}
+
 export interface LabPart {
 	id: string;
 	title: string;
 	status: LabStatus;
 	checkoff: string;
+	preRead: LabReference[];
 }
 
 export interface LabUnit {
@@ -14,6 +21,7 @@ export interface LabUnit {
 	duration: string;
 	dependsOn: string;
 	question: string;
+	preRead: LabReference[];
 	work: string;
 	artifact: string;
 	acceptance: string;

@@ -21,6 +21,18 @@ export const phase1: LabPhase = {
 			duration: '45–60 min',
 			dependsOn: '路线入口检查',
 			question: '为什么“能生成文本的模型”还不是“可以稳定接收请求的服务”？',
+			preRead: [
+				{
+					label: '站内 · LLM 推理请求生命周期',
+					href: '/blog/llm-inference-request-lifecycle/',
+					focus: '只读模型、推理引擎与 API Server 的职责边界。',
+				},
+				{
+					label: 'vLLM · Architecture Overview',
+					href: 'https://docs.vllm.ai/en/latest/design/arch_overview/',
+					focus: '只看 Entrypoints，区分离线 LLM 类与在线服务入口。',
+				},
+			],
 			work: '比较训练、离线推理和在线 Serving 的输入、状态与系统目标；画出 API、引擎和资源三层边界。',
 			artifact: '一张三层系统图，以及每层各一句职责说明。',
 			acceptance: '不看文章解释模型权重、推理引擎和 API Server 为什么不能混为一谈。',
@@ -34,6 +46,18 @@ export const phase1: LabPhase = {
 			duration: '90–120 min',
 			dependsOn: 'P1-L0',
 			question: 'Prompt 从 HTTP 输入到流式 Token 返回，中间依次发生什么？',
+			preRead: [
+				{
+					label: '站内 · LLM 推理请求生命周期',
+					href: '/blog/llm-inference-request-lifecycle/',
+					focus: '只读 API、Tokenizer、Scheduler、Prefill、Decode 与 Streaming 主链。',
+				},
+				{
+					label: 'vLLM · Architecture Overview',
+					href: 'https://docs.vllm.ai/en/latest/design/arch_overview/',
+					focus: '只看 API Server、Engine Core 与 Worker 三种进程职责。',
+				},
+			],
 			work: '按 API → Chat Template → Tokenizer → Scheduler → Prefill → KV Cache → Decode → Streaming 追踪状态变化。',
 			artifact: '请求链路图、Prefill/Decode 对照表和 KV Cache 状态说明。',
 			acceptance: '能指出每个阶段的输入、输出、持久状态和可能等待的位置。',
@@ -47,6 +71,18 @@ export const phase1: LabPhase = {
 			duration: '90–120 min',
 			dependsOn: 'P1-L1',
 			question: '怎样证明请求确实经过了预期 Runtime、模型和 Backend？',
+			preRead: [
+				{
+					label: 'vLLM · Quickstart',
+					href: 'https://docs.vllm.ai/en/latest/getting_started/quickstart/',
+					focus: '只看 Online Serving 的启动命令和 OpenAI-compatible 请求。',
+				},
+				{
+					label: 'Ollama · Generate API',
+					href: 'https://docs.ollama.com/api/generate',
+					focus: '只看请求体、非流式响应和 done_reason。',
+				},
+			],
 			work: '启动 Ollama 与 vLLM Metal，保存安装/启动日志、完整命令和一份 OpenAI-compatible 响应。',
 			artifact: '安装脚本、服务日志、环境说明和原始 JSON 响应。',
 			acceptance: '从干净终端复现服务，并从日志中定位模型、Backend、KV Cache 预算和端点。',
@@ -60,6 +96,18 @@ export const phase1: LabPhase = {
 			duration: '60–90 min',
 			dependsOn: 'P1-L2',
 			question: '怎样避免把一次请求的偶然耗时写成系统结论？',
+			preRead: [
+				{
+					label: 'Ollama · Usage metrics',
+					href: 'https://docs.ollama.com/api/usage',
+					focus: '只读六个计数/耗时字段及纳秒单位。',
+				},
+				{
+					label: 'vLLM · Metrics',
+					href: 'https://docs.vllm.ai/en/latest/design/metrics/',
+					focus: '只看 TTFT、ITL/TPOT、E2E 与服务端状态指标的口径。',
+				},
+			],
 			work: '冻结模型、Prompt、输出长度、Warmup、重复次数与计时边界；区分近似 TPOT、严格 ITL、TTFT 和 E2E。',
 			artifact: '可重复运行的 Benchmark 脚本与实验契约。',
 			acceptance: '每个结果都能回答环境、负载、控制变量、统计口径和原始数据位置。',
@@ -73,6 +121,18 @@ export const phase1: LabPhase = {
 			duration: '2 × 120 min',
 			dependsOn: 'P1-L3',
 			question: '输入长度和输出长度分别怎样影响 Prefill、Decode 与端到端耗时？',
+			preRead: [
+				{
+					label: '站内 · 本地 Serving 实验',
+					href: '/blog/llm-inference-request-lifecycle-practice/',
+					focus: '只读实验协议、输入长度与输出长度两个假设，不预读结果。',
+				},
+				{
+					label: 'Python · time.perf_counter',
+					href: 'https://docs.python.org/3/library/time.html#time.perf_counter',
+					focus: '只确认单调高分辨率计时器的语义和边界。',
+				},
+			],
 			work: '先写趋势预测，再一次只改变一个长度变量；运行 Warmup 和重复测量，保存 CSV，并解释异常与 Backend 边界。',
 			artifact: '两版长度扫描 CSV、实验文章和可追溯到脚本的结论。',
 			acceptance: '能从原始 CSV 重建结论，并明确哪些指标只是 Runtime 提供的近似值。',
@@ -86,6 +146,18 @@ export const phase1: LabPhase = {
 			duration: '45–60 min',
 			dependsOn: 'P1-L0 — P1-L4',
 			question: '是否已经拥有进入机制实现所需的系统模型和证据纪律？',
+			preRead: [
+				{
+					label: '站内 · 请求生命周期',
+					href: '/blog/llm-inference-request-lifecycle/',
+					focus: '只复查自己无法闭卷画出的链路节点。',
+				},
+				{
+					label: '站内 · 本地 Serving 实验',
+					href: '/blog/llm-inference-request-lifecycle-practice/',
+					focus: '只复查失败实验、指标限制和结论边界。',
+				},
+			],
 			work: '闭卷重画请求链路；复跑一个扫描点；从日志、响应、脚本和 CSV 各解释一条证据；列出尚未验证的并发与尾延迟结论。',
 			artifact: '两篇阶段文章与完整 serving-baseline 复现包。',
 			acceptance: '链路解释、复跑和证据边界三项同时通过；只完成阅读不算通过。',
