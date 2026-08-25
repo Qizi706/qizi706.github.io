@@ -13,9 +13,7 @@ KV_HEADS = 2
 HEAD_DIM = 3
 
 
-def sequential_array(
-    shape: tuple[int, ...], *, offset: float = 0.0
-) -> np.ndarray:
+def sequential_array(shape: tuple[int, ...], *, offset: float = 0.0) -> np.ndarray:
     size = int(np.prod(shape))
     return (np.arange(size, dtype=np.float64) + offset).reshape(shape)
 
@@ -144,12 +142,8 @@ class TestMultiHeadContractValidation(unittest.TestCase):
         valid_projected = np.zeros(
             (BATCH_SIZE, SEQUENCE_LENGTH, QUERY_HEADS * HEAD_DIM)
         )
-        bad_w_q_input_width = np.zeros(
-            (MODEL_WIDTH + 1, QUERY_HEADS * HEAD_DIM)
-        )
-        bad_w_k_head_dim = np.zeros(
-            (MODEL_WIDTH, KV_HEADS * (HEAD_DIM + 1))
-        )
+        bad_w_q_input_width = np.zeros((MODEL_WIDTH + 1, QUERY_HEADS * HEAD_DIM))
+        bad_w_k_head_dim = np.zeros((MODEL_WIDTH, KV_HEADS * (HEAD_DIM + 1)))
         cases = (
             (
                 "projected_not_3d",
@@ -205,9 +199,11 @@ class TestMultiHeadContractValidation(unittest.TestCase):
         )
 
         for name, action, message_pattern in cases:
-            with self.subTest(case=name):
-                with self.assertRaisesRegex(ValueError, message_pattern):
-                    action()
+            with (
+                self.subTest(case=name),
+                self.assertRaisesRegex(ValueError, message_pattern),
+            ):
+                action()
 
 
 if __name__ == "__main__":

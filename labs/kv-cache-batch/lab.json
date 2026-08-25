@@ -1,10 +1,10 @@
 {
 	"slug": "kv-cache-batch",
-	"title": "KV Cache and Batched Decode",
-	"description": "An assignment-style NumPy lab for causal attention, KV Cache, batched decode, and MHA/GQA",
+	"title": "LLM 推理机制 Lab",
+	"description": "从 KV Cache、Batched Decode 到 MHA/GQA 的 NumPy 实验包；当前任务为 M2-B",
 	"parent": {
-		"href": "/blog/build-a-complete-system-from-scratch/",
-		"label": "只有编辑器和构建工具，如何从零构建一个完整系统？"
+		"href": "/learning/phase-2/",
+		"label": "阶段 2 共学入口"
 	},
 	"publish": [
 		"lab.json",
@@ -59,39 +59,39 @@
 			"path": "/learning/phase-2/",
 			"documents": [
 				{
-					"label": "Lab 说明",
-					"title": "M2 实验任务书",
-					"description": "按任务、提示、示例输出和单项评分命令完成当前练习。",
+					"label": "现在做什么",
+					"title": "当前实验任务书 · M2-B",
+					"description": "当前练习的操作入口：只保留任务范围、实现要求、提示和评分命令。",
 					"path": "README.md"
 				},
 				{
-					"label": "执行路线",
-					"title": "阶段 2 学习计划",
-					"description": "查看 M2 到 F0 的 Gate、验收条件与停止条件。",
+					"label": "它位于哪里",
+					"title": "阶段 2 总路线与验收",
+					"description": "只在查看 M2 到 F0 的依赖、阶段范围、验收和停止条件时使用。",
 					"path": "docs/PLAN.md"
 				},
 				{
-					"label": "当前 Gate",
-					"title": "M2 学习工作表",
-					"description": "跟进 Head 拆分、Q/K/V 投影和无 Cache MHA Oracle。",
+					"label": "实际做了什么",
+					"title": "M2 预测与验收工作表",
+					"description": "边做边填写预测、第一次失败、修正规则、测试结果和下一决策。",
 					"path": "docs/gates/M2.md"
 				},
 				{
-					"label": "语义实验",
-					"title": "P0 · NumPy View / Copy",
-					"description": "阅读轴语义、Stride、View 与 Copy 的预测和观察。",
+					"label": "历史工作表",
+					"title": "P0 · NumPy View / Copy 记录",
+					"description": "已完成 Gate 的预测、观察与验收记录，不是当前任务说明。",
 					"path": "docs/gates/P0.md"
 				},
 				{
-					"label": "性能实验",
-					"title": "M1 · Batch Size 扫描",
-					"description": "阅读 240 条样本的设计、门禁和 Knee 判定过程。",
+					"label": "历史工作表",
+					"title": "M1 · Batch Size 扫描记录",
+					"description": "已完成 Gate 的设计、运行记录与验收过程，不是当前任务说明。",
 					"path": "docs/gates/M1.md"
 				},
 				{
-					"label": "实验结论",
+					"label": "结果证据",
 					"title": "Batch Knee 分析",
-					"description": "阅读从原始 CSV 重建的吞吐、延迟与 Knee 结论。",
+					"description": "从原始 CSV 重建的派生结论；原始样本仍以 results 目录为准。",
 					"path": "results/batch-size-scan/knee-analysis.md"
 				}
 			],

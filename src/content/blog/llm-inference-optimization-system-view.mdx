@@ -2,7 +2,7 @@
 title: 'LLM 推理优化的系统视角：从 KV Cache 到调度'
 description: '阶段 2 的 AI Infra 学习记录：从 Prefill、Decode 与 KV Cache 出发，理解计算、带宽、容量和调度如何共同决定 LLM Serving 的吞吐与延迟。'
 pubDate: '2026-08-13T20:00:00+08:00'
-updatedDate: '2026-08-25T17:36:16+08:00'
+updatedDate: '2026-08-25T18:18:00+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -15,11 +15,11 @@ draft: true
 mathjax: true
 ---
 
-## 1. Aside: 请求链路清楚以后，为什么系统还是会变慢？
+## 1. 从请求链路到性能因果链
 
 阶段 1 的[《LLM 推理系统从请求到返回的完整链路》](/blog/llm-inference-request-lifecycle/)回答了一条请求怎样经过 Tokenizer、Scheduler、Prefill、KV Cache 与 Decode。
 
-但知道组件名称，并不等于能够解释性能。
+本文继续追问另一件事：请求在这条链路上消耗了哪些资源，又为什么会等待？知道组件名称只是起点；要解释性能，还需要把组件地图改写成一条因果链：**工作负载改变计算与状态，Scheduler 安排这些工作，资源竞争最终表现为吞吐与延迟。**
 
 <SlideCard title="同一个模型，为什么会出现不同的性能？">
 
@@ -62,15 +62,13 @@ mathjax: true
 
 </SlideCard>
 
-<Note title="从请求地图转向资源地图" class="title-underline">
+<Note title="本文与阶段 2 其他材料的边界" class="title-underline">
 
-阶段 2 不再把推理优化理解成一组可以同时打开的开关，而是追踪一条因果链：**工作负载怎样改变计算和状态，Scheduler 怎样安排这些工作，最终又怎样反映到吞吐与延迟。**
-
-本文只建立机制模型。最小 Attention 实现、原始计时数据和实验失败记录见[《LLM 推理机制实验：KV Cache、预分配与 Batch Size》](/draft/vllm-inference-performance-lab/)；真实 vLLM Serving 是阶段 2 后半段的主要任务，不能用当前 Toy Lab 的结果替代。
+本文只建立相对稳定的机制模型，不承担当前任务说明、进度追踪或原始实验记录。想跟随练习时，从[阶段 2 共学页](/learning/phase-2/)进入；那里会区分当前任务、执行路线、填写工作表与实验结果，不需要在本文中来回寻找不同手册。
 
 </Note>
 
-## 2. 从一次请求到三种性能状态
+## 2. 先定义性能问题：阶段、指标与因果链
 
 ### 2.1 Prefill、Decode 与 Online Serving
 
@@ -106,7 +104,45 @@ mathjax: true
 
 </Note>
 
-### 2.2 四类约束怎样连接？
+### 2.2 用户所说的“快”是什么？
+
+Prefill 与 Decode 的资源倾向不同，用户感受到的等待也不止一个数字。讨论优化以前，需要先明确它最终影响的是哪一项指标。
+
+<SlideCard title="Latency is not one number">
+
+## TTFT
+
+$$
+\mathrm{TTFT}=t_{\mathrm{first}}-t_{\mathrm{arrival}}
+$$
+
+包含客户端可见的排队、前端处理、Prefill 和传输时间。
+
+## ITL 与 TPOT
+
+$$
+\mathrm{ITL}_i=t_i-t_{i-1}
+$$
+
+$$
+\mathrm{TPOT}=\frac{t_{\mathrm{last}}-t_{\mathrm{first}}}{N_{\mathrm{output}}-1}
+$$
+
+描述首 token 以后，生成过程是否稳定流畅。
+
+## E2E 与 Throughput
+
+$$
+\mathrm{E2E}=t_{\mathrm{finish}}-t_{\mathrm{arrival}}
+$$
+
+吞吐需要同时说明是 Request Throughput 还是 Token Throughput。
+
+</SlideCard>
+
+因此，“吞吐提高”不能自动推出“单个用户等待更短”。一个策略可能让设备在单位时间内处理更多 token，同时让部分请求排队更久。后文讨论每项优化时，都需要重新落回这些用户指标。
+
+### 2.3 四类资源约束怎样连接？
 
 <SlideCard title="推理性能的四种约束">
 
@@ -134,6 +170,20 @@ mathjax: true
 </SlideCard>
 
 这四类约束不是互斥标签。KV Cache 用容量换掉历史重算，却让 Decode 持续读取更多状态；Batching 提高设备利用率，却会增加请求竞争；PagedAttention 降低物理空间浪费，却不会让每个有效 token 的逻辑 K/V 消失。
+
+客户端时间只能告诉我们“用户等待了多久”，不能独立证明时间花在 Scheduler、KV Cache 还是 Model Runner。解释因果关系还需要服务端证据：waiting / running requests、Queue Time、每轮调度的 Sequence 与 Token 数、KV Block 的分配与释放，以及模型实际执行时间。
+
+```text
+request rate / client concurrency
+  -> waiting and active sequences
+  -> scheduler selects sequences and token budget
+  -> KV blocks lookup / allocate / grow / release
+  -> prefill and decode execute
+  -> stream chunks return to client
+  -> TTFT / ITL / TPOT / E2E / throughput / P99
+```
+
+这条链是后文的主线：工作负载从左侧进入，用户指标从右侧出现，中间每一个箭头都需要服务端状态才能排除替代解释。四类约束仍然有些抽象，KV Cache 恰好同时牵动计算、带宽、容量和调度，适合用来建立第一条完整的因果模型。
 
 ## 3. KV Cache：从计算优化变成状态管理
 
@@ -267,61 +317,17 @@ Allocator 保留、Block 对齐、碎片、Graph 和框架状态会让进程占�
 
 </SlideCard>
 
-因此，阶段 2 的显存实验不会只记录一个峰值数字。它会分别保存服务启动前、模型加载后、Warm-up 后与稳态压力下的内存，并把每一项标成“实测”“由配置估算”或 `Unobservable`。在统一内存 Backend 上，也必须说明观测的是设备专用显存、进程驻留还是系统统一内存，不能混用口径。
+因此，显存实验不能只记录一个峰值数字。应分别保存服务启动前、模型加载后、Warm-up 后与稳态压力下的内存，并把每一项标成“实测”“由配置估算”或 `Unobservable`。在统一内存 Backend 上，也必须说明观测的是设备专用显存、进程驻留还是系统统一内存，不能混用口径。
 
-### 3.4 用最小实现验证不变量
+### 3.4 最小实验能够验证到哪里？
 
-为了不只停留在公式，我先用 NumPy 实现三条单 Sequence 的单头 Causal Attention 路径，再增加一个 `B=2` 的 Batched Decode 路径：
+配套的 NumPy 实验使用 No Cache、动态扩展 Cache 与预分配 Cache 三条路径验证逐 token 数值等价，再把多个独立 Sequence 组织成固定形状的 Batched Decode。实验支持两个机制判断：KV Cache 避免了历史位置的重复计算；Batched 执行能够摊薄调用与分配开销，却不会消除每个 Sequence 自身的 Attention 工作。
 
-<SlideCard title="Toy Attention 的三条路径">
+这些结果只属于 CPU、NumPy、单层和受控 Shape，不能外推成真实 GPU Serving 的固定加速倍数。实现、原始样本、异常结果与复现边界统一放在[《LLM 推理机制实验：KV Cache、预分配与 Batch Size》](/draft/vllm-inference-performance-lab/)中；本文由此只保留机制结论，继续追踪瓶颈怎样从计算转移到状态管理。
 
-## No Cache
+## 4. 按作用层次理解推理优化
 
-- 每一步对完整前缀重新计算 Q/K/V 与 Attention
-- 只保留当前最后一个位置的输出
-
-## Concatenate Cache
-
-- 每一步只计算新 token 的 Q/K/V
-- 使用 `np.concatenate` 扩展历史 K/V
-
-## Preallocated Cache
-
-- 预先分配完整 K/V Buffer
-- 每一步原地写入新位置，只读取有效前缀
-
-</SlideCard>
-
-<SlideCard title="两个 Sequence 怎样组成 Batch？">
-
-## Sequential Reference
-
-- 在 Python 中分别执行两个等长 Sequence
-- 两次调用共享同一套模型权重，但执行路径相互独立
-
-## Batched Decode
-
-- 输入 Shape 从 `[T, D_model]` 变为 `[B, T, D_model]`
-- 每轮同时取出 `[B, 1, D_model]`
-- 两个 Sequence 分别维护自己的 K/V，Attention 不跨越 Batch 维
-
-</SlideCard>
-
-三条 Cache 路径先通过逐 token 数值等价检查，Batched 路径再与两个独立 No-Cache 结果对照。测试刻意令 `d_k != d_v`，避免 K/V Shape 错误被相同维度掩盖；计时则固定 `d_model = d_k = d_v = 64`，比较动态拼接、预分配和两个 Sequence 的顺序/Batched 执行。
-
-固定 OpenBLAS 与 OMP 为单线程后，`B=2` 的 Batched 路径比顺序执行快约 1.36–1.82x。五个测量点并非从最短长度开始严格单调下降，但从 `T=32` 到 `T=256`，加速由 1.817x 收窄到 1.362x。它减少的是 Python/NumPy 调用和分配次数，没有消除两个 Sequence 的 Attention 工作；当 $O(T^2)$ 的计算与动态 Cache 复制逐渐占主导，相对收益自然下降。
-
-实验还暴露了一个重要问题：未固定 BLAS 线程时，No Cache 路径的矩阵计算跨过了不同执行策略阈值，导致表面加速比被放大。固定线程后趋势仍然存在，但具体倍数发生了变化。现在 Benchmark 会保留全部原始计时样本，不再只留下中位数。
-
-完整代码、环境与边界保存在 [`kv-cache-batch` Lab](/labs/kv-cache-batch/)，当前练习从 [M2 实验任务书](/labs/kv-cache-batch/read/README/)进入。这个 Microbenchmark 只证明 Cache 复用与分配策略的最小机制，不代表真实 GPU Serving 的固定收益。
-
-<Note title="机制验证不是 Serving Benchmark" class="title-underline">
-
-当前已经完成的 Attention 数值路径仍只有 CPU、NumPy、单 Head、等长 Sequence、`B∈{1,2,4,8}` 和单层计算。M2-A1/A2 已额外固定 Head 轴变换与 Q/K/V 投影契约，但 M2-B 的无 Cache MHA 核心仍是 `TODO`，因此还不能把当前实现称为完整 Multi-Head Attention。这里的 Batch 只是固定形状的 Batched NumPy 执行，不包含请求到达、不同长度、动态加入/退出或 Token Budget，也还不能回答 MHA/GQA 性能、GPU Kernel、Continuous Batching、PagedAttention 或真实 Scheduler 的问题。
-
-</Note>
-
-## 4. 推理优化不是同一层的开关
+KV Cache 表明，推理优化通常不会让所有成本同时下降，而是改变工作的形态或位置。沿着这条思路，可以依次观察模型架构、Kernel 与 Runtime、存储布局、请求调度和解码算法。无论位于哪一层，都用同样三个问题检查它：**消除了什么浪费，引入了什么成本，应该用什么证据证明它生效？**
 
 ### 4.1 Model Architecture：改变必须保存的状态
 
@@ -371,7 +377,33 @@ Allocator 保留、Block 对齐、碎片、Graph 和框架状态会让进程占�
 
 PagedAttention 与操作系统页表很像：上层看到连续空间，底层物理空间不必连续。但它首先解决的是设备侧 KV Block 的分配和寻址，并不意味着必须依靠 Page Fault，或一定把冷 Block 交换到磁盘。
 
-### 4.3 Serving / Scheduler：改变请求怎样共享设备
+模型架构和 Runtime 决定单个请求需要多少状态、状态怎样存放；在线 Serving 还需要决定多个请求怎样共享这些资源。在讨论调度以前，必须先拆开几个经常被混称为 “Batch Size” 的量。
+
+### 4.3 “Batch Size”为什么不是一个数字？
+
+<SlideCard title="四个不能混写成 batch size 的量">
+
+## Client Concurrency
+
+客户端同时尚未完成的请求数。
+
+## Active Sequences
+
+已经进入引擎、正在等待或运行，并保留状态的 Sequence 数。
+
+## Sequence Batch
+
+某一次 Engine Step 实际被 Scheduler 选中执行的 Sequence 集合。
+
+## Token Budget
+
+某次调度迭代允许处理的 token 总量；Prefill 请求可能一次消耗多个 token，Decode 请求通常只推进一个 token。
+
+</SlideCard>
+
+因此，改变 Client Concurrency 不等于直接设置模型执行 Batch；修改 `max_num_seqs` 或 `max_num_batched_tokens` 也不等于每一轮都会用满这些上限。真实 Sequence Batch 是请求状态、长度、KV 容量与调度策略共同形成的结果。文章标题可以使用较直观的 “batch size”，实验变量却必须精确到上述某一个量。
+
+### 4.4 Serving / Scheduler：改变请求怎样共享设备
 
 Static Batching 中，已经完成的 Sequence 可能继续等待最长 Sequence，空出的执行槽不能及时接纳新请求。Continuous Batching 在迭代边界移除完成请求，并把新请求加入后续执行轮次，更适合长度动态的生成任务。
 
@@ -396,7 +428,9 @@ Static Batching 中，已经完成的 Sequence 可能继续等待最长 Sequence
 
 </SlideCard>
 
-### 4.4 Prefix Caching：复用重复的 Prefill
+Continuous Batching 减少的是空槽与小 Batch 的执行浪费，引入的是更多请求对调度机会和 KV 容量的竞争。要证明它生效，既要观察实际 Scheduled Sequences 和 Token 数，也要同时检查吞吐、TTFT、TPOT 与尾延迟。
+
+### 4.5 Prefix Caching：复用重复的 Prefill
 
 Prefix Caching 复用的是多个请求已经计算过的**相同前缀 KV 状态**。它可能减少重复 Prefill 工作并降低 TTFT，但不会让后续新 token 的 Decode 自动消失。
 
@@ -416,115 +450,23 @@ Prefix Caching 复用的是多个请求已经计算过的**相同前缀 KV 状�
 
 </SlideCard>
 
-### 4.5 Chunked Prefill：把长 Prompt 拆进多轮预算
+### 4.6 Chunked Prefill：把长 Prompt 拆进多轮预算
 
 Chunked Prefill 不减少一个 Prompt 必须处理的 token 总数，而是把长 Prefill 拆成较小块，让 Scheduler 有机会在块之间安排已有 Decode。它试图降低长 Prefill 对 Decode ITL 的阻塞，却可能增加调度轮次、Kernel Launch 或中间状态管理成本。
 
 因此它的基本问题不是“开关打开后是否更快”，而是：在同一 Mixed Workload 下，Decode 的 ITL 尖峰是否减弱，整体吞吐和长请求 TTFT 又付出了什么代价？没有对齐的流式时间线和服务端预算记录时，不能把波动归因于 Chunked Prefill。
 
-### 4.6 Speculative Decoding：减少串行的大模型 Decode 步骤
+### 4.7 Speculative Decoding：减少串行的大模型 Decode 步骤
 
 Speculative Decoding 让更便宜的 Draft Model 先提出多个候选 token，再由 Target Model 并行验证这些位置。正确的接受与拒绝规则保持 Target Model 的输出分布；它不是用更差质量直接换速度。
 
-收益取决于候选接受率、Draft 成本、一次验证的宽度以及 Backend 是否高效执行验证。候选经常被拒绝时，Draft 和验证都可能成为额外工作；它也不能替代 KV Cache、Batching 或 Scheduler。更完整的候选—验证过程见[《从猜想到验证》中的投机解码说明](/blog/conjecture-verification-practice/)。阶段 2 核心只要求解释机制与收益条件，不要求把它加入本轮 vLLM Benchmark。
+收益取决于候选接受率、Draft 成本、一次验证的宽度以及 Backend 是否高效执行验证。候选经常被拒绝时，Draft 和验证都可能成为额外工作；它也不能替代 KV Cache、Batching 或 Scheduler。更完整的候选—验证过程见[《从猜想到验证》中的投机解码说明](/blog/conjecture-verification-practice/)。本文只解释它的机制与收益条件，不把尚未进行的 vLLM Benchmark 写成结论。
 
-## 5. “batch size”为什么不是一个数字？
+这些技术分属不同层次，却都可以放回同一条因果链：先确认工作量或状态怎样改变，再确认 Runtime 和 Scheduler 实际采用了新路径，最后观察用户指标及其代价。没有中间证据时，“打开开关以后更快”仍然不足以说明原因。
 
-在 LLM Serving 中，下面几个量经常被统称为 Batch Size，但它们表示不同状态：
+## 5. 把机制模型变成可证伪实验
 
-<SlideCard title="四个不能混写成 batch size 的量">
-
-## Client Concurrency
-
-客户端同时尚未完成的请求数。
-
-## Active Sequences
-
-已经进入引擎、正在等待或运行，并保留状态的 Sequence 数。
-
-## Sequence Batch
-
-某一次 Engine Step 实际被 Scheduler 选中执行的 Sequence 集合。
-
-## Token Budget
-
-某次调度迭代允许处理的 token 总量；Prefill 请求可能一次消耗多个 token，Decode 请求通常只推进一个 token。
-
-</SlideCard>
-
-因此，改变 Client Concurrency 不等于直接设置模型执行 Batch；修改 `max_num_seqs` 或 `max_num_batched_tokens` 也不等于每一轮都会用满这些上限。真实 Sequence Batch 是请求状态、长度、KV 容量与调度策略共同形成的结果。
-
-<Note title="标题可以简洁，实验变量必须精确" class="title-underline">
-
-阶段 2 的中间机制实验和最终 vLLM 性能文章都会在标题中使用更直观的 “batch size”，但实验记录会明确区分客户端负载、Scheduler 上限与每轮实际执行状态。否则“增大 Batch 后吞吐提高”无法说明究竟改变了什么。
-
-</Note>
-
-## 6. 从工作负载到用户指标
-
-### 6.1 客户端看见什么？
-
-<SlideCard title="Latency is still not one number">
-
-## TTFT
-
-$$
-\mathrm{TTFT}=t_{\mathrm{first}}-t_{\mathrm{arrival}}
-$$
-
-包含客户端可见的排队、前端处理、Prefill 和传输时间。
-
-## ITL 与 TPOT
-
-$$
-\mathrm{ITL}_i=t_i-t_{i-1}
-$$
-
-$$
-\mathrm{TPOT}=\frac{t_{\mathrm{last}}-t_{\mathrm{first}}}{N_{\mathrm{output}}-1}
-$$
-
-描述首 token 以后，生成过程是否稳定流畅。
-
-## E2E 与 Throughput
-
-$$
-\mathrm{E2E}=t_{\mathrm{finish}}-t_{\mathrm{arrival}}
-$$
-
-吞吐需要同时说明是 Request Throughput 还是 Token Throughput。
-
-</SlideCard>
-
-### 6.2 服务端发生了什么？
-
-客户端时间只能告诉我“用户等待了多久”，不能独立证明时间花在 Scheduler、KV Cache 还是 Model Runner。解释因果关系还需要服务端证据：
-
-- waiting / running requests；
-- Queue Time 与 Scheduler 决策；
-- 每轮调度的 Sequence 与 Token 数；
-- KV Cache Usage、Block 分配、复用与释放；
-- Model Execution、Prefix Cache 命中和失败状态。
-
-<SlideCard title="一条需要被证据填满的性能链">
-
-```text
-request rate / client concurrency
-  -> waiting and active sequences
-  -> scheduler selects sequences and token budget
-  -> KV blocks lookup / allocate / grow / release
-  -> prefill and decode execute
-  -> stream chunks return to client
-  -> TTFT / ITL / TPOT / E2E / throughput / P99
-```
-
-每一个箭头都可能包含替代解释。只有客户端时序而没有服务端状态时，结论应该停留在“观测到相关变化”，不能直接声称某个 Scheduler 分支导致了结果。
-
-</SlideCard>
-
-## 7. 把机制模型变成可证伪实验
-
-阶段 2 最终要回答：
+把上述机制落到真实 Serving 时，需要回答：
 
 > 在固定模型、推理引擎和硬件后，Input 长度、Client Concurrency 与 Scheduler Batch Budget 如何改变请求排队、KV Cache 占用和实际执行 Batch，并最终影响 TTFT、TPOT、Token Throughput 与尾延迟？
 
@@ -556,40 +498,11 @@ request rate / client concurrency
 
 <Note title="学习文章与实验文章的边界" class="title-underline">
 
-本文负责解释为什么这些预测值得检验；[阶段 2 中间机制实验](/draft/vllm-inference-performance-lab/)负责记录当前 Toy Attention 支持了什么、证据边界在哪里，以及迁移到真实 vLLM 前还缺什么。最终 vLLM 性能文章只使用 S0–S4 真正产生的数据；必须保留原始 CSV/JSON、启动配置、版本、日志、内存记录、异常请求和复现命令，不能用理论预期替代尚未出现的结果。
+本文负责解释为什么这些预测值得检验；[阶段 2 中间机制实验](/draft/vllm-inference-performance-lab/)只总结已经完成的 Toy Attention 测量及其证据边界。当前做到哪一步、下一步执行什么，以[阶段 2 共学页](/learning/phase-2/)为入口；未来的真实 vLLM 性能文章只使用实际产生的数据，不能用这里的理论预期代替结果。
 
 </Note>
 
-## 8. 当前证据与下一门禁
-
-这篇文章只维护相对稳定的机制模型。一个月内的核心交付路线是 M2 → S0–S4 → F0；Mixed Prefill/Decode、Prefix Reuse、固定版本源码追踪与跨环境迁移作为进阶扩展，不阻塞阶段 2 的基础完成。完整步骤、命令、产物目录和验收条件统一保存在[阶段 2 学习执行手册](/labs/kv-cache-batch/read/docs/PLAN/)。
-
-F0 的阶段产出固定为《vLLM 推理性能实验：并发、Batch Size 与输入长度如何影响吞吐和延迟》。在 S0–S4 的真实数据出现前，这个标题只存在于计划中，不创建空文章或把 Toy 结果改写成 Serving 结论。
-
-<SlideCard title="当前只推进一道门">
-
-## 已有证据
-
-- M0 已完成 Cache、预分配和固定 `B=2` 的 Batched Decode；当前归档保留 300 条 Batch Length 样本
-- P0 已完成 NumPy View/Copy、Stride 与 Buffer 分配的语义闭环
-- M1 已完成 `B=1/2/4/8` 扫描、240 条原始样本、曲线与 Knee 分析；两组当前可审计计时证据累计 540 条
-- M2-A1 已用 Shape、元素映射和内存共享测试固定 Head 轴变换
-- M2-A2 已完成 Q/K/V 投影、两个非零坐标 Oracle、五类非法配置和闭卷 Shape 推导；完整 12 项回归测试通过
-- Lab 已提供 `make setup/test/grade/m2-b`、M2-B `TODO` 骨架和 5 项公开验收测试；当前 `make grade` 为 `40/100`，只停在尚未实现的 M2-B
-
-## 当前任务
-
-M2-B：先固定 `H_q=H_kv`，补完 `multi_head_causal_attention` 的 Score、Causal Mask、稳定 Softmax 与 `Weight @ V`。当前公开评分还会验证 Future Token 不可见、Batch/Head 隔离和非法输入；在 5 项验收全部通过前，不提前实现 Cache、GQA 映射或真实 Serving 实验。
-
-## 下一决策
-
-完成 M2 的 MHA/GQA 映射、Cache 等价性和 KV 字节公式后，才进入 S0，重新冻结真实 vLLM 环境与可观测能力。
-
-</SlideCard>
-
-从 [M2 实验任务书](/labs/kv-cache-batch/read/README/)可以运行单项评分；预测、前置阅读、第一次失败与验收记录见 [M2 工作表](/labs/kv-cache-batch/read/docs/gates/M2/)。未完成的 Gate 一律保持 `In progress` 或 `Pending`；理论预测、评分骨架和公开测试都不能替代通过后的实现证据。
-
-## 9. 重新回答最初的问题
+## 6. 重新回答最初的问题
 
 <SlideCard title="一个请求为什么会变慢？">
 
@@ -613,7 +526,7 @@ M2-B：先固定 `H_q=H_kv`，补完 `multi_head_causal_attention` 的 Score、C
 
 </SlideCard>
 
-<SlideCard title="阶段 2 最后应该留下什么理解？">
+<SlideCard title="这套系统视角应该留下什么理解？">
 
 ## KV Cache
 
@@ -645,7 +558,7 @@ M2-B：先固定 `H_q=H_kv`，补完 `multi_head_causal_attention` 的 Score、C
 
 </SlideCard>
 
-<Note title="阶段 2 的核心问题" class="title-underline">
+<Note title="全文的核心问题" class="title-underline">
 
 判断一项推理优化是否有效，最终要回答三件事：**它消除了哪一种浪费，引入了什么新成本，以及原来的瓶颈被转移到了哪里。**
 

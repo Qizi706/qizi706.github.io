@@ -94,7 +94,7 @@ const description =
 		</NoticeBanner>
 		<div class="hero-actions" aria-label="Lab 快捷入口">
 			<a class="action-link action-link--primary" href="#lab">进入 Lab</a>
-			<a class="action-link" href={currentDocumentHref}>阅读当前工作表</a>
+			<a class="action-link" href={currentDocumentHref}>填写当前工作表</a>
 		</div>
 	</header>
 
@@ -111,7 +111,7 @@ const description =
 	<section id="lab" class="section-block lab-section">
 		<div class="section-heading">
 			<p>00 / LAB ENTRY</p>
-			<h2>进入 Lab：阅读机制，检查证据</h2>
+			<h2>一个入口，五种材料</h2>
 		</div>
 
 		<SurfaceCard as="article" class="lab-launch" padding="none">
@@ -122,9 +122,9 @@ const description =
 				<p class="lab-launch__current"><strong>当前目标：</strong>{current.objective}</p>
 			</div>
 			<div class="lab-launch__actions">
-				<a class="action-link action-link--primary" href={labInstructionsHref}>打开实验任务书</a>
+				<a class="action-link action-link--primary" href={labInstructionsHref}>打开当前任务书</a>
 				<a class="action-link" href={currentDocumentHref}>填写 {current.id} 工作表</a>
-				<a class="action-link" href={planHref}>阅读完整计划</a>
+				<a class="action-link" href={planHref}>查看阶段总路线</a>
 				<a class="action-link" href={labHref}>浏览全部文件</a>
 				<a class="text-link" href={archiveHref} download={archive.filename}>
 					下载完整 Lab · {archive.filename}
@@ -132,10 +132,27 @@ const description =
 			</div>
 		</SurfaceCard>
 
+		<div class="material-map" aria-label="阶段 2 材料关系">
+			<p>
+				<strong>想理解机制：</strong>先读<a href="#articles">系统视角文章</a
+				>，再读实验文章，看机制怎样被证据支持或限制。
+			</p>
+			<p>
+				<strong>想跟着实现：</strong>按“当前任务书 → 当前 Gate 工作表 → 测试与原始结果”的顺序推进。
+			</p>
+			<p>
+				<strong>想确认全局：</strong
+				>只有在查看前后依赖、阶段验收和停止条件时才打开执行计划；它不是第二份当前任务书。
+			</p>
+		</div>
+
 		<div class="document-heading">
 			<div>
-				<h3>实验文档 · 阅读模式</h3>
-				<p>说明、工作表和结论按排版后的 Markdown 阅读；代码与原始数据从文件目录直接打开。</p>
+				<h3>实验文档 · 各自只回答一种问题</h3>
+				<p>
+					任务书告诉你现在做什么，执行计划说明它位于哪里，Gate
+					工作表保存你实际做过什么；结果目录只保存证据。
+				</p>
 			</div>
 			<span>{labDocuments.length} DOCS</span>
 		</div>
@@ -182,21 +199,25 @@ const description =
 
 		<ol class="follow-steps">
 			<li>
-				<strong>先看路线，不先抄代码。</strong>
-				打开<a href={planHref}>阶段 2 学习执行手册</a>，确认核心路线、当前 Gate 和停止条件。
+				<strong>先选阅读或实践。</strong>
+				只想建立概念模型，就从下方文章区开始；想亲手完成当前 Gate，就直接打开<a
+					href={labInstructionsHref}>当前任务书</a
+				>。
 			</li>
 			<li>
-				<strong>拿到相同材料。</strong>
-				<a href={archiveHref} download={archive.filename}>下载完整 Lab</a
-				>，或从本页末尾逐层浏览目录；原始数据、测试、记录和代码都在其中。
+				<strong>执行前写工作表。</strong>
+				在<a href={currentDocumentHref}>{current.id} 工作表</a>写下 Prediction 和 Shape
+				推导，再按任务书运行定向测试；工作表用于记录，不替代任务说明。
 			</li>
 			<li>
-				<strong>从当前任务跟做。</strong>
-				先写 Prediction，再完成当天前置阅读和正确性测试，不直接从我的结果倒推答案。
+				<strong>需要全局时再看计划。</strong>
+				<a href={planHref}>阶段 2 执行计划</a>只负责核心路线、Gate
+				依赖、阶段验收和停止条件，不重复当天的操作步骤。
 			</li>
 			<li>
-				<strong>用证据决定下一步。</strong>
-				只有 Acceptance 通过才前进；结果不同就保存环境、原始数据和反例，而不是修改结论迎合本文。
+				<strong>让结果回到证据层。</strong>
+				测试、原始数据和图表进入结果目录；实验文章只总结已经产生的证据。只有 Acceptance 通过才进入下一个
+				Gate。
 			</li>
 		</ol>
 	</section>
@@ -492,6 +513,22 @@ const description =
 		font-family: var(--font-mono);
 		font-size: 0.7rem;
 		text-align: center;
+	}
+
+	.material-map {
+		display: grid;
+		gap: 0.45rem;
+		margin-top: 1rem;
+		padding: 0.9rem 1rem;
+		border-left: 3px solid #2563eb;
+		background: #f8fafc;
+	}
+
+	.material-map p {
+		margin: 0;
+		color: #475569;
+		font-size: 0.88rem;
+		line-height: 1.65;
 	}
 
 	.document-heading {
