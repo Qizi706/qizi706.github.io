@@ -26,9 +26,13 @@ const statusLabel = status === 'done' ? '已完成' : status === 'active' ? '进
 <style>
 	.learning-stage {
 		margin: 0.8rem 0;
-		border: 1px solid rgb(var(--gray-light));
+		border: 0;
 		border-radius: var(--card-radius);
 		background: rgb(255 255 255 / 28%);
+		box-shadow:
+			0 -2px 5px -2px rgb(15 23 42 / 16%),
+			0 4px 6px -1px rgb(0 0 0 / 10%),
+			0 2px 4px -2px rgb(0 0 0 / 10%);
 	}
 
 	summary {
