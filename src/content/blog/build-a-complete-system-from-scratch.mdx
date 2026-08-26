@@ -87,27 +87,27 @@ pyproject.toml
 
 ## 3. 空目录里的第一件东西：一个能失败的例子
 
-以我现在的 [`kv-cache-batch` Lab](/labs/kv-cache-batch/) 为例。最初要回答的问题并不是“如何设计一个 AI Infra 平台”，而是：
+以我现在的 [`p2-inference-systems` Lab](/labs/p2-inference-systems/) 为例。最初要回答的问题并不是“如何设计一个 AI Infra 平台”，而是：
 
 > 对同一组输入和权重，使用 KV Cache 的逐 Token Decode，是否与每一步重算完整前缀得到相同结果？
 
 这个问题很好，因为它能被程序反驳。只需要三个文件：
 
 ```text
-kv-cache-batch/
+p2-inference-systems/
 ├── pyproject.toml
-├── src/kv_cache_lab/attention.py
+├── src/inference_lab/attention.py
 └── tests/test_attention.py
 ```
 
 从空目录得到它，不需要项目向导：
 
 ```bash
-mkdir -p kv-cache-batch/src/kv_cache_lab kv-cache-batch/tests
-cd kv-cache-batch
+mkdir -p p2-inference-systems/src/inference_lab p2-inference-systems/tests
+cd p2-inference-systems
 
 $EDITOR pyproject.toml
-$EDITOR src/kv_cache_lab/attention.py
+$EDITOR src/inference_lab/attention.py
 $EDITOR tests/test_attention.py
 
 uv sync
@@ -180,7 +180,7 @@ Cache 正确以后，我要比较 No Cache、Dynamic Cache 和 Preallocated Cach
 如果把这些都塞进 `attention.py`，机制实现和实验流程会因为不同原因变化：前者因为算法变化，后者因为实验协议变化。于是项目第一次自然分开：
 
 ```text
-src/kv_cache_lab/
+src/inference_lab/
 ├── attention.py      # 机制：Attention 与 KV Cache 怎样工作
 └── benchmark.py      # 实验：怎样构造输入、预热、计时并写出样本
 ```
@@ -195,11 +195,11 @@ src/kv_cache_lab/
 
 ```text
 results/
-└── batch-size-scan/
+└── m1-batch-size-scan/
     ├── raw.csv
     ├── summary.csv
-    ├── batch-latency-percentiles.svg
-    ├── positions-throughput.svg
+    ├── latency-p50-p95.svg
+    ├── throughput-positions-per-second.svg
     └── knee-analysis.md
 ```
 
@@ -207,7 +207,7 @@ results/
 
 ```text
 benchmark.py              产生事实
-summarize_batch_size.py   读取事实，生成解释材料
+summarize_batch_size_scan.py   读取事实，生成解释材料
 ```
 
 现在任何一个 P50、P95 或吞吐曲线点都能重新从 `raw.csv` 计算。`raw.csv` 不能证明实验设计一定正确，但它防止了“图还在，现场没了”。
@@ -221,8 +221,8 @@ summarize_batch_size.py   读取事实，生成解释材料
 这时项目才增加：
 
 ```text
-src/kv_cache_lab/multi_head.py
-tests/test_multi_head.py
+src/inference_lab/multi_head_attention.py
+tests/test_multi_head_attention.py
 ```
 
 第一步仍然不是完整 Attention，只是一个轴变换：
@@ -314,13 +314,13 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
 
 # 重新产生 Batch Size 原始数据和汇总
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  uv run kv-cache-batch --experiment batch-size \
-  --csv results/batch-size-scan/raw.csv
+  uv run p2-inference-systems --experiment batch-size \
+  --csv results/m1-batch-size-scan/raw.csv
 
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  uv run kv-cache-batch-summary \
-  --input results/batch-size-scan/raw.csv \
-  --output-dir results/batch-size-scan \
+  uv run p2-inference-systems-summary \
+  --input results/m1-batch-size-scan/raw.csv \
+  --output-dir results/m1-batch-size-scan \
   --sequence-length 128 --dtype float64 --blas-threads 1
 ```
 
@@ -381,7 +381,7 @@ q[b, h, t, d]
 
 ### 第一遍：跟着一条窄路径做出来
 
-只阅读当前步骤所需的最小材料，写下运行前预测，然后实现一条能被测试的路径。[M2-A1](/labs/kv-cache-batch/read/docs/gates/m2/a1/) 与 [M2-A2](/labs/kv-cache-batch/read/docs/gates/m2/a2/) 工作表已经保存 Head 轴与 Q/K/V 投影证据；当前 B 只增加无 Cache Score、Mask、Softmax、逐 Head Output 和隔离性测试，不顺手完成 Cached MHA 或 GQA。
+只阅读当前步骤所需的最小材料，写下运行前预测，然后实现一条能被测试的路径。[M2-A1](/labs/p2-inference-systems/read/checkoffs/m2-a1-split-heads/) 与 [M2-A2](/labs/p2-inference-systems/read/checkoffs/m2-a2-qkv-projection/) 工作表已经保存 Head 轴与 Q/K/V 投影证据；当前 B 只增加无 Cache Score、Mask、Softmax、逐 Head Output 和隔离性测试，不顺手完成 Cached MHA 或 GQA。
 
 这一遍练的是“把知识变成行为”。
 
@@ -397,7 +397,7 @@ q[b, h, t, d]
 
 这一遍练的是迁移。能够修改一个条件而不推倒重来，才说明脑中形成了机制，而不是记住了文件。
 
-<CodeCard title="一次 120 分钟练习应该留下什么？" path="labs/kv-cache-batch/docs/gates/m2/b.md">
+<CodeCard title="一次 120 分钟练习应该留下什么？" path="labs/p2-inference-systems/checkoffs/m2-b-causal-attention.md">
 
 ```text
 Question:
@@ -418,7 +418,7 @@ Feedback:
   unittest 的第一个失败 + 手算 Score/Output 坐标 + 完整回归
 
 Artifact:
-  multi_head.py、test_multi_head.py、docs/gates/m2/b.md
+  multi_head_attention.py、test_multi_head_attention.py、checkoffs/m2-b-causal-attention.md
 
 Transfer:
   关闭代码后重做推导；下一轮进入 Cached MHA

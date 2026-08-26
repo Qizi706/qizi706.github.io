@@ -7,12 +7,18 @@ import '../../styles/lab-roadmap.css';
 
 export const progress = phase2Progress;
 export const current = progress.current;
-export const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', current.document);
-export const labInstructionsHref = getLabArtifactDisplayHref('kv-cache-batch', current.assignment);
-export const labReadmeHref = getLabArtifactDisplayHref('kv-cache-batch', 'README.md');
-export const planHref = getLabArtifactDisplayHref('kv-cache-batch', 'docs/roadmap.md');
-export const labHomeHref = '/labs/kv-cache-batch/';
-export const labArchiveHref = '/labs/kv-cache-batch.tar.gz';
+export const currentDocumentHref = getLabArtifactDisplayHref(
+	'p2-inference-systems',
+	current.document,
+);
+export const labInstructionsHref = getLabArtifactDisplayHref(
+	'p2-inference-systems',
+	current.assignment,
+);
+export const labReadmeHref = getLabArtifactDisplayHref('p2-inference-systems', 'README.md');
+export const planHref = getLabArtifactDisplayHref('p2-inference-systems', 'roadmap.md');
+export const labHomeHref = '/labs/p2-inference-systems/';
+export const labArchiveHref = '/labs/p2-inference-systems.tar.gz';
 export const description =
 	'阶段 2 完整学习路线：从 NumPy 语义、KV Cache、Batching 与 MHA/GQA Oracle，逐层进入真实 vLLM 环境、输入长度、并发、调度和最终性能报告。';
 
@@ -100,9 +106,9 @@ M 系列回答“机制在数值和状态上是否正确”；S 系列回答“�
 			保留未实现入口，完成后运行公开评分。
 		</div>
 		<pre>
-			<code>{`curl -LO https://zqwiki.cn/labs/kv-cache-batch.tar.gz
-tar -xzf kv-cache-batch.tar.gz
-cd kv-cache-batch
+			<code>{`curl -LO https://zqwiki.cn/labs/p2-inference-systems.tar.gz
+tar -xzf p2-inference-systems.tar.gz
+cd p2-inference-systems
 make setup
 make grade`}</code>
 		</pre>
@@ -121,7 +127,7 @@ make grade`}</code>
 			和发布器排除。
 		</div>
 		<pre>
-			<code>{`cd labs/kv-cache-batch
+			<code>{`cd labs/p2-inference-systems
 make setup
 make private-setup
 make source-status
@@ -155,7 +161,7 @@ make grade`}</code>
 - <strong>阶段计划：</strong> <a href={planHref}>Phase 2 总路线与验收</a>用于审计 Gate
   依赖、实验协议、停止条件和阶段边界。
 - <strong>事实证据：</strong>
-  [测试、原始数据与结果目录](/labs/kv-cache-batch/results/)证明契约与实验事实；派生结果必须可以从
+  [测试、原始数据与结果目录](/labs/p2-inference-systems/results/)证明契约与实验事实；派生结果必须可以从
   Raw 重建。
 - <strong>文件用法：</strong> <a href={labHomeHref}>Lab 文件首页</a>
   提供下载、解压、评分和维护者私有工作区命令；<a href={labReadmeHref}>README</a>保存稳定使用契约。
@@ -183,9 +189,9 @@ make grade`}</code>
 
 ### 已完成实验
 
-- [P0 · NumPy View/Copy 与轴语义](/labs/kv-cache-batch/read/docs/gates/P0/)
-- [M0 · KV Cache、预分配与固定 B=2 Length Scan](/labs/kv-cache-batch/results/batch-length-scan/)
-- [M1 · B=1/2/4/8 Batch Size Scan](/labs/kv-cache-batch/read/results/batch-size-scan/knee-analysis/)
+- [P0 · NumPy View/Copy 与轴语义](/labs/p2-inference-systems/read/checkoffs/p0-numpy-semantics/)
+- [M0 · KV Cache、预分配与固定 B=2 Length Scan](/labs/p2-inference-systems/results/m0-length-scan/)
+- [M1 · B=1/2/4/8 Batch Size Scan](/labs/p2-inference-systems/read/results/m1-batch-size-scan/knee-analysis/)
 
 </section>
 
@@ -223,7 +229,7 @@ S5、S6、R0、T0 不阻塞 F0。只有核心实验产生了对应问题，才�
 路线页决定实验顺序；Lab 目录只用于审计 Starter、测试、工作表和原始结果，不作为学习起点。
 
 - <a href={labHomeHref}>查看使用方法并浏览全部公开文件</a>
-- [下载公开 Starter 压缩包](/labs/kv-cache-batch.tar.gz)
+- [下载公开 Starter 压缩包](/labs/p2-inference-systems.tar.gz)
 - <a href={labInstructionsHref}>阅读当前任务书</a>
 - <a href={planHref}>阅读阶段总计划</a>
 

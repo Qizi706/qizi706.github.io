@@ -60,7 +60,10 @@ const systemBuildingPost = posts.find((post) => post.id === 'build-a-complete-sy
 const labProgress = phase2Progress;
 const labMilestone = labProgress.milestone;
 const currentStage = labProgress.current;
-const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', currentStage.document);
+const currentDocumentHref = getLabArtifactDisplayHref(
+	'p2-inference-systems',
+	currentStage.document,
+);
 ---
 
 <PageLayout title={SITE_TITLE} description={SITE_DESCRIPTION} mainClass="home-page">
@@ -209,7 +212,7 @@ const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', currentS
 			<nav aria-label="当前实验入口">
 				<a href="/learning/phase-2/#current">进入当前 Lab</a>
 				<a href={currentDocumentHref}>填写工作表</a>
-				<a href="/labs/kv-cache-batch/">使用 Lab 文件</a>
+				<a href="/labs/p2-inference-systems/">使用 Lab 文件</a>
 			</nav>
 		</div>
 	</section>

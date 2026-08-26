@@ -41,7 +41,7 @@ mathjax: true
 
 这不是 vLLM、GPU 或在线 Serving Benchmark，而是进入真实系统实验前的机制验证。实验只覆盖 CPU、NumPy、单 Head、等长 Sequence 和固定 Batch。它能证明最小实现中的数值不变量与耗时趋势，不能直接给出 vLLM 的 TTFT、TPOT、吞吐或 P99。
 
-机制背景见[《LLM 推理优化的系统视角：从 KV Cache 到调度》](/draft/llm-inference-optimization-system-view/)，完整代码与原始数据见 [`kv-cache-batch` 实验产物目录](/labs/kv-cache-batch/)。
+机制背景见[《LLM 推理优化的系统视角：从 KV Cache 到调度》](/draft/llm-inference-optimization-system-view/)，完整代码与原始数据见 [`p2-inference-systems` 实验产物目录](/labs/p2-inference-systems/)。
 
 </Note>
 
@@ -306,9 +306,9 @@ Batched： T 次 Python Decode Step
 |   4 |          2.627 |          2.673 |      0.657 |     194,928 |           2.045x |
 |   8 |          5.264 |          5.312 |      0.658 |     194,513 |           2.064x |
 
-![Batch Size 对 Batch P50/P95 的影响](/labs/kv-cache-batch/results/batch-size-scan/batch-latency-percentiles.svg)
+![Batch Size 对 Batch P50/P95 的影响](/labs/p2-inference-systems/results/m1-batch-size-scan/latency-p50-p95.svg)
 
-![Batch Size 对 Positions/s 的影响](/labs/kv-cache-batch/results/batch-size-scan/positions-throughput.svg)
+![Batch Size 对 Positions/s 的影响](/labs/p2-inference-systems/results/m1-batch-size-scan/throughput-positions-per-second.svg)
 
 相邻一级 B 的吞吐增幅由原始 CSV 计算：
 
@@ -391,25 +391,25 @@ KV Cache 用线性增长的状态换掉了更昂贵的历史重算；历史 Cach
 <CoreCard title="运行正确性测试与 Benchmark" class="title-underline">
 
 ```bash
-cd labs/kv-cache-batch
+cd labs/p2-inference-systems
 make setup
 make test
 
 # 重建 B=2 Length Scan
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  uv run kv-cache-batch \
+  uv run p2-inference-systems \
   --experiment batch-length \
-  --csv results/batch-length-scan/raw.csv
+  --csv results/m0-length-scan/raw.csv
 
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  uv run kv-cache-batch \
+  uv run p2-inference-systems \
   --experiment batch-size \
-  --csv results/batch-size-scan/raw.csv
+  --csv results/m1-batch-size-scan/raw.csv
 
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  uv run kv-cache-batch-summary \
-  --input results/batch-size-scan/raw.csv \
-  --output-dir results/batch-size-scan \
+  uv run p2-inference-systems-summary \
+  --input results/m1-batch-size-scan/raw.csv \
+  --output-dir results/m1-batch-size-scan \
   --sequence-length 128 \
   --dtype float64 \
   --blas-threads 1
@@ -421,40 +421,40 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
 
 ```bash
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  uv run kv-cache-batch \
+  uv run p2-inference-systems \
   --experiment cache \
   --csv results/cache-strategy/raw.csv
 ```
 
-可以从 [实验产物目录](/labs/kv-cache-batch/) 统一浏览、查看原始文件或下载。本文涉及的直接证据包括：
+可以从 [实验产物目录](/labs/p2-inference-systems/) 统一浏览、查看原始文件或下载。本文涉及的直接证据包括：
 
-- [Attention 与 Cache 实现](/labs/kv-cache-batch/src/kv_cache_lab/attention.py)
-- [Benchmark Harness](/labs/kv-cache-batch/src/kv_cache_lab/benchmark.py)
-- [Batch Size 汇总与绘图脚本](/labs/kv-cache-batch/src/kv_cache_lab/summarize_batch_size.py)
-- [正确性测试](/labs/kv-cache-batch/tests/test_attention.py)
-- [Batch Size 汇总公式测试](/labs/kv-cache-batch/tests/test_summarize_batch_size.py)
-- [Batch Length Scan 的 300 条原始样本](/labs/kv-cache-batch/results/batch-length-scan/raw.csv)
-- [Batch Size Scan 的 240 条原始样本](/labs/kv-cache-batch/results/batch-size-scan/raw.csv)
-- [Batch Size 汇总表](/labs/kv-cache-batch/results/batch-size-scan/summary.csv)
-- [Batch Size Knee 分析](/labs/kv-cache-batch/read/results/batch-size-scan/knee-analysis/)
+- [Attention 与 Cache 实现](/labs/p2-inference-systems/src/inference_lab/attention.py)
+- [Benchmark Harness](/labs/p2-inference-systems/src/inference_lab/benchmark.py)
+- [Batch Size 汇总与绘图脚本](/labs/p2-inference-systems/src/inference_lab/summarize_batch_size_scan.py)
+- [正确性测试](/labs/p2-inference-systems/tests/test_attention.py)
+- [Batch Size 汇总公式测试](/labs/p2-inference-systems/tests/test_batch_size_summary.py)
+- [Batch Length Scan 的 300 条原始样本](/labs/p2-inference-systems/results/m0-length-scan/raw.csv)
+- [Batch Size Scan 的 240 条原始样本](/labs/p2-inference-systems/results/m1-batch-size-scan/raw.csv)
+- [Batch Size 汇总表](/labs/p2-inference-systems/results/m1-batch-size-scan/summary.csv)
+- [Batch Size Knee 分析](/labs/p2-inference-systems/read/results/m1-batch-size-scan/knee-analysis/)
 
 ```text
-kv-cache-batch/
-├── src/kv_cache_lab/
+p2-inference-systems/
+├── src/inference_lab/
 │   ├── attention.py
 │   ├── benchmark.py
-│   └── summarize_batch_size.py
+│   └── summarize_batch_size_scan.py
 ├── tests/
 │   ├── test_attention.py
-│   └── test_summarize_batch_size.py
+│   └── test_batch_size_summary.py
 └── results/
-    ├── batch-length-scan/
+    ├── m0-length-scan/
     │   └── raw.csv
-    └── batch-size-scan/
+    └── m1-batch-size-scan/
         ├── raw.csv
         ├── summary.csv
-        ├── batch-latency-percentiles.svg
-        ├── positions-throughput.svg
+        ├── latency-p50-p95.svg
+        ├── throughput-positions-per-second.svg
         └── knee-analysis.md
 ```
 

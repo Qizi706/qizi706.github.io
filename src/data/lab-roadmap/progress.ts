@@ -42,7 +42,7 @@ const taskDetails = {
 			},
 		],
 		artifact:
-			'multi_head.py、test_multi_head.py，以及 M2-B 工作表中的 Shape 推导、独立标量 Oracle、首次失败和闭卷解释。',
+			'multi_head_attention.py、test_multi_head_attention.py，以及 M2-B 工作表中的 Shape 推导、独立标量 Oracle、首次失败和闭卷解释。',
 		acceptance:
 			'Score、Weight 与逐 Head 输出 Shape 正确；至少两个非零坐标匹配独立标量 Oracle；因果性、Batch/Head 隔离、输入契约与完整回归全部通过；关闭代码后能解释缩放与 Softmax 轴。',
 		steps: [
@@ -56,8 +56,8 @@ const taskDetails = {
 		],
 		nextDecision:
 			'M2-B 全部门禁通过后进入 M2-C Cached MHA；任一项失败就继续修正 B，不提前实现 Cache、GQA Head 映射或 Output Projection。',
-		document: 'docs/gates/m2/b.md',
-		assignment: 'assignments/m2-b.md',
+		document: 'checkoffs/m2-b-causal-attention.md',
+		assignment: 'assignments/m2-b-causal-attention.md',
 	},
 } as const;
 

@@ -7,9 +7,9 @@
 ```text
 /learning/                   跨阶段 Syllabus：先学什么、依赖什么
   ├── /learning/phase-1/     Phase 1：请求链路与本地 Serving 基线
-  │     └── serving-baseline 已完成的复现包
+  │     └── p1-serving-baseline 已完成的复现包
   └── /learning/phase-2/     Phase 2：机制、调度与性能工程
-        └── kv-cache-batch   当前 Lab 与后续实验事实源
+        └── p2-inference-systems   当前 Lab 与后续实验事实源
 ```
 
 每个 Lab 统一使用下面的职责分层：
@@ -19,7 +19,7 @@
 | 路线页                            | 当前位于哪一层，通过后解锁什么        | 不保存实现细节     |
 | Lab `README.md`                   | 怎样下载、启动以及文件位于哪里        | 不随当前 Gate 重写 |
 | `assignments/<gate>.md`           | 当前任务怎样执行和评分                | 不重复完整阶段路线 |
-| `docs/gates/`                     | 预测、第一次失败、修正规则和 Checkoff | 不充当任务说明     |
+| `checkoffs/`                      | 预测、第一次失败、修正规则和 Checkoff | 不充当任务说明     |
 | `src/` 与 `tests/`                | 实现与自动验收                        | 不替代实验解释     |
 | `results/`、`logs/`、`responses/` | 原始证据与可重建派生结果              | 不用叙事覆盖事实   |
 | 文章                              | 机制教材或完成后的实验报告            | 不跟踪今天的进度   |

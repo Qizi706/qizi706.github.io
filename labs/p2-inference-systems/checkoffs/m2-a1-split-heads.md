@@ -1,0 +1,143 @@
+# M2-A1 工作表：Query Head 轴变换
+
+状态：**已完成**。本页只保存 M2-A1 的预测、第一次失败、修正规则和 Checkoff。
+
+阶段依赖见 [roadmap.md](../roadmap.md)，下一步是 [M2-A2](m2-a2-qkv-projection.md)。
+
+### 学习契约
+
+```text
+Question: 怎样把扁平的 Head 特征拆成显式 Head 轴，并证明轴顺序正确？
+Prediction: 变换后 Shape 与预期相同、单个元素位置对应、share memory
+Time box: 120 min
+Action: 实现 split_heads(projected, num_heads)
+Artifact: multi_head_attention.py、test_multi_head_attention.py 与本工作表中的预测、失败和结果记录
+Acceptance: Shape 和元素映射测试通过，关闭代码后能重新写出变换
+Feedback source: unittest 失败信息与手算元素 Oracle
+Result: 3 个 M2-A1 测试通过，完整 9 个测试通过
+What changed: 修正了 Shape/坐标理解，并发现 Python 局部变量遮蔽问题
+Reflection: 预测基本正确；Python 基本语法仍需在真实任务中复用，现在对 MHA 和从零构建程序有了初步认识
+Next decision: M2-A1 通过，进入 M2-A2
+```
+
+### 运行前预测
+
+固定参数：
+
+```text
+B = 2
+T = 5
+H = 4
+D_head = 3
+```
+
+先填写，不运行 NumPy：
+
+```text
+projected 输入 Shape = [2, 5, 12]
+拆分 Head 后 Shape   = [2, 5, 4, 3]
+移动 Head 轴后 Shape = [2, 4, 5, 3]
+```
+
+为每个轴写一句语义：
+
+```text
+B: batch 数量
+H: head 数量
+T: Sequence 长度
+D_head: 每个 head 的维度
+```
+
+选择一个坐标，例如 `b=1, h=2, t=3, d=1`，手算它在扁平投影最后一维中的索引：
+
+```text
+flat_index = h * D_head + d = 7
+q[1, 2, 3, 1] 应等于 projected[1, 3, 7]
+```
+
+预测下面两步是否创建新数据 Buffer，并写出理由：
+
+| 操作                  | View / Copy 预测 | 理由                                               | 实际结果 |
+| --------------------- | ---------------- | -------------------------------------------------- | -------- |
+| 拆分最后一维          | View             | 实际物理布局没变                                   | View     |
+| 交换 Head 与 Sequence | View             | 创建了一个新的对象，改变 Stride，但是 share memory | View     |
+
+### 只实现这个接口
+
+在 `src/inference_lab/multi_head_attention.py` 中实现：
+
+```python
+def split_heads(projected: np.ndarray, num_heads: int) -> np.ndarray:
+    """Convert [B, T, H * D_head] into [B, H, T, D_head]."""
+    # TODO: validate the contract
+    # TODO: split the final dimension
+    # TODO: move the Head axis before Sequence
+```
+
+这一轮禁止加入：
+
+- Q/K/V 权重投影；
+- Softmax 与 Causal Mask；
+- KV Cache；
+- GQA Head 映射；
+- 性能 Benchmark。
+
+### 三个最小测试
+
+在 `tests/test_multi_head_attention.py` 中只写：
+
+- **Shape 测试**：输入使用顺序值，检查输出为预测的四维 Shape。
+- **元素映射测试**：选择一个非零 `b/h/t/d`，用手算的 `flat_index` 比较变换前后的具体值。
+- **内存共享测试**：确认轴变换结果与输入共享同一数据 Buffer。
+
+Shape 测试只能证明尺寸正确；元素测试才用于排除 Head 与 Sequence 轴放反。
+
+运行：
+
+```bash
+OPENBLAS_NUM_THREADS=1 \
+OMP_NUM_THREADS=1 \
+PYTHONPATH=src \
+uv run python -m unittest discover -s tests -p 'test_multi_head_attention.py' -v
+```
+
+### 求助阶梯
+
+只有上一层尝试 15 分钟仍无法推进时，才进入下一层：
+
+- 重新画出每一步 Shape，不看代码。
+- 回看 `examples/p0_numpy_array_semantics.py` 中的 `swapaxes` Case。
+- 用 `B=1, T=2, H=2, D_head=2` 的顺序值数组手工追踪。
+- 向 AI 只询问“我的 Shape 推导哪一步不成立”，不索要完整实现。
+- 提交当前代码、失败输出和预测，请 AI Review 最小错误。
+
+不要直接索要完整答案；独立能力来自“预测 → 失败 → 定位 → 修正”，不是来自第一次就写对。
+
+### 运行后记录
+
+```text
+实际 Shape: (2, 5, 4, 3)
+元素映射是否成立: 成立
+内存共享观察: 内存共享
+第一次失败信息: 我把接受返回值的变量名设置为函数同名 split_heads，python 的类型不像 cpp 那样严格，因此报错：
+Traceback (most recent call last):
+  File "/home/celeb/Programming/blogs/astro-site/labs/p2-inference-systems/tests/test_multi_head_attention.py", line 29, in test_split_heads_shape_match_oracle
+    split_heads = split_heads(self.x, H)
+                  ^^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'split_heads' where it is not associated with a value
+错误属于哪一层: 测试设计
+修正后的规则: 修改了一下变量名
+```
+
+### A1 验收
+
+**已完成**
+
+- 运行前预测已保存。
+- Shape 测试通过。
+- 非零坐标的元素映射测试通过。
+- 能解释 `H * D_head` 为什么可以拆成两个轴。
+- 能解释为什么仅检查 Shape 不足以证明轴顺序正确。
+- 关闭代码后，能在空白文件中重新写出变换。
+
+通过后进入 **M2-A2**：把同一变换迁移到 Q/K/V，并增加权重宽度与 Head 整除检查。未通过时只修正 A1，不扩展到 Attention。

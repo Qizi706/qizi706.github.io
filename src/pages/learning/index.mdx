@@ -5,8 +5,11 @@ import { getLabArtifactDisplayHref } from '../../utils/lab-artifacts.mjs';
 import '../../styles/lab-roadmap.css';
 
 export const current = phase2Progress.current;
-export const currentDocumentHref = getLabArtifactDisplayHref('kv-cache-batch', current.document);
-export const currentLabHref = '/labs/kv-cache-batch/';
+export const currentDocumentHref = getLabArtifactDisplayHref(
+	'p2-inference-systems',
+	current.document,
+);
+export const currentLabHref = '/labs/p2-inference-systems/';
 export const description =
 	'从阶段 1 的 LLM Serving 请求链路与本地基线，到阶段 2 的 Attention、KV Cache、调度与 vLLM 性能工程：按依赖、实验和 Checkoff 递进的完整学习路线。';
 
@@ -118,11 +121,11 @@ export const description =
 
 ## 当前 Lab 文件怎样使用？
 
-公开下载者从 [`kv-cache-batch.tar.gz`](/labs/kv-cache-batch.tar.gz) 获得未完成 Starter，解压后直接修改
+公开下载者从 [`p2-inference-systems.tar.gz`](/labs/p2-inference-systems.tar.gz) 获得未完成 Starter，解压后直接修改
 `src/`；仓库维护者运行 `make private-setup`，只在被忽略的 `.work/src/` 中保存个人实现。两者使用同一套测试与评分入口，但私人源码不会进入网站或下载包。
 
 - <a href={currentLabHref}>查看完整使用方法和公开文件</a>
-- [直接下载当前 Starter](/labs/kv-cache-batch.tar.gz)
+- [直接下载当前 Starter](/labs/p2-inference-systems.tar.gz)
 - [进入 Phase 2 当前任务](/learning/phase-2/#current)
 
 </section>

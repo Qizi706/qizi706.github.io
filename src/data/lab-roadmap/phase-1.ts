@@ -87,7 +87,7 @@ export const phase1: LabPhase = {
 			artifact: '安装脚本、服务日志、环境说明和原始 JSON 响应。',
 			acceptance: '从干净终端复现服务，并从日志中定位模型、Backend、KV Cache 预算和端点。',
 			unlocks: 'P1-L3 测量契约',
-			href: '/labs/serving-baseline/read/README/',
+			href: '/labs/p1-serving-baseline/read/README/',
 		},
 		{
 			id: 'P1-L3',
@@ -112,7 +112,7 @@ export const phase1: LabPhase = {
 			artifact: '可重复运行的 Benchmark 脚本与实验契约。',
 			acceptance: '每个结果都能回答环境、负载、控制变量、统计口径和原始数据位置。',
 			unlocks: 'P1-L4 Length Scan',
-			href: '/labs/serving-baseline/scripts/benchmark_ollama_input_length.py',
+			href: '/labs/p1-serving-baseline/scripts/p1_l4_benchmark_input_length.py',
 		},
 		{
 			id: 'P1-L4',
@@ -159,7 +159,7 @@ export const phase1: LabPhase = {
 				},
 			],
 			work: '闭卷重画请求链路；复跑一个扫描点；从日志、响应、脚本和 CSV 各解释一条证据；列出尚未验证的并发与尾延迟结论。',
-			artifact: '两篇阶段文章与完整 serving-baseline 复现包。',
+			artifact: '两篇阶段文章与完整 p1-serving-baseline 复现包。',
 			acceptance: '链路解释、复跑和证据边界三项同时通过；只完成阅读不算通过。',
 			unlocks: 'Phase 2 · P0 NumPy 语义热身',
 			href: '/learning/phase-1/#checkoff',

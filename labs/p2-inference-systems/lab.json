@@ -1,0 +1,69 @@
+{
+	"schemaVersion": 1,
+	"slug": "p2-inference-systems",
+	"title": "LLM 推理机制 Lab",
+	"description": "从 KV Cache、Batched Decode 到 MHA/GQA 的 NumPy 实验 Starter 与可复查证据",
+	"parent": {
+		"href": "/learning/phase-2/",
+		"label": "阶段 2 实验路线"
+	},
+	"usage": {
+		"mode": "starter",
+		"readme": "README.md",
+		"currentTask": "assignments/m2-b-causal-attention.md",
+		"publicSource": "src",
+		"privateSource": ".work/src"
+	},
+	"publish": [
+		"lab.json",
+		"README.md",
+		"Makefile",
+		"grade-lab",
+		"pyproject.toml",
+		"uv.lock",
+		"assignments",
+		"src",
+		"tests",
+		"grader_tests",
+		"examples",
+		"roadmap.md",
+		"checkoffs",
+		"results"
+	],
+	"notes": [
+		"The published src directory is the intentionally unfinished Starter, not the maintainer's local implementation.",
+		"The ignored .work directory is never published.",
+		"Markdown opens in reading mode; code, data, and other artifacts open as published files."
+	],
+	"checks": {
+		"required": [
+			"README.md",
+			"assignments/m2-b-causal-attention.md",
+			"Makefile",
+			"grade-lab",
+			"grader_tests/test_m2_b_causal_attention.py",
+			"roadmap.md",
+			"checkoffs/p0-numpy-semantics.md",
+			"checkoffs/m1-batch-size-scan.md",
+			"checkoffs/m2-a1-split-heads.md",
+			"checkoffs/m2-a2-qkv-projection.md",
+			"checkoffs/m2-b-causal-attention.md",
+			"src/inference_lab/attention.py",
+			"src/inference_lab/multi_head_attention.py",
+			"tests/test_attention.py",
+			"tests/test_multi_head_attention.py",
+			"results/m1-batch-size-scan/raw.csv",
+			"results/m1-batch-size-scan/summary.csv"
+		],
+		"csvRows": {
+			"results/m0-length-scan/raw.csv": 300,
+			"results/m1-batch-size-scan/raw.csv": 240
+		},
+		"starterContains": {
+			"src/inference_lab/multi_head_attention.py": [
+				"M2-B TODO: implement scaled dot-product causal attention",
+				"raise NotImplementedError"
+			]
+		}
+	}
+}

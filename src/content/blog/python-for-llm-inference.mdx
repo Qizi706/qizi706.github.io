@@ -53,7 +53,7 @@ mathjax: false
 
 <Note title="本文的范围" class="title-underline">
 
-目标不是掌握 Python 的所有语言特性，而是能够独立维护当前 [`kv-cache-batch` Lab](/labs/kv-cache-batch/)，完成 `B=1/2/4/8` 扫描，读懂 vLLM 中常见的 Python 结构，并为后续流式 Serving Harness 做准备。
+目标不是掌握 Python 的所有语言特性，而是能够独立维护当前 [`p2-inference-systems` Lab](/labs/p2-inference-systems/)，完成 `B=1/2/4/8` 扫描，读懂 vLLM 中常见的 Python 结构，并为后续流式 Serving Harness 做准备。
 
 Web Framework、GUI、数据分析 Notebook、复杂装饰器、Descriptor、Metaclass、Multiprocessing 与 Python C Extension 暂不进入学习范围。
 
@@ -348,9 +348,9 @@ Python 默认不会在运行时验证这些注解。当前 `pyproject.toml` 中�
 当前项目结构可以读成：
 
 ```text
-kv-cache-batch/
+p2-inference-systems/
 ├── pyproject.toml
-├── src/kv_cache_lab/
+├── src/inference_lab/
 │   ├── __init__.py
 │   ├── attention.py
 │   └── benchmark.py
@@ -358,17 +358,17 @@ kv-cache-batch/
     └── test_attention.py
 ```
 
-- `kv-cache-batch` 是项目发行名和主 CLI 名，`kv_cache_lab` 是内部 Python Package；不同名称可以避免在目录树里混淆项目根目录与源码包；
+- `p2-inference-systems` 是项目发行名和主 CLI 名，`inference_lab` 是内部 Python Package；不同名称可以避免在目录树里混淆项目根目录与源码包；
 - `attention.py` 和 `benchmark.py` 是 Module；
-- `from kv_cache_lab.attention import ...` 使用绝对导入；
+- `from inference_lab.attention import ...` 使用绝对导入；
 - `pyproject.toml` 的 `[project.scripts]` 把命令行名称绑定到 `benchmark:main`。
 
 ```toml
 [project.scripts]
-kv-cache-batch = "kv_cache_lab.benchmark:main"
+p2-inference-systems = "inference_lab.benchmark:main"
 
 [tool.uv.build-backend]
-module-name = "kv_cache_lab"
+module-name = "inference_lab"
 ```
 
 下面的守卫表示“直接运行这个 Module 时调用 `main`，被 Import 时不调用”：
@@ -383,16 +383,16 @@ if __name__ == "__main__":
 <CoreCard title="当前实验项目的基本命令" class="title-underline">
 
 ```bash
-cd labs/kv-cache-batch
+cd labs/p2-inference-systems
 uv sync
 
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   uv run python -m unittest discover -s tests -v
 
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  uv run kv-cache-batch \
+  uv run p2-inference-systems \
   --experiment batch-length \
-  --csv results/batch-length-scan/raw.csv
+  --csv results/m0-length-scan/raw.csv
 ```
 
 </CoreCard>
@@ -661,9 +661,9 @@ def summarize_samples(samples_ms: list[float]) -> dict[str, float]:
 
 ```bash
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  uv run kv-cache-batch \
+  uv run p2-inference-systems \
   --experiment batch-size \
-  --csv results/batch-size-scan/raw.csv
+  --csv results/m1-batch-size-scan/raw.csv
 ```
 
 不要在 `import numpy` 后才尝试修改 BLAS 线程环境变量。底层 Runtime 可能已经完成初始化，实验未必真的采用新配置。
@@ -801,7 +801,7 @@ finish_ns       stream finishes or fails
 
 ### 9.1 P0：对象与 ndarray 语义
 
-**Status：Completed。** 六类实验的预测、实际结果、差异解释和闭卷口述已经保存在 [P0 记录](/labs/kv-cache-batch/read/docs/gates/P0/)；后续不再为“复习 Python”增加脱离主线的练习。
+**Status：Completed。** 六类实验的预测、实际结果、差异解释和闭卷口述已经保存在 [P0 记录](/labs/p2-inference-systems/read/checkoffs/p0-numpy-semantics/)；后续不再为“复习 Python”增加脱离主线的练习。
 
 **Question：** 哪些操作共享状态，哪些操作复制数据？
 
@@ -828,7 +828,7 @@ finish_ns       stream finishes or fails
 - 所有 B 通过数值与 Shape 检查；
 - 能解释吞吐提高为什么不等于单请求更快；
 - 如果没有饱和拐点，结论写成 `Not reached`；
-- 结果写入可复查的 [Batch Size Scan 证据目录](/labs/kv-cache-batch/results/batch-size-scan/)。
+- 结果写入可复查的 [Batch Size Scan 证据目录](/labs/p2-inference-systems/results/m1-batch-size-scan/)。
 
 **Result：** 240 条原始样本与两张曲线可重建；`B=8` 首次满足相邻吞吐增幅低于 10% 的 Knee 定义。
 
@@ -838,7 +838,7 @@ finish_ns       stream finishes or fails
 
 **Action：** A1/A2 已完成 Head 拆分、Q/K/V 投影和输入契约；B 先写独立标量 Oracle、Future Token 与 Head/Batch 隔离测试，再实现 `H_q=H_kv` 的无 Cache MHA。
 
-**Artifact：** `multi_head.py`、`test_multi_head.py` 与 [M2-B 工作表](/labs/kv-cache-batch/read/docs/gates/m2/b/)。
+**Artifact：** `multi_head_attention.py`、`test_multi_head_attention.py` 与 [M2-B 工作表](/labs/p2-inference-systems/read/checkoffs/m2-b-causal-attention/)。
 
 **Acceptance：** Score/Weight、逐 Head Output Shape 和两个非零坐标 Oracle 通过；Future Token 不可见、Weight 沿历史 Token Axis 归一化，Head/Batch 互不污染；A2 与完整回归无退化。
 
@@ -865,7 +865,7 @@ B=2, H_q=H_kv=3, T=4, D_head=5
 Q/K/V=[2,3,4,5]
 ```
 
-在 [M2-B 工作表](/labs/kv-cache-batch/read/docs/gates/m2/b/) 中填写 K 转置、Score、Mask、Weight 与 Output 的 Shape，指出 Softmax Axis，再手算至少两个非零坐标。还要预测修改 Future Token、一个 Head 或一个 Batch 分别会影响哪些输出。
+在 [M2-B 工作表](/labs/p2-inference-systems/read/checkoffs/m2-b-causal-attention/) 中填写 K 转置、Score、Mask、Weight 与 Output 的 Shape，指出 Softmax Axis，再手算至少两个非零坐标。还要预测修改 Future Token、一个 Head 或一个 Batch 分别会影响哪些输出。
 
 ### 10.2 15 分钟：只读当天会用到的文档
 
