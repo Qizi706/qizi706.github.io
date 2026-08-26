@@ -25,7 +25,7 @@ function getContentType(filePath) {
 
 	switch (extension) {
 		case '.csv':
-			return 'text/csv; charset=utf-8';
+			return 'text/plain; charset=utf-8';
 		case '.html':
 			return 'text/html; charset=utf-8';
 		case '.js':
