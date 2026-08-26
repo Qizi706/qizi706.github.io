@@ -1,0 +1,105 @@
+.page-frame.phase2-wiki-page {
+	flex: none;
+	width: min(100%, var(--content-width));
+	max-width: var(--content-width);
+	color: #0f172a;
+	font-family: var(--font-body);
+}
+
+.phase2-wiki-page .wiki-page-header h1 {
+	margin: 0 0 0.5rem;
+	padding: 1.5rem 0 0;
+	font-size: 1.5rem;
+	line-height: 2rem;
+}
+
+.phase2-wiki-page .wiki-index-section {
+	scroll-margin-top: 4.5rem;
+}
+
+.phase2-wiki-page .wiki-index-section h2 {
+	margin: 0;
+	padding: 1.5rem 0 0.5rem;
+	font-size: 1.25rem;
+	line-height: 1.75rem;
+}
+
+.phase2-wiki-page .wiki-index-list,
+.phase2-wiki-page .wiki-route-list {
+	margin: 0.25rem 0;
+	padding: 0 0 0 0.5rem;
+	list-style-position: inside;
+}
+
+.phase2-wiki-page .wiki-index-list {
+	list-style-type: disc;
+}
+
+.phase2-wiki-page .wiki-route-list {
+	list-style-type: decimal;
+}
+
+.phase2-wiki-page .wiki-index-list li,
+.phase2-wiki-page .wiki-route-list li {
+	margin: 0.25rem 1rem;
+	padding: 0;
+	line-height: 1.625;
+	text-align: left;
+}
+
+.phase2-wiki-page .route-family {
+	display: inline-block;
+	margin-right: 0.35rem;
+	padding: 0 0.25rem;
+	border: 1px solid;
+	border-radius: 0.2rem;
+	font-size: 0.8rem;
+	line-height: 1.35;
+}
+
+.phase2-wiki-page .route-family.is-gray {
+	border-color: #94a3b8;
+	background: #f1f5f9;
+}
+
+.phase2-wiki-page .route-family.is-green {
+	border-color: #34d399;
+	background: #d1fae5;
+}
+
+.phase2-wiki-page .route-family.is-blue {
+	border-color: #38bdf8;
+	background: #e0f2fe;
+}
+
+.phase2-wiki-page .route-family.is-violet {
+	border-color: #a78bfa;
+	background: #ede9fe;
+}
+
+.phase2-wiki-page .route-status {
+	color: #64748b;
+	font-size: 0.78rem;
+	white-space: nowrap;
+}
+
+.phase2-wiki-page .route-status.is-active {
+	color: var(--accent);
+	font-weight: 700;
+}
+
+.phase2-wiki-page .route-status.is-done {
+	color: #15803d;
+}
+
+.phase2-wiki-page .route-separator {
+	color: #94a3b8;
+}
+
+@media (max-width: 560px) {
+	.phase2-wiki-page .wiki-index-list li,
+	.phase2-wiki-page .wiki-route-list li {
+		margin-right: 0;
+		margin-left: 0.5rem;
+	}
+}

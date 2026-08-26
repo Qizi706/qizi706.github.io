@@ -1,0 +1,144 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import { phase2, phase2Progress } from '../../data/lab-roadmap';
+import '../../styles/phase-2-wiki.css';
+import { getLabArtifactDisplayHref } from '../../utils/lab-artifacts.mjs';
+
+const progress = phase2Progress;
+const current = progress.current;
+const currentDocumentHref = getLabArtifactDisplayHref('p2-inference-systems', current.document);
+const labInstructionsHref = getLabArtifactDisplayHref('p2-inference-systems', current.assignment);
+const labReadmeHref = getLabArtifactDisplayHref('p2-inference-systems', 'README.md');
+const planHref = getLabArtifactDisplayHref('p2-inference-systems', 'roadmap.md');
+const labHomeHref = '/labs/p2-inference-systems/';
+const labArchiveHref = '/labs/p2-inference-systems.tar.gz';
+const description =
+	'阶段 2 实验索引：从 NumPy 语义、KV Cache、Batching 与 MHA/GQA Oracle，逐层进入真实 vLLM 测量。';
+
+const statusLabels = {
+	done: '已通过',
+	active: '当前',
+	pending: '待解锁',
+	optional: '进阶',
+};
+
+const routeRows = [
+	{ label: '基础', tone: 'gray', unitIds: ['P0', 'M0'] },
+	{ label: '机制', tone: 'green', unitIds: ['M1', 'M2'] },
+	{ label: 'Serving', tone: 'blue', unitIds: ['S0', 'S1', 'S2'] },
+	{ label: 'Serving', tone: 'blue', unitIds: ['S3', 'S4'] },
+	{ label: '交付', tone: 'violet', unitIds: ['F0'] },
+].map((row) => ({
+	...row,
+	units: row.unitIds.map((id) => {
+		const unit = phase2.units.find((candidate) => candidate.id === id);
+		if (!unit) throw new Error(`Missing Phase 2 unit: ${id}`);
+		return unit;
+	}),
+}));
+---
+
+<PageLayout
+	title={`阶段 2：${phase2.title}`}
+	description={description}
+	mainClass="phase2-wiki-page"
+	noindex
+>
+	<header class="wiki-page-header">
+		<h1>阶段 2 · {phase2.title}</h1>
+		<ul class="wiki-index-list">
+			<li><strong>目标：</strong>{phase2.shortTitle}</li>
+			<li><strong>时间：</strong>{phase2.period}；<strong>状态：</strong>进行中</li>
+			<li>
+				<strong>当前：</strong>
+				<a href="#current">{current.id} · {current.title}</a>；通过后进入 {progress.next.id} · {
+					progress.next.title
+				}
+			</li>
+			<li>
+				<a href="/learning/">实验路线</a>；<a href="/learning/phase-1/">Phase 1</a>；
+				<a href={planHref}>完整阶段计划</a>
+			</li>
+		</ul>
+	</header>
+
+	<section id="current" class="wiki-index-section">
+		<h2>当前任务</h2>
+		<ul class="wiki-index-list">
+			<li>
+				<span class="route-status is-active">当前</span>{' '}
+				<a href={labInstructionsHref}>{current.id} · {current.title}</a>（{current.period}）
+			</li>
+			<li>
+				<a href={labInstructionsHref}>任务书</a> | <a href={currentDocumentHref}>工作表</a> | {
+					' '
+				}<a href={labArchiveHref} download>Starter</a> | <a href={labHomeHref}>公开文件</a>
+			</li>
+			<li>当前 Checkoff 通过后进入 {progress.next.id}；未通过时只修正 {current.id}。</li>
+		</ul>
+	</section>
+
+	<section id="route" class="wiki-index-section">
+		<h2>核心路线</h2>
+		<ol class="wiki-route-list" aria-label="阶段 2 核心实验路线">
+			{
+				routeRows.map((row) => (
+					<li>
+						<span class={`route-family is-${row.tone}`}>{row.label}</span>
+						{row.units.map((unit, index) => (
+							<>
+								{index > 0 && (
+									<span class="route-separator" aria-hidden="true">
+										{' '}
+										|{' '}
+									</span>
+								)}
+								{unit.href ? (
+									<a href={unit.href}>
+										{unit.id} · {unit.title}
+									</a>
+								) : (
+									<span>
+										{unit.id} · {unit.title}
+									</span>
+								)}
+								<span class:list={['route-status', `is-${unit.status}`]}>
+									（{statusLabels[unit.status]}）
+								</span>
+							</>
+						))}
+					</li>
+				))
+			}
+		</ol>
+	</section>
+
+	<section id="materials" class="wiki-index-section">
+		<h2>材料与证据</h2>
+		<ul class="wiki-index-list">
+			<li>
+				<strong>执行：</strong>
+				<a href={labInstructionsHref}>当前任务书</a> | <a href={currentDocumentHref}>当前工作表</a> |
+				{' '}<a href={labReadmeHref}>Lab 使用说明</a>
+			</li>
+			<li>
+				<strong>证据：</strong>{progress.evidence.tests} 项回归测试、{progress.evidence.rawSamples} 条原始样本；
+				<a href="/labs/p2-inference-systems/read/checkoffs/p0-numpy-semantics/">P0</a> | {' '}<a
+					href="/labs/p2-inference-systems/results/m0-length-scan/">M0</a
+				> | {' '}<a href="/labs/p2-inference-systems/read/results/m1-batch-size-scan/knee-analysis/"
+					>M1</a
+				>
+			</li>
+			<li>
+				<strong>文章：</strong>
+				<a href="/blog/python-for-llm-inference/">Python / NumPy 前置能力</a> | {' '}<a
+					href="/blog/build-a-complete-system-from-scratch/">从零构建完整系统</a
+				>
+			</li>
+			<li>
+				<strong>进阶：</strong>S5、S6、R0、T0 不阻塞核心路线；完成 F0 后再从
+				<a href={planHref}>阶段计划</a>中选择。
+			</li>
+		</ul>
+	</section>
+</PageLayout>
