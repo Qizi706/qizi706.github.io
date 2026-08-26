@@ -2,9 +2,9 @@
 import type { CollectionEntry } from 'astro:content';
 import { getCollection } from 'astro:content';
 import BlogArticle from '../../components/BlogArticle.astro';
-import FormattedDate from '../../components/FormattedDate.astro';
 import PageLayout from '../../layouts/PageLayout.astro';
 import { getDraftPostUrl } from '../../utils/posts';
+import '../../styles/wiki-index.css';
 
 interface DraftIndexProps {
 	kind: 'index';
@@ -41,141 +41,56 @@ export async function getStaticPaths() {
 
 const page: Props = Astro.props;
 const description = `不进入正式文章归档的草稿预览，共 ${page.kind === 'index' ? page.posts.length : 1} 篇。`;
+const archiveDateFormatter = new Intl.DateTimeFormat('zh-CN', {
+	year: 'numeric',
+	month: '2-digit',
+	day: '2-digit',
+	timeZone: 'Asia/Shanghai',
+});
+const formatArchiveDate = (date: Date) => archiveDateFormatter.format(date).replaceAll('/', '.');
 ---
 
 {
 	page.kind === 'post' ? (
 		<BlogArticle post={page.post} />
 	) : (
-		<PageLayout title="草稿预览" {description} mainClass="draft-index" noindex>
-			<header class="page-heading">
-				<div>
-					<p class="path">~/draft</p>
-					<h1>草稿预览</h1>
-				</div>
-				<span class="draft-badge">UNLISTED · {page.posts.length}</span>
-			</header>
-			<p class="notice">
-				这里的文章可通过直达链接预览，但不会进入正式文章归档、RSS 或 sitemap；这不是权限控制。
-			</p>
-			{page.posts.length > 0 ? (
-				<ul class="post-list">
-					{page.posts.map((post) => (
-						<li>
-							<article>
-								<a class="post-title" href={getDraftPostUrl(post)}>
-									<h2>{post.data.title}</h2>
-								</a>
-								<p class="description">{post.data.description}</p>
-								<p class="meta">
-									{post.data.categories.join(' / ') || '未分类'} · 更新于{' '}
-									<FormattedDate date={post.data.updatedDate ?? post.data.pubDate} />
-								</p>
-							</article>
-						</li>
-					))}
+		<PageLayout title="草稿预览" {description} mainClass="wiki-index-page" noindex>
+			<header class="wiki-page-header">
+				<h1>草稿预览</h1>
+				<ul class="wiki-index-list">
+					<li>
+						<strong>状态：</strong>UNLISTED · {page.posts.length}
+					</li>
+					<li>直达链接可以预览，但草稿不会进入正式文章归档、RSS 或 sitemap；这不是权限控制。</li>
+					<li>
+						<a href="/blog/">正式文章</a> | <a href="/">首页</a>
+					</li>
 				</ul>
-			) : (
-				<p class="empty">
-					当前没有标记为 <code>draft: true</code> 的文章。
-				</p>
-			)}
+			</header>
+
+			<section class="wiki-index-section" aria-label="草稿目录">
+				<h2>草稿目录</h2>
+				{page.posts.length > 0 ? (
+					<ol class="wiki-route-list">
+						{page.posts.map((post) => {
+							const lastModified = post.data.updatedDate ?? post.data.pubDate;
+							return (
+								<li>
+									<time class="route-family is-gray" datetime={lastModified.toISOString()}>
+										{formatArchiveDate(lastModified)}
+									</time>
+									<a href={getDraftPostUrl(post)}>{post.data.title}</a>
+									{post.data.categories.length > 0 && `（${post.data.categories.join(' / ')}）`}
+								</li>
+							);
+						})}
+					</ol>
+				) : (
+					<p class="wiki-section-note">
+						当前没有标记为 <code>draft: true</code> 的文章。
+					</p>
+				)}
+			</section>
 		</PageLayout>
 	)
 }
-
-<style>
-	:global(.page-frame.draft-index) {
-		max-width: var(--content-width);
-	}
-
-	.page-heading {
-		display: flex;
-		align-items: flex-end;
-		justify-content: space-between;
-		gap: 1rem;
-		margin-bottom: 1rem;
-		padding-bottom: 1rem;
-		border-bottom: 1px solid rgb(var(--gray-light));
-	}
-
-	.path {
-		margin: 0 0 0.3rem;
-		color: var(--accent);
-		font-family: var(--font-mono);
-		font-size: 0.75rem;
-	}
-
-	.page-heading h1 {
-		margin: 0;
-	}
-
-	.draft-badge {
-		flex: none;
-		padding: 0.1rem 0.4rem;
-		border: 1px solid #cbd5e1;
-		border-radius: var(--card-radius);
-		color: #64748b;
-		font-family: var(--font-mono);
-		font-size: 0.65rem;
-		letter-spacing: 0.04em;
-	}
-
-	.notice,
-	.empty {
-		margin: 0 0 1rem;
-		color: rgb(var(--gray));
-		font-size: 0.85rem;
-	}
-
-	.post-list {
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	.post-list li {
-		padding: 1rem 0;
-		border-top: 1px dashed rgb(var(--gray-light));
-	}
-
-	.post-list li:last-child {
-		border-bottom: 1px dashed rgb(var(--gray-light));
-	}
-
-	.post-title {
-		color: rgb(var(--black));
-	}
-
-	.post-title:hover {
-		color: var(--accent);
-	}
-
-	.post-title h2 {
-		margin: 0;
-		font-size: 1.05rem;
-		line-height: 1.45;
-	}
-
-	.description {
-		margin: 0.3rem 0 0;
-		color: rgb(var(--gray));
-		font-size: 0.875rem;
-		line-height: 1.55;
-	}
-
-	.meta {
-		margin: 0.35rem 0 0;
-		color: #64748b;
-		font-family: var(--font-mono);
-		font-size: 0.7rem;
-	}
-
-	@media (max-width: 520px) {
-		.page-heading {
-			align-items: flex-start;
-			flex-direction: column;
-			gap: 0.6rem;
-		}
-	}
-</style>

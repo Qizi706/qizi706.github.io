@@ -4,6 +4,7 @@ import { getCollection } from 'astro:content';
 import { SITE_TITLE } from '../../consts';
 import PageLayout from '../../layouts/PageLayout.astro';
 import { getCategorySlug, getPostUrl } from '../../utils/posts';
+import '../../styles/wiki-index.css';
 
 interface Props {
 	category: string;
@@ -50,18 +51,18 @@ const archiveRange =
 		: '';
 ---
 
-<PageLayout title={`${category} | ${SITE_TITLE}`} {description} mainClass="category-page">
-	<header class="page-heading">
+<PageLayout title={`${category} | ${SITE_TITLE}`} {description} mainClass="wiki-index-page">
+	<header class="wiki-page-header">
 		<h1>{category}</h1>
 		{
 			isAiInfra ? (
-				<ul class="category-summary">
+				<ul class="wiki-index-list">
 					<li>学习主题：LLM 推理与 Serving</li>
 					<li>当前阶段：请求链路、Prefill、Decode、KV Cache 与本地推理服务</li>
 					<li>文章：共 {posts.length} 篇；理论知识与验证实验并列阅读</li>
 				</ul>
 			) : (
-				<ul class="category-summary">
+				<ul class="wiki-index-list">
 					<li>{description}</li>
 					{archiveRange && <li>收录时间：{archiveRange}</li>}
 					<li>文章按发布时间由旧到新排列，编号即建议阅读顺序</li>
@@ -70,36 +71,29 @@ const archiveRange =
 		}
 	</header>
 
-	<section aria-label={`${category} 分类下的文章`}>
+	<section class="wiki-index-section" aria-label={`${category} 分类下的文章`}>
 		<h2>{isAiInfra ? '学习内容' : '文章目录'}</h2>
 		{
 			isAiInfra ? (
-				<ol class="post-list ai-infra-list">
+				<ol class="wiki-route-list">
 					<li>
-						<span class="archive-label archive-label-gray">推理基础</span>{' '}
+						<span class="route-family is-gray">推理基础</span>
 						{posts.map((post, index) => (
 							<>
-								{index > 0 && <span class="post-separator"> | </span>}
-								<a class="post-title" href={getPostUrl(post)}>
-									{post.data.title}
-								</a>
+								{index > 0 && <span class="route-separator"> | </span>}
+								<a href={getPostUrl(post)}>{post.data.title}</a>
 							</>
 						))}
 					</li>
 				</ol>
 			) : (
-				<ol class="post-list">
+				<ol class="wiki-route-list">
 					{posts.map((post) => (
 						<li>
-							<time
-								class="archive-label archive-label-gray"
-								datetime={post.data.pubDate.toISOString()}
-							>
+							<time class="route-family is-gray" datetime={post.data.pubDate.toISOString()}>
 								{formatArchiveDate(post.data.pubDate)}
-							</time>{' '}
-							<a class="post-title" href={getPostUrl(post)}>
-								{post.data.title}
-							</a>
+							</time>
+							<a href={getPostUrl(post)}>{post.data.title}</a>
 						</li>
 					))}
 				</ol>
@@ -107,94 +101,3 @@ const archiveRange =
 		}
 	</section>
 </PageLayout>
-
-<style>
-	:global(.page-frame.category-page) {
-		font-family: var(--font-body);
-		line-height: 1.75;
-	}
-
-	.page-heading {
-		margin: 0;
-	}
-
-	.page-heading h1 {
-		padding: 1.5rem 0 0;
-		margin: 0 0 1rem;
-		font-size: 1.5rem;
-		line-height: 2rem;
-	}
-
-	.category-summary {
-		margin: 0.25rem 0;
-		padding: 0 0 0 0.5rem;
-		list-style-position: inside;
-		list-style-type: disc;
-		text-align: left;
-	}
-
-	.category-summary li {
-		margin: 0 1rem;
-		padding: 0;
-		text-align: justify;
-		overflow-wrap: normal;
-		word-break: normal;
-	}
-
-	section {
-		margin: 0;
-	}
-
-	section h2 {
-		margin: 0;
-		padding: 1.5rem 0 0.5rem;
-		font-size: 1.25rem;
-		line-height: 1.75rem;
-	}
-
-	.post-list {
-		margin: 0.75rem 1rem;
-		padding: 0 0 0 0.5rem;
-		list-style-position: inside;
-		list-style-type: decimal;
-		text-align: justify;
-	}
-
-	.post-list li {
-		margin: 0;
-		padding: 0;
-		text-align: justify;
-		overflow-wrap: normal;
-		word-break: normal;
-	}
-
-	.archive-label {
-		display: inline;
-		padding: 0 0.25rem;
-		border-color: #94a3b8;
-		color: inherit;
-		font: inherit;
-		white-space: nowrap;
-	}
-
-	.archive-label-gray {
-		background: #f1f5f9;
-	}
-
-	.post-title {
-		font-weight: 500;
-		line-height: inherit;
-	}
-
-	.post-separator {
-		white-space: pre;
-	}
-
-	@media (min-width: 768px) {
-		:global(.page-frame.category-page) {
-			border-width: 1px;
-			border-radius: 0;
-			box-shadow: var(--wiki-frame-shadow);
-		}
-	}
-</style>

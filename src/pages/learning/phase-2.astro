@@ -1,7 +1,7 @@
 ---
 import PageLayout from '../../layouts/PageLayout.astro';
 import { phase2, phase2Progress } from '../../data/lab-roadmap';
-import '../../styles/phase-2-wiki.css';
+import '../../styles/wiki-index.css';
 import { getLabArtifactDisplayHref } from '../../utils/lab-artifacts.mjs';
 
 const progress = phase2Progress;
@@ -16,10 +16,10 @@ const description =
 	'阶段 2 实验索引：从 NumPy 语义、KV Cache、Batching 与 MHA/GQA Oracle，逐层进入真实 vLLM 测量。';
 
 const statusLabels = {
-	done: '已通过',
-	active: '当前',
-	pending: '待解锁',
-	optional: '进阶',
+	done: 'Passed',
+	active: 'Current',
+	pending: 'Locked',
+	optional: 'Optional',
 };
 
 const routeRows = [
@@ -41,7 +41,7 @@ const routeRows = [
 <PageLayout
 	title={`阶段 2：${phase2.title}`}
 	description={description}
-	mainClass="phase2-wiki-page"
+	mainClass="wiki-index-page"
 	noindex
 >
 	<header class="wiki-page-header">
@@ -66,7 +66,7 @@ const routeRows = [
 		<h2>当前任务</h2>
 		<ul class="wiki-index-list">
 			<li>
-				<span class="route-status is-active">当前</span>{' '}
+				<strong>当前：</strong>
 				<a href={labInstructionsHref}>{current.id} · {current.title}</a>（{current.period}）
 			</li>
 			<li>

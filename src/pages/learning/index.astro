@@ -1,0 +1,97 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import { phase1, phase2, phase2Progress } from '../../data/lab-roadmap';
+import { getLabArtifactDisplayHref } from '../../utils/lab-artifacts.mjs';
+import '../../styles/wiki-index.css';
+
+const current = phase2Progress.current;
+const currentDocumentHref = getLabArtifactDisplayHref('p2-inference-systems', current.document);
+const currentTaskHref = getLabArtifactDisplayHref('p2-inference-systems', current.assignment);
+const description =
+	'从 LLM Serving 请求链路与本地基线，进入 Attention、KV Cache、调度与 vLLM 性能工程的实验路线。';
+---
+
+<PageLayout title="AI Infra 实验路线" description={description} mainClass="wiki-index-page">
+	<header class="wiki-page-header">
+		<h1>AI Infra 实验路线</h1>
+		<ul class="wiki-index-list">
+			<li><strong>目标：</strong>从一条请求出发，建立可解释、可测量、可复现的单机推理系统。</li>
+			<li><strong>进度：</strong>Phase 1 Passed；Phase 2 Current。</li>
+			<li>
+				<strong>当前：</strong><a href="/learning/phase-2/#current"
+					>{current.id} · {current.title}</a
+				>（{current.period}）
+			</li>
+			<li>
+				<a href={currentTaskHref}>当前任务书</a>{' '}|{' '}<a href={currentDocumentHref}
+					>当前工作表</a
+				>{' '}|{' '}<a href="/labs/p2-inference-systems.tar.gz" download>Starter</a>{' '}|{' '}<a
+					href="/labs/">公开 Lab</a
+				>
+			</li>
+		</ul>
+	</header>
+
+	<section id="route" class="wiki-index-section">
+		<h2>阶段路线</h2>
+		<ol class="wiki-route-list">
+			<li>
+				<span class="route-family is-gray">Phase 1</span><a href={phase1.path}>{phase1.title}</a
+				>（Passed · {phase1.period}）
+			</li>
+			<li>
+				<span class="route-family is-green">Phase 2</span><a href={`${phase2.path}#current`}
+					>{phase2.title}</a
+				>（Current · {phase2.period}）
+			</li>
+		</ol>
+	</section>
+
+	<section id="method" class="wiki-index-section">
+		<h2>实验方法</h2>
+		<ol class="wiki-route-list">
+			<li>
+				<strong>Question / Prediction：</strong>每轮只回答一个可证伪问题，并在运行前写下趋势、Shape
+				或状态变化。
+			</li>
+			<li>
+				<strong>Implement / Grade：</strong>一次只增加一个变换，用定向测试、完整回归和原始数据验收。
+			</li>
+			<li>
+				<strong>Checkoff：</strong>脱离代码解释机制、复现结果并修改约束，通过后才进入下一层。
+			</li>
+		</ol>
+	</section>
+
+	<section id="materials" class="wiki-index-section">
+		<h2>材料与边界</h2>
+		<ul class="wiki-index-list">
+			<li>
+				<strong>路线：</strong>只描述依赖、当前 Gate 与完成标准；具体机制进入文章和任务书阅读。
+			</li>
+			<li>
+				<strong>公开 Starter：</strong>下载者修改压缩包中的 <code>src/</code
+				>，使用公开测试与评分入口验收。
+			</li>
+			<li>
+				<strong>本地实现：</strong>维护者的答案仅保存在被忽略的 <code>.work/src/</code
+				>，不会进入网站和下载包。
+			</li>
+			<li>
+				<strong>证据：</strong>测试、日志、原始数据与可重建结果决定实验结论，阅读本身不计完成。
+			</li>
+		</ul>
+	</section>
+
+	<section id="checkoff" class="wiki-index-section">
+		<h2>完成标准</h2>
+		<ul class="wiki-index-list">
+			<li><strong>Phase 1：</strong>{phase1.completion}</li>
+			<li><strong>Phase 2：</strong>{phase2.completion}</li>
+			<li>
+				当前唯一行动：完成 <a href="/learning/phase-2/#current">{current.id} · {current.title}</a
+				>；未通过时只修正当前 Gate。
+			</li>
+		</ul>
+	</section>
+</PageLayout>

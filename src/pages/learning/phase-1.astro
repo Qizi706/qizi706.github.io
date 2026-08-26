@@ -1,0 +1,114 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro';
+import { phase1 } from '../../data/lab-roadmap';
+import '../../styles/wiki-index.css';
+
+const description =
+	'阶段 1 实验索引：从模型、推理与 Serving 的边界出发，追踪请求链路，启动本地服务并建立可复现测量基线。';
+
+const routeRows = [
+	{ label: '基础', tone: 'gray', unitIds: ['P1-L0', 'P1-L1'] },
+	{ label: '运行', tone: 'green', unitIds: ['P1-L2'] },
+	{ label: '测量', tone: 'blue', unitIds: ['P1-L3', 'P1-L4'] },
+	{ label: '交付', tone: 'violet', unitIds: ['P1-F'] },
+].map((row) => ({
+	...row,
+	units: row.unitIds.map((id) => {
+		const unit = phase1.units.find((candidate) => candidate.id === id);
+		if (!unit) throw new Error(`Missing Phase 1 unit: ${id}`);
+		return unit;
+	}),
+}));
+---
+
+<PageLayout title={`阶段 1：${phase1.title}`} description={description} mainClass="wiki-index-page">
+	<nav class="wiki-breadcrumbs" aria-label="实验路线层级">
+		<a href="/learning/">AI Infra 实验路线</a><span>/</span><span>Phase 1</span>
+	</nav>
+
+	<header class="wiki-page-header">
+		<h1>阶段 1 · {phase1.title}</h1>
+		<ul class="wiki-index-list">
+			<li><strong>目标：</strong>{phase1.shortTitle}</li>
+			<li><strong>时间：</strong>{phase1.period}；<strong>状态：</strong>Passed</li>
+			<li>{phase1.goal}</li>
+			<li>
+				<a href="/learning/">实验路线</a>{' '}|{' '}<a href="/labs/p1-serving-baseline/read/README/"
+					>复现说明</a
+				>{' '}|{' '}<a href="/labs/p1-serving-baseline.tar.gz" download>证据包</a>{' '}|{' '}<a
+					href="/learning/phase-2/">Phase 2</a
+				>
+			</li>
+		</ul>
+	</header>
+
+	<section id="route" class="wiki-index-section">
+		<h2>Lab 路线</h2>
+		<ol class="wiki-route-list" aria-label="阶段 1 Lab 路线">
+			{
+				routeRows.map((row) => (
+					<li>
+						<span class={`route-family is-${row.tone}`}>{row.label}</span>
+						{row.units.map((unit, index) => (
+							<>
+								{index > 0 && (
+									<span class="route-separator" aria-hidden="true">
+										{' '}
+										|{' '}
+									</span>
+								)}
+								{unit.href ? (
+									<a href={unit.href}>
+										{unit.id} · {unit.title}
+									</a>
+								) : (
+									<span>
+										{unit.id} · {unit.title}
+									</span>
+								)}
+								<span class="route-status is-done">（Passed）</span>
+							</>
+						))}
+					</li>
+				))
+			}
+		</ol>
+	</section>
+
+	<section id="evidence" class="wiki-index-section">
+		<h2>材料与证据</h2>
+		<ul class="wiki-index-list">
+			<li>
+				<strong>机制：</strong><a href="/blog/llm-inference-request-lifecycle/"
+					>LLM 推理请求生命周期</a
+				>说明 API、Tokenizer、Scheduler、Prefill、KV Cache、Decode 与 Streaming。
+			</li>
+			<li>
+				<strong>实验：</strong><a href="/blog/llm-inference-request-lifecycle-practice/"
+					>本地 LLM 推理服务实验</a
+				>记录环境、长度实验、失败与指标边界。
+			</li>
+			<li>
+				<strong>复现：</strong><a href="/labs/p1-serving-baseline/">Phase 1 公开文件</a
+				>保存脚本、日志、响应和原始长度扫描数据。
+			</li>
+		</ul>
+	</section>
+
+	<section id="checkoff" class="wiki-index-section">
+		<h2>Checkoff</h2>
+		<ul class="wiki-index-list">
+			<li>{phase1.completion}</li>
+			<li>
+				闭卷画出请求链路，标出 Prefill、Decode 与 KV Cache；从干净终端启动服务并复跑一个长度扫描点。
+			</li>
+			<li>
+				能够解释 Warmup、重复次数、计时边界和近似 TPOT 的限制，并列出尚未验证的并发与尾延迟结论。
+			</li>
+			<li>
+				<strong>下一步：</strong><a href="/learning/phase-2/">进入 Phase 2 · 推理机制与性能工程</a
+				>。
+			</li>
+		</ul>
+	</section>
+</PageLayout>

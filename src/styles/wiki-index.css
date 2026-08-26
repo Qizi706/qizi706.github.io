@@ -1,0 +1,136 @@
+.page-frame.wiki-index-page {
+	flex: none;
+	width: min(100%, var(--content-width));
+	max-width: var(--content-width);
+	color: #0f172a;
+	font-family: var(--font-body);
+}
+
+.wiki-index-page .wiki-breadcrumbs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem;
+	margin: 0 0 0.25rem;
+	color: #64748b;
+	font-size: 0.9rem;
+}
+
+.wiki-index-page .wiki-breadcrumbs a {
+	color: inherit;
+}
+
+.wiki-index-page .wiki-page-header h1 {
+	margin: 0 0 0.5rem;
+	padding: 1.5rem 0 0;
+	font-size: 1.5rem;
+	line-height: 2rem;
+}
+
+.wiki-index-page .wiki-index-section {
+	scroll-margin-top: 4.5rem;
+}
+
+.wiki-index-page .wiki-index-section h2 {
+	margin: 0;
+	padding: 1.5rem 0 0.5rem;
+	font-size: 1.25rem;
+	line-height: 1.75rem;
+}
+
+.wiki-index-page .wiki-index-list,
+.wiki-index-page .wiki-route-list {
+	margin: 0.25rem 0;
+	padding: 0 0 0 0.5rem;
+	list-style-position: inside;
+}
+
+.wiki-index-page .wiki-index-list {
+	list-style-type: disc;
+}
+
+.wiki-index-page .wiki-route-list {
+	list-style-type: decimal;
+}
+
+.wiki-index-page .wiki-index-list li,
+.wiki-index-page .wiki-route-list li {
+	margin: 0.25rem 1rem;
+	padding: 0;
+	overflow-wrap: anywhere;
+	line-height: 1.625;
+	text-align: left;
+}
+
+.wiki-index-page .route-family {
+	margin-right: 0.25rem;
+	padding-right: 0.25rem;
+	padding-left: 0.25rem;
+	border: 0;
+	border-radius: 0;
+	font-size: inherit;
+	line-height: inherit;
+	white-space: nowrap;
+}
+
+.wiki-index-page .route-family.is-gray {
+	background: #f1f5f9;
+}
+
+.wiki-index-page .route-family.is-green {
+	background: #d1fae5;
+}
+
+.wiki-index-page .route-family.is-blue {
+	background: #e0f2fe;
+}
+
+.wiki-index-page .route-family.is-violet {
+	background: #ede9fe;
+}
+
+.wiki-index-page .route-status {
+	color: #64748b;
+	font-size: 0.78rem;
+	white-space: nowrap;
+}
+
+.wiki-index-page .route-status.is-active {
+	color: var(--accent);
+	font-weight: 700;
+}
+
+.wiki-index-page .route-status.is-done {
+	color: #15803d;
+}
+
+.wiki-index-page .route-separator {
+	color: #94a3b8;
+}
+
+.wiki-index-page .wiki-section-note {
+	margin: 0;
+	color: #475569;
+	line-height: 1.625;
+}
+
+@media (max-width: 560px) {
+	.page-frame.wiki-index-page {
+		flex: 1 1 0;
+		width: 100%;
+		min-width: 0;
+		max-width: 100%;
+	}
+
+	.wiki-index-page .wiki-index-list li,
+	.wiki-index-page .wiki-route-list li {
+		margin-right: 0;
+		margin-left: 0.5rem;
+		white-space: normal;
+	}
+
+	.wiki-index-page .wiki-index-list li a,
+	.wiki-index-page .wiki-route-list li a {
+		overflow-wrap: anywhere;
+		white-space: normal;
+	}
+}
