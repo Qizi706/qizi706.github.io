@@ -4,7 +4,6 @@ import FormattedDate from '../components/FormattedDate.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
 import { phase2Progress } from '../data/lab-roadmap';
 import PageLayout from '../layouts/PageLayout.astro';
-import { getLabArtifactDisplayHref } from '../utils/lab-artifacts.mjs';
 import { getCategoryUrl, getDraftPostUrl, getPostUrl } from '../utils/posts';
 
 const allPosts = await getCollection('blog');
@@ -57,13 +56,7 @@ const categories = [...categorySummaries.values()].sort(
 );
 const featuredPost = posts.find((post) => post.id === 'conjecture-verification-practice');
 const systemBuildingPost = posts.find((post) => post.id === 'build-a-complete-system-from-scratch');
-const labProgress = phase2Progress;
-const labMilestone = labProgress.milestone;
-const currentStage = labProgress.current;
-const currentDocumentHref = getLabArtifactDisplayHref(
-	'p2-inference-systems',
-	currentStage.document,
-);
+const currentStage = phase2Progress.current;
 ---
 
 <PageLayout title={SITE_TITLE} description={SITE_DESCRIPTION} mainClass="home-page">
@@ -186,46 +179,24 @@ const currentDocumentHref = getLabArtifactDisplayHref(
 		)
 	}
 
-	<section class="tomorrow-section" aria-labelledby="tomorrow-heading">
+	<section class="home-index-section" aria-labelledby="tomorrow-heading">
 		<h2 id="tomorrow-heading">当前实验</h2>
-		<div class="tomorrow-milestone" aria-label="当前阶段目标">
-			<p><strong>{labMilestone.title}</strong> · {labMilestone.goal}</p>
-			<dl>
-				<dt>核心路线</dt>
-				<dd>{labMilestone.coreRoute}</dd>
-				<dt>最终产出</dt>
-				<dd>{labMilestone.finalArtifact}</dd>
-			</dl>
-			<a class="roadmap-overview-link" href="/learning/">查看 Phase 1 → Phase 2 完整实验路线 →</a>
-		</div>
-
-		<div class="current-learning">
-			<p class="current-learning__meta">当前任务 · {currentStage.period} · 进行中</p>
-			<h3>{currentStage.id} · {currentStage.title}</h3>
-			<p><strong>唯一目标：</strong>{currentStage.objective}</p>
-			<dl>
-				<dt>问题</dt>
-				<dd>{currentStage.question}</dd>
-				<dt>验收</dt>
-				<dd>{currentStage.acceptance}</dd>
-			</dl>
-			<nav aria-label="当前实验入口">
-				<a href="/learning/phase-2/#current">进入当前 Lab</a>
-				<a href={currentDocumentHref}>填写工作表</a>
-				<a href="/labs/p2-inference-systems/">使用 Lab 文件</a>
-			</nav>
-		</div>
+		<ul class="home-index-links">
+			<li>
+				<a href="/learning/phase-2/#current">{currentStage.id} · {currentStage.title}</a>
+				<small>（{currentStage.period} · 进行中）</small>
+			</li>
+		</ul>
 	</section>
 
 	{
 		categories.length > 0 && (
-			<section aria-labelledby="topics-heading">
+			<section class="home-index-section" aria-labelledby="topics-heading">
 				<h2 id="topics-heading">文章存档</h2>
-				<ul class="category-links">
-					{categories.map(({ name, count }) => (
+				<ul class="home-index-links">
+					{categories.map(({ name }) => (
 						<li>
 							<a href={getCategoryUrl(name)}>{name}</a>
-							<small>（{count} 篇文章）</small>
 						</li>
 					))}
 				</ul>
@@ -334,7 +305,7 @@ const currentDocumentHref = getLabArtifactDisplayHref(
 	}
 
 	.featured-links,
-	.category-links,
+	.home-index-links,
 	.draft-links {
 		margin: 0.25rem 0;
 		padding: 0 0 0 0.5rem;
@@ -343,7 +314,7 @@ const currentDocumentHref = getLabArtifactDisplayHref(
 	}
 
 	.featured-links li,
-	.category-links li,
+	.home-index-links li,
 	.draft-links li {
 		margin: 0 1rem;
 		padding: 0;
@@ -353,7 +324,7 @@ const currentDocumentHref = getLabArtifactDisplayHref(
 	}
 
 	.featured-links li::marker,
-	.category-links li::marker,
+	.home-index-links li::marker,
 	.draft-links li::marker {
 		color: #d1d5db;
 	}
@@ -366,86 +337,27 @@ const currentDocumentHref = getLabArtifactDisplayHref(
 		background: rgb(248 250 252 / 72%);
 	}
 
-	.tomorrow-milestone {
-		margin: 0 0 1rem;
+	.home-index-section {
+		margin-top: 1.5rem;
 	}
 
-	.tomorrow-milestone p {
-		margin: 0 0 0.7rem;
-		color: #334155;
-		font-size: 0.86rem;
-		line-height: 1.6;
+	.home-index-section h2 {
+		margin-bottom: 0.25rem;
 	}
 
-	.tomorrow-milestone dl,
-	.current-learning dl {
-		display: grid;
-		grid-template-columns: 6rem minmax(0, 1fr);
-		gap: 0.25rem 0.75rem;
-		margin: 0;
+	.home-index-links {
+		margin-top: 0.25rem;
+		margin-bottom: 0.25rem;
 	}
 
-	.tomorrow-milestone dt,
-	.current-learning dt {
+	.home-index-links li {
+		margin-top: 0;
+		margin-bottom: 0;
+	}
+
+	.home-index-links small {
 		color: #64748b;
 		font-size: 0.86rem;
-		font-weight: 700;
-	}
-
-	.tomorrow-milestone dd,
-	.current-learning dd {
-		margin: 0;
-		color: #334155;
-		font-size: 0.86rem;
-		line-height: 1.5;
-	}
-
-	.roadmap-overview-link {
-		display: inline-block;
-		margin-top: 0.7rem;
-		font-size: 0.86rem;
-	}
-
-	.current-learning {
-		padding-top: 0.9rem;
-		border-top: 1px solid #cbd5e1;
-	}
-
-	.current-learning__meta {
-		margin: 0;
-		color: #64748b;
-		font-size: 0.9rem;
-	}
-
-	.current-learning h3 {
-		margin: 0.25rem 0 0;
-		font-size: 1rem;
-	}
-
-	.current-learning > p {
-		margin: 0.7rem 0;
-		font-size: 0.86rem;
-		line-height: 1.6;
-	}
-
-	.current-learning nav {
-		display: flex;
-		gap: 1rem;
-		margin-top: 0.7rem;
-		font-size: 0.86rem;
-	}
-
-	@media (max-width: 520px) {
-		.tomorrow-milestone dl,
-		.current-learning dl {
-			grid-template-columns: 1fr;
-			gap: 0.1rem;
-		}
-
-		.tomorrow-milestone dd + dt,
-		.current-learning dd + dt {
-			margin-top: 0.4rem;
-		}
 	}
 
 	.draft-heading {
@@ -563,12 +475,6 @@ const currentDocumentHref = getLabArtifactDisplayHref(
 		background: transparent;
 		box-shadow: none;
 		object-fit: contain;
-	}
-
-	.category-links small {
-		margin-left: 0.25rem;
-		color: #0f172a;
-		font-size: 0.9rem;
 	}
 
 	@media (max-width: 520px) {
