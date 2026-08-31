@@ -1,12 +1,10 @@
-# P2 推理系统 Lab：KV Cache、Batch 与 MHA
+# P2 推理系统 Lab：公开 Starter
 
-这是一个可下载、可评分、可复查的 AI Infra 实验包。公开目录中的 `src/` 始终是 **Starter**：它只包含开始当前任务所需的基础实现和刻意保留的 `TODO`，不会从维护者的本地实现自动更新。
+这是当前 **M2-B · Multi-Head Causal Attention** 的公开 Starter。网站和下载包只提供尚未完成的任务、空白工作表、公开评分器，以及运行当前任务所需的最小起点。
 
-网站入口为 [Lab 文件与使用方法](/labs/p2-inference-systems/)；这里同时保留可复制的完整命令和稳定文件契约。
+个人实现、已填写 Checkoff、第一次失败和历史实验结果不保存在本站仓库；它们由独立的私人 Git 仓库管理。
 
-当前任务是 [M2-B · Multi-Head Causal Attention](assignments/m2-b-causal-attention.md)。完整依赖与状态从 [AI Infra 实验路线](/learning/)进入。
-
-## 下载者：直接使用公开 Starter
+## 下载并开始
 
 ```bash
 curl -LO https://zqwiki.cn/labs/p2-inference-systems.tar.gz
@@ -16,41 +14,40 @@ make setup
 make grade
 ```
 
-下载后直接编辑 `src/`。当前 Starter 预期通过 M2-A1/M2-A2，并在尚未实现的 M2-B 处失败。
+下载后可以直接编辑 `src/`、`tests/` 和本地工作表。当前 Starter 预期通过 M2-A1/M2-A2，并在尚未实现的 M2-B 处失败。
 
-## 仓库维护者：使用私有工作区
+当前任务书：[M2-B · Multi-Head Causal Attention](assignments/m2-b-causal-attention.md)。阶段依赖与状态从 [AI Infra 实验路线](/learning/)进入。
 
-在本站仓库中，不要直接把个人实现写入公开 `src/`。第一次开始本地实现时运行：
+## 本站维护者的私人仓库
+
+本站工作区中的 `.work/` 本身是一个独立 Git 仓库。所有实际作答都在其中完成：
 
 ```bash
-cd labs/p2-inference-systems
+cd labs/p2-inference-systems/.work
 make setup
-make private-setup
-make source-status
+make grade
+make test
+git status
 ```
 
-`make private-setup` 会把公开 Starter 复制到 `.work/src/`。此后 `make test`、`make grade` 和各 Gate 评分命令会自动使用 `.work/src/`；`.work/` 被 Git 忽略，也不在发布白名单中。
+不要把 `.work/` 中的源码、测试、Checkoff 或结果复制回本站仓库。需要远端备份时，只为它连接私有 Git 远端。
 
-命令不会覆盖已有 `.work/`。公开发布前可以用下面的命令确认 Starter 与私有实现的边界：
+## 公开文件边界
+
+| 路径 | 公开内容 |
+| --- | --- |
+| `assignments/m2-b-causal-attention.md` | 当前未完成任务 |
+| `checkoffs/m2-b-causal-attention.md` | 未填写的工作表模板 |
+| `src/inference_lab/multi_head_attention.py` | 带 M2-B `TODO` 的 Starter |
+| `tests/test_multi_head_attention.py` | 前置能力回归测试 |
+| `grader_tests/test_m2_b_causal_attention.py` | 当前任务公开评分器 |
+
+`lab.json` 使用 `unfinished-only` 发布策略。构建门禁会拒绝公开历史 `results/`、已完成 Checkoff，以及当前工作表之外的其他 Checkoff。
+
+修改公开材料后运行：
 
 ```bash
-make source-status
 cd ../..
 npm run labs:check
 npm run labs:publish
 ```
-
-## 文件职责
-
-| 路径                      | 职责                                  |
-| ------------------------- | ------------------------------------- |
-| `lab.json`                | 公开文件白名单与证据门禁              |
-| `assignments/`            | 每个 Gate 的任务范围、提示与评分命令  |
-| `roadmap.md`              | 阶段范围、依赖、验收和停止条件        |
-| `checkoffs/`              | 预测、第一次失败、修正规则与 Checkoff |
-| `src/`                    | 可公开下载的 Starter，不保存本地答案  |
-| `.work/src/`              | 维护者本地实现，永不发布              |
-| `tests/`、`grader_tests/` | 回归测试与公开评分                    |
-| `results/`                | 原始数据和可重建的派生结果            |
-
-执行链固定为：**路线页定位 → Assignment 执行 → Gate 工作表记录 → 测试与 results 验收 → Checkoff**。

@@ -1,6 +1,8 @@
 # M2-B 工作表：无 Cache MHA Oracle
 
-状态：**Current**。当前任务与评分命令以 [assignments/m2-b-causal-attention.md](../assignments/m2-b-causal-attention.md) 为准；阶段依赖与停止条件见 [roadmap.md](../roadmap.md)。
+状态：**Current · 未填写模板**。当前任务与评分命令以 [assignments/m2-b-causal-attention.md](../assignments/m2-b-causal-attention.md) 为准；阶段依赖与停止条件见[阶段 2 路线页](/learning/phase-2/)。
+
+> 本文件是网站公开的空白模板。下载者可以在自己的副本中填写；本站维护者必须填写私人作答仓库中的同名文件，不得把答案写回这里。
 
 ### 学习合同
 

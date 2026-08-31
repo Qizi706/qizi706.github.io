@@ -26,9 +26,9 @@ Phase 1 Checkoff
 | ------------------------------ | ----------------------------------------------------------------------------- | ---------------------------------------- |
 | 当前位于哪一层？               | [阶段 2 路线页](/learning/phase-2/)                                           | 依赖、状态、交付、Checkoff 与下一层      |
 | 现在具体做什么？               | 本 README                                                                     | 当前任务、允许修改的范围、命令与评分     |
-| 怎样审计详细阶段边界？         | [`roadmap.md`](../roadmap.md)                                                 | 完整实验协议、阶段验收与停止条件         |
-| 我的预测、失败和结果记在哪里？ | [`checkoffs/m2-b-causal-attention.md`](../checkoffs/m2-b-causal-attention.md) | 边做边填写的工作记录，不是第二份任务说明 |
-| 已经产生了什么证据？           | [`results/`](../results) 与测试                                               | 原始数据、派生结果和可运行验收           |
+| 怎样审计阶段边界？             | [阶段 2 路线页](/learning/phase-2/)                                           | 依赖、状态、交付与停止条件               |
+| 空白工作表在哪里？             | [`checkoffs/m2-b-causal-attention.md`](../checkoffs/m2-b-causal-attention.md) | 公开模板，不保存本站维护者的答案         |
+| 我的答案和证据记在哪里？       | 私人作答仓库中的同名文件                                                      | 实现、失败记录、Checkoff 与结果           |
 | 机制与结果怎样解释？           | [阶段 2 路线页](/learning/phase-2/)中的文章区                                 | 系统文章解释机制，实验文章总结已完成证据 |
 
 正常路径是：**路线页定位 → Assignment 执行 → M2-B 工作表记录 → 实现与测试 → results 验收**。只有需要审计详细实验协议或停止条件时，才打开总计划。
@@ -116,7 +116,7 @@ OK
 == m2-a2: PASS (20/20) ==
 </pre>
 
-这里保留 A1/A2 只是为了说明 M2-B 的可信起点；完整预测、失败与验收历史分别保存在 [M2-A1](../checkoffs/m2-a1-split-heads.md) 和 [M2-A2](../checkoffs/m2-a2-qkv-projection.md) 工作表中。
+这里保留 A1/A2 只是为了提供 M2-B 的可信起点；它们的个人预测、失败与验收历史只保存在私人作答仓库。
 
 ## M2-B：实现无 Cache MHA（当前）
 
@@ -149,7 +149,7 @@ output   [B,H,T,D_head]
 
 ### 建议步骤
 
-先关闭实现文件，在 [`checkoffs/m2-b-causal-attention.md`](../checkoffs/m2-b-causal-attention.md) 中写出 Score、Mask、Weight、Output 的 Shape 和 Softmax Axis。然后在 `tests/test_multi_head_attention.py` 中写一个不调用生产函数的标量 Oracle，保存第一次失败，再完成 `TODO`。
+先关闭实现文件。下载者可在自己的副本中填写 [`checkoffs/m2-b-causal-attention.md`](../checkoffs/m2-b-causal-attention.md)；本站维护者必须填写私人作答仓库中的同名文件，不能修改公开模板。然后在私人仓库的 `tests/test_multi_head_attention.py` 中写一个不调用生产函数的标量 Oracle，保存第一次失败，再完成 `TODO`。
 
 如果需要提示，请按这个顺序展开：
 
@@ -179,7 +179,7 @@ $ <kbd>make grade</kbd>
 $ <kbd>make test</kbd>
 $ <kbd>git diff --check</kbd>
 </pre>
-<p>最终评分必须是 <code>Score: 100/100</code>。然后回到 <a href="/labs/p2-inference-systems/read/checkoffs/m2-b-causal-attention/">M2-B 工作表</a>填写第一次失败、修正规则与闭卷解释；只有验收清单全部完成，才进入 M2-C Cached MHA。</p>
+<p>最终评分必须是 <code>Score: 100/100</code>。然后回到私人作答仓库的 M2-B 工作表填写第一次失败、修正规则与闭卷解释；只有验收清单全部完成，才进入 M2-C Cached MHA。网站上的同名页面始终保持为空白模板。</p>
 </div>
 
 ## 文件布局
@@ -191,24 +191,15 @@ p2-inference-systems/
 ├── Makefile                 # setup、回归与单项评分入口
 ├── grade-lab       # 公开评分脚本
 ├── assignments/
-│   └── m2-b.md              # 当前任务书
+│   └── m2-b-causal-attention.md       # 当前任务书
+├── checkoffs/
+│   └── m2-b-causal-attention.md       # 空白模板
 ├── grader_tests/
 │   └── test_m2_b_causal_attention.py          # M2-B 公开验收测试
 ├── src/inference_lab/
-│   ├── multi_head_attention.py         # M2-A1/A2 实现与 M2-B TODO
-│   ├── attention.py          # 已完成的单 Head / KV Cache 实验
-│   └── benchmark.py          # 历史计时与 CSV 输出
-├── tests/                    # 已完成任务的回归测试
-├── docs/
-│   ├── roadmap.md            # 阶段 2 总路线与验收
-│   └── gates/
-│       ├── P0.md             # P0 历史工作表
-│       ├── M1.md             # M1 历史工作表
-│       └── m2/
-│           ├── a1.md         # M2-A1 历史工作表
-│           ├── a2.md         # M2-A2 历史工作表
-│           └── b.md          # M2-B 当前工作表
-└── results/                  # 已完成实验的原始数据与派生结果
+│   └── multi_head_attention.py        # M2-A1/A2 起点与 M2-B TODO
+└── tests/
+    └── test_multi_head_attention.py   # 前置能力回归
 ```
 
-已完成的 M0、P0 与 M1 实验不再重复写入当前任务书。它们的过程在对应 Gate 工作表中，原始证据在 [`results/`](../results) 中，面向读者的解释在阶段 2 实验文章中。
+已完成任务的源码、工作表和原始证据由私人作答仓库管理，不进入本站发布包。

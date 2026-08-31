@@ -169,12 +169,11 @@ function renderLabLanding(manifest, labName, entries, archiveSize) {
 			`make setup\n` +
 			`make grade`;
 		const maintainerCommands =
-			`cd labs/${labName}\n` +
+			`cd labs/${labName}/${usage.privateSource}\n` +
 			`make setup\n` +
-			`make private-setup\n` +
-			`make source-status\n` +
 			`make test\n` +
-			`make grade`;
+			`make grade\n` +
+			`git status`;
 		workflow = `<section>
 <h2>下载 Starter，在本地完成实现</h2>
 <p>下载包中的 <code>${escapeHtml(usage.publicSource)}/</code> 是刻意保留 TODO 的公开起点。解压后直接修改它，再用公开测试和评分命令验收。</p>
@@ -182,16 +181,17 @@ function renderLabLanding(manifest, labName, entries, archiveSize) {
 <p class="link-row"><a href="${escapeHtml(taskHref)}">打开当前任务书</a></p>
 </section>
 <section>
-<h2>网站只展示 Starter，不展示个人答案</h2>
+<h2>网站只展示未完成 Starter，不展示个人答案</h2>
 <ul class="wiki-index-list">
 <li><strong><code>${escapeHtml(usage.publicSource)}/</code></strong>：网站和压缩包中的公开 Starter。</li>
-<li><strong><code>${escapeHtml(usage.privateSource)}/</code></strong>：维护者本地实现，被 Git 和发布器排除。</li>
+<li><strong><code>${escapeHtml(usage.privateSource)}/</code></strong>：独立的私人 Git 仓库，被本站 Git 和发布器排除。</li>
+<li>已填写 Checkoff、完成后的实现和实验结果只进入私人仓库。</li>
 <li>Markdown 在阅读页打开；源码、测试、数据和图表按发布原文打开。</li>
 </ul>
 </section>
 <section>
-<h2>在私有工作区实现，不直接修改公开 Starter</h2>
-<p><code>make private-setup</code> 只在首次使用时复制 Starter，并拒绝覆盖已有 <code>${escapeHtml(usage.privateSource)}/</code>。之后 Makefile 会自动选择私有源码。</p>
+<h2>在私人仓库作答，不直接修改公开 Starter</h2>
+<p>私人仓库拥有自己的 Git 历史；本站构建不会读取或回写其中的文件。</p>
 <pre><code>${escapeHtml(maintainerCommands)}</code></pre>
 </section>`;
 	} else {

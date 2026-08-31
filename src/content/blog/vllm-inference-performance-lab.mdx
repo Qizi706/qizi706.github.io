@@ -306,10 +306,6 @@ Batched： T 次 Python Decode Step
 |   4 |          2.627 |          2.673 |      0.657 |     194,928 |           2.045x |
 |   8 |          5.264 |          5.312 |      0.658 |     194,513 |           2.064x |
 
-![Batch Size 对 Batch P50/P95 的影响](/labs/p2-inference-systems/results/m1-batch-size-scan/latency-p50-p95.svg)
-
-![Batch Size 对 Positions/s 的影响](/labs/p2-inference-systems/results/m1-batch-size-scan/throughput-positions-per-second.svg)
-
 相邻一级 B 的吞吐增幅由原始 CSV 计算：
 
 | B 变化 | Positions/s Gain |
@@ -426,17 +422,7 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   --csv results/cache-strategy/raw.csv
 ```
 
-可以从 [实验产物目录](/labs/p2-inference-systems/) 统一浏览、查看原始文件或下载。本文涉及的直接证据包括：
-
-- [Attention 与 Cache 实现](/labs/p2-inference-systems/src/inference_lab/attention.py)
-- [Benchmark Harness](/labs/p2-inference-systems/src/inference_lab/benchmark.py)
-- [Batch Size 汇总与绘图脚本](/labs/p2-inference-systems/src/inference_lab/summarize_batch_size_scan.py)
-- [正确性测试](/labs/p2-inference-systems/tests/test_attention.py)
-- [Batch Size 汇总公式测试](/labs/p2-inference-systems/tests/test_batch_size_summary.py)
-- [Batch Length Scan 的 300 条原始样本](/labs/p2-inference-systems/results/m0-length-scan/raw.csv)
-- [Batch Size Scan 的 240 条原始样本](/labs/p2-inference-systems/results/m1-batch-size-scan/raw.csv)
-- [Batch Size 汇总表](/labs/p2-inference-systems/results/m1-batch-size-scan/summary.csv)
-- [Batch Size Knee 分析](/labs/p2-inference-systems/read/results/m1-batch-size-scan/knee-analysis/)
+本文涉及的实现、测试、原始样本、汇总和图表保存在私人作答仓库，不再由网站的 Lab 文件目录发布。公开 Lab 包只保留当前尚未完成的 Starter、空白工作表和评分器。
 
 ```text
 p2-inference-systems/

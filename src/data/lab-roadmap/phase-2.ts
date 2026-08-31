@@ -37,7 +37,7 @@ export const phase2: LabPhase = {
 			artifact: '六个可执行小实验、断言与预测/观察记录。',
 			acceptance: '能从 Buffer + Shape + Stride 解释六个 Case，并映射回 Attention 热路径。',
 			unlocks: 'M0 单 Head KV Cache',
-			href: '/labs/p2-inference-systems/read/checkoffs/p0-numpy-semantics/',
+			href: '/blog/python-for-llm-inference/',
 		},
 		{
 			id: 'M0',
@@ -63,7 +63,7 @@ export const phase2: LabPhase = {
 			acceptance:
 				'所有位置与 Full Recompute 数值等价，Cache Shape 正确，性能结论不越过 CPU/NumPy 边界。',
 			unlocks: 'M1 Batch Size 曲线',
-			href: '/labs/p2-inference-systems/results/m0-length-scan/',
+			href: '/blog/vllm-inference-performance-lab/',
 		},
 		{
 			id: 'M1',
@@ -88,7 +88,7 @@ export const phase2: LabPhase = {
 			artifact: '原始 CSV、汇总、两张曲线和 Knee 分析。',
 			acceptance: '正确性先于计时；曲线完全由原始数据生成；能区分摊销成本与请求延迟。',
 			unlocks: 'M2 Multi-Head / GQA',
-			href: '/labs/p2-inference-systems/read/checkoffs/m1-batch-size-scan/',
+			href: '/blog/vllm-inference-performance-lab/',
 		},
 		{
 			id: 'M2',

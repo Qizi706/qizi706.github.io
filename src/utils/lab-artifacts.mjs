@@ -200,11 +200,13 @@ function assertManifest(manifest, expectedSlug) {
 	if (
 		manifest.usage.mode === 'starter' &&
 		(typeof manifest.usage.currentTask !== 'string' ||
+			typeof manifest.usage.currentCheckoff !== 'string' ||
 			typeof manifest.usage.publicSource !== 'string' ||
-			typeof manifest.usage.privateSource !== 'string')
+			typeof manifest.usage.privateSource !== 'string' ||
+			!['unfinished-only'].includes(manifest.usage.publicationPolicy))
 	) {
 		throw new Error(
-			`${expectedSlug}: Starter usage requires currentTask, publicSource, and privateSource.`,
+			`${expectedSlug}: Starter usage requires currentTask, currentCheckoff, publicSource, privateSource, and publicationPolicy.`,
 		);
 	}
 	if (!Array.isArray(manifest.publish) || manifest.publish.length === 0) {
@@ -296,6 +298,10 @@ export async function validateLab(labName) {
 
 	if (manifest.usage.mode === 'starter') {
 		const currentTaskPath = normalizeRelativePath(manifest.usage.currentTask, 'current task path');
+		const currentCheckoffPath = normalizeRelativePath(
+			manifest.usage.currentCheckoff,
+			'current checkoff path',
+		);
 		const publicSourcePath = normalizeRelativePath(
 			manifest.usage.publicSource,
 			'public source path',
@@ -315,11 +321,39 @@ export async function validateLab(labName) {
 		if (!artifactPaths.has(currentTaskPath)) {
 			throw new Error(`${labName}: current task is not published: ${currentTaskPath}`);
 		}
+		if (!artifactPaths.has(currentCheckoffPath)) {
+			throw new Error(`${labName}: current checkoff is not published: ${currentCheckoffPath}`);
+		}
 		if (!hasPublicSource) {
 			throw new Error(`${labName}: public Starter source is not published: ${publicSourcePath}`);
 		}
 		if (publishesPrivateSource) {
 			throw new Error(`${labName}: private implementation was published: ${privateSourcePath}`);
+		}
+
+		if (manifest.usage.publicationPolicy === 'unfinished-only') {
+			const publishedCheckoffs = artifacts
+				.map(({ path: artifactPath }) => artifactPath)
+				.filter((artifactPath) => artifactPath.startsWith('checkoffs/'));
+			const unexpectedCheckoffs = publishedCheckoffs.filter(
+				(artifactPath) => artifactPath !== currentCheckoffPath,
+			);
+			if (unexpectedCheckoffs.length > 0) {
+				throw new Error(
+					`${labName}: unfinished-only Starter cannot publish completed checkoffs: ${unexpectedCheckoffs.join(', ')}`,
+				);
+			}
+
+			const publishedResults = artifacts
+				.map(({ path: artifactPath }) => artifactPath)
+				.filter(
+					(artifactPath) => artifactPath === 'results' || artifactPath.startsWith('results/'),
+				);
+			if (publishedResults.length > 0) {
+				throw new Error(
+					`${labName}: unfinished-only Starter cannot publish results: ${publishedResults.join(', ')}`,
+				);
+			}
 		}
 	}
 
@@ -362,6 +396,24 @@ export async function validateLab(labName) {
 			if (typeof snippet !== 'string' || snippet === '' || !starterContent.includes(snippet)) {
 				throw new Error(`${labName}: public Starter contract changed: ${normalizedPath}`);
 			}
+		}
+	}
+
+	const artifactsByPath = new Map(
+		artifacts.map((artifact) => [artifact.path, artifact]),
+	);
+	for (const [templatePath, expectedSha256] of Object.entries(
+		manifest.checks?.immutableTemplates ?? {},
+	)) {
+		const normalizedPath = normalizeRelativePath(templatePath, 'immutable template path');
+		const artifact = artifactsByPath.get(normalizedPath);
+		if (!artifact) {
+			throw new Error(`${labName}: immutable template is not published: ${normalizedPath}`);
+		}
+		if (!/^[0-9a-f]{64}$/u.test(expectedSha256) || artifact.sha256 !== expectedSha256) {
+			throw new Error(
+				`${labName}: immutable public template changed; keep answers in the private repository: ${normalizedPath}`,
+			);
 		}
 	}
 
