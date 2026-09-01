@@ -323,7 +323,7 @@ Allocator 保留、Block 对齐、碎片、Graph 和框架状态会让进程占�
 
 配套的 NumPy 实验使用 No Cache、动态扩展 Cache 与预分配 Cache 三条路径验证逐 token 数值等价，再把多个独立 Sequence 组织成固定形状的 Batched Decode。实验支持两个机制判断：KV Cache 避免了历史位置的重复计算；Batched 执行能够摊薄调用与分配开销，却不会消除每个 Sequence 自身的 Attention 工作。
 
-这些结果只属于 CPU、NumPy、单层和受控 Shape，不能外推成真实 GPU Serving 的固定加速倍数。实现、原始样本、异常结果与复现边界统一放在[《LLM 推理机制实验：KV Cache、预分配与 Batch Size》](/draft/vllm-inference-performance-lab/)中；本文由此只保留机制结论，继续追踪瓶颈怎样从计算转移到状态管理。
+这些结果只属于 CPU、NumPy、单层和受控 Shape，不能外推成真实 GPU Serving 的固定加速倍数。实现、原始样本、异常结果与复现边界统一放在[《LLM 推理机制实验：KV Cache、预分配与 Batch Size》](/blog/vllm-inference-performance-lab/)中；本文由此只保留机制结论，继续追踪瓶颈怎样从计算转移到状态管理。
 
 ## 4. 按作用层次理解推理优化
 
@@ -498,7 +498,7 @@ Speculative Decoding 让更便宜的 Draft Model 先提出多个候选 token，�
 
 <Note title="学习文章与实验文章的边界" class="title-underline">
 
-本文负责解释为什么这些预测值得检验；[阶段 2 中间机制实验](/draft/vllm-inference-performance-lab/)只总结已经完成的 Toy Attention 测量及其证据边界。当前做到哪一步、下一步执行什么，以[阶段 2 共学页](/learning/phase-2/)为入口；未来的真实 vLLM 性能文章只使用实际产生的数据，不能用这里的理论预期代替结果。
+本文负责解释为什么这些预测值得检验；[阶段 2 中间机制实验](/blog/vllm-inference-performance-lab/)只总结已经完成的 Toy Attention 测量及其证据边界。当前做到哪一步、下一步执行什么，以[阶段 2 共学页](/learning/phase-2/)为入口；未来的真实 vLLM 性能文章只使用实际产生的数据，不能用这里的理论预期代替结果。
 
 </Note>
 

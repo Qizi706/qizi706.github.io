@@ -2,7 +2,7 @@
 title: 'LLM 推理机制实验：KV Cache、预分配与 Batch Size'
 description: '阶段 2 的中间机制产出：用最小 NumPy Attention 验证 KV Cache、预分配、Batched Decode 与无 Cache MHA Oracle，并为真实 vLLM Serving 实验建立可证伪预测。'
 pubDate: '2026-08-16T20:30:00+08:00'
-updatedDate: '2026-09-01T11:50:00+08:00'
+updatedDate: '2026-09-01T14:55:00+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -11,7 +11,7 @@ tags:
   - 'KV Cache'
   - 'Batch'
   - 'Benchmark'
-draft: true
+draft: false
 mathjax: true
 ---
 
@@ -422,7 +422,7 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   --csv results/cache-strategy/raw.csv
 ```
 
-本文涉及的实现、测试、原始样本、汇总和图表保存在私人作答仓库，不再由网站的 Lab 文件目录发布。公开 Lab 包只保留当前尚未完成的 Starter、空白工作表和评分器。
+本文涉及的个人实现、填写后的工作表、原始样本、汇总和图表保存在私人作答仓库，不由网站的 Lab 文件目录发布。公开 Lab 包保留当前 Starter、当前与历史任务书、未填写工作表模板和当前评分器。
 
 ```text
 p2-inference-systems/
