@@ -14,7 +14,7 @@
 		"currentCheckoff": "checkoffs/m2-c-cached-mha.md",
 		"publicSource": "src",
 		"privateSource": ".work",
-		"publicationPolicy": "unfinished-only"
+		"publicationPolicy": "task-archive"
 	},
 	"publish": [
 		"lab.json",
@@ -23,7 +23,14 @@
 		"grade-lab",
 		"pyproject.toml",
 		"uv.lock",
+		"assignments/m2-b-causal-attention.md",
 		"assignments/m2-c-cached-mha.md",
+		"checkoffs/p0-numpy-semantics.md",
+		"checkoffs/m0-kv-cache.md",
+		"checkoffs/m1-batch-size-scan.md",
+		"checkoffs/m2-a1-split-heads.md",
+		"checkoffs/m2-a2-qkv-projection.md",
+		"checkoffs/m2-b-causal-attention.md",
 		"checkoffs/m2-c-cached-mha.md",
 		"src/inference_lab/__init__.py",
 		"src/inference_lab/multi_head_attention.py",
@@ -33,16 +40,23 @@
 	"notes": [
 		"The published src directory is the intentionally unfinished Starter, not the maintainer's local implementation.",
 		"Completed work lives in the ignored .work Git repository and is never published.",
-		"Only the current unfinished assignment and its blank checkoff are published.",
+		"Current and archived assignments plus blank checkoff templates are published; filled answers remain private.",
 		"Markdown opens in reading mode; code, data, and other artifacts open as published files."
 	],
 	"checks": {
 		"required": [
 			"README.md",
+			"assignments/m2-b-causal-attention.md",
 			"assignments/m2-c-cached-mha.md",
 			"Makefile",
 			"grade-lab",
 			"grader_tests/test_m2_c_cached_mha.py",
+			"checkoffs/p0-numpy-semantics.md",
+			"checkoffs/m0-kv-cache.md",
+			"checkoffs/m1-batch-size-scan.md",
+			"checkoffs/m2-a1-split-heads.md",
+			"checkoffs/m2-a2-qkv-projection.md",
+			"checkoffs/m2-b-causal-attention.md",
 			"checkoffs/m2-c-cached-mha.md",
 			"src/inference_lab/multi_head_attention.py",
 			"tests/test_multi_head_attention.py"
@@ -54,6 +68,12 @@
 			]
 		},
 		"immutableTemplates": {
+			"checkoffs/p0-numpy-semantics.md": "be6ca16bead04e24bb1ca05c0524381e822d23b02097dc4ea6a8f2c6c06ef5e6",
+			"checkoffs/m0-kv-cache.md": "ae119c3f24f87946e34ed42a42e81c8bb7f3c9308aa69e5a8e281cc88347ac99",
+			"checkoffs/m1-batch-size-scan.md": "c5c9ab200bed849605c34aad52c549de886ef5040b3fd225620cbf7091199e89",
+			"checkoffs/m2-a1-split-heads.md": "5812bd143074ab5ed27dd72c20833ec626a752ef5b2d82e5e2b43d4affa4a3a8",
+			"checkoffs/m2-a2-qkv-projection.md": "a70b0ad2d14d3020fb0277f422538d8f7f4b1d5db4990fca524ffb637bfe578f",
+			"checkoffs/m2-b-causal-attention.md": "a207b6d6fab292a2710d5c592c3e4a3af29b6541867e6a16706fdfd458522c86",
 			"checkoffs/m2-c-cached-mha.md": "cf7aafd6ab79773ca1d2ed94bb789ca94209c8b571be70cc77ed3adb7d7bdd22"
 		}
 	}

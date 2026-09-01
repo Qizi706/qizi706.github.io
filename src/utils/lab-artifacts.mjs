@@ -203,7 +203,7 @@ function assertManifest(manifest, expectedSlug) {
 			typeof manifest.usage.currentCheckoff !== 'string' ||
 			typeof manifest.usage.publicSource !== 'string' ||
 			typeof manifest.usage.privateSource !== 'string' ||
-			!['unfinished-only'].includes(manifest.usage.publicationPolicy))
+			!['unfinished-only', 'task-archive'].includes(manifest.usage.publicationPolicy))
 	) {
 		throw new Error(
 			`${expectedSlug}: Starter usage requires currentTask, currentCheckoff, publicSource, privateSource, and publicationPolicy.`,
@@ -331,17 +331,35 @@ export async function validateLab(labName) {
 			throw new Error(`${labName}: private implementation was published: ${privateSourcePath}`);
 		}
 
-		if (manifest.usage.publicationPolicy === 'unfinished-only') {
+		if (
+			manifest.usage.publicationPolicy === 'unfinished-only' ||
+			manifest.usage.publicationPolicy === 'task-archive'
+		) {
 			const publishedCheckoffs = artifacts
 				.map(({ path: artifactPath }) => artifactPath)
 				.filter((artifactPath) => artifactPath.startsWith('checkoffs/'));
-			const unexpectedCheckoffs = publishedCheckoffs.filter(
-				(artifactPath) => artifactPath !== currentCheckoffPath,
-			);
-			if (unexpectedCheckoffs.length > 0) {
-				throw new Error(
-					`${labName}: unfinished-only Starter cannot publish completed checkoffs: ${unexpectedCheckoffs.join(', ')}`,
+
+			if (manifest.usage.publicationPolicy === 'unfinished-only') {
+				const unexpectedCheckoffs = publishedCheckoffs.filter(
+					(artifactPath) => artifactPath !== currentCheckoffPath,
 				);
+				if (unexpectedCheckoffs.length > 0) {
+					throw new Error(
+						`${labName}: unfinished-only Starter cannot publish archived checkoffs: ${unexpectedCheckoffs.join(', ')}`,
+					);
+				}
+			}
+
+			if (manifest.usage.publicationPolicy === 'task-archive') {
+				const immutableTemplates = manifest.checks?.immutableTemplates ?? {};
+				const unprotectedCheckoffs = publishedCheckoffs.filter(
+					(artifactPath) => !(artifactPath in immutableTemplates),
+				);
+				if (unprotectedCheckoffs.length > 0) {
+					throw new Error(
+						`${labName}: task-archive requires an immutable hash for every published checkoff: ${unprotectedCheckoffs.join(', ')}`,
+					);
+				}
 			}
 
 			const publishedResults = artifacts
@@ -351,7 +369,7 @@ export async function validateLab(labName) {
 				);
 			if (publishedResults.length > 0) {
 				throw new Error(
-					`${labName}: unfinished-only Starter cannot publish results: ${publishedResults.join(', ')}`,
+					`${labName}: Starter publication policy cannot publish private results: ${publishedResults.join(', ')}`,
 				);
 			}
 		}
@@ -399,9 +417,7 @@ export async function validateLab(labName) {
 		}
 	}
 
-	const artifactsByPath = new Map(
-		artifacts.map((artifact) => [artifact.path, artifact]),
-	);
+	const artifactsByPath = new Map(artifacts.map((artifact) => [artifact.path, artifact]));
 	for (const [templatePath, expectedSha256] of Object.entries(
 		manifest.checks?.immutableTemplates ?? {},
 	)) {

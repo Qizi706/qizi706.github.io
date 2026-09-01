@@ -1,6 +1,6 @@
 # P2 推理系统 Lab：公开 Starter
 
-这是当前 **M2-C · Cached Multi-Head Attention** 的公开 Starter。网站和下载包只提供尚未完成的任务、空白工作表、公开评分器，以及运行当前任务所需的最小起点。
+这是当前 **M2-C · Cached Multi-Head Attention** 的公开 Starter。网站和下载包提供当前未完成任务、历史任务书、所有 Gate 的空白工作表、公开评分器，以及运行当前任务所需的最小起点。
 
 个人实现、已填写 Checkoff、第一次失败和历史实验结果不保存在本站仓库；它们由独立的私人 Git 仓库管理。
 
@@ -36,13 +36,14 @@ git status
 
 | 路径                                        | 公开内容                    |
 | ------------------------------------------- | --------------------------- |
+| `assignments/m2-b-causal-attention.md`      | M2-B 历史任务书             |
 | `assignments/m2-c-cached-mha.md`            | 当前未完成任务              |
-| `checkoffs/m2-c-cached-mha.md`              | 未填写的工作表模板          |
+| `checkoffs/*.md`                            | 当前与历史 Gate 的空白模板  |
 | `src/inference_lab/multi_head_attention.py` | M2-B 前置能力与 M2-C `TODO` |
 | `tests/test_multi_head_attention.py`        | 前置能力回归测试            |
 | `grader_tests/test_m2_c_cached_mha.py`      | 当前任务公开评分器          |
 
-`lab.json` 使用 `unfinished-only` 发布策略。构建门禁会拒绝公开历史 `results/`、已完成 Checkoff，以及当前工作表之外的其他 Checkoff。
+`lab.json` 使用 `task-archive` 发布策略。历史任务书和空白工作表可以公开；每份工作表都由不可变哈希保护。构建门禁会拒绝未登记模板、私人 `results/` 与 `.work/` 内容。
 
 修改公开材料后运行：
 

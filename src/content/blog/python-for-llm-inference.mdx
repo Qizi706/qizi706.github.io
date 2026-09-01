@@ -838,7 +838,7 @@ finish_ns       stream finishes or fails
 
 **Action：** A1/A2 已完成 Head 拆分、Q/K/V 投影和输入契约；B 先写独立标量 Oracle、Future Token 与 Head/Batch 隔离测试，再实现 `H_q=H_kv` 的无 Cache MHA。
 
-**Artifact：** 私人仓库中的 `multi_head_attention.py`、`test_multi_head_attention.py` 与已填写 M2-B 工作表。M2-B 完成后，其任务书和工作表已从网站发布白名单移除；网站现在只公开尚未完成的 M2-C Starter 与空白模板。
+**Artifact：** 私人仓库中的 `multi_head_attention.py`、`test_multi_head_attention.py` 与已填写 M2-B 工作表。网站公开保留 [M2-B 历史任务书](/labs/p2-inference-systems/read/assignments/m2-b-causal-attention/)和[未填写模板](/labs/p2-inference-systems/read/checkoffs/m2-b-causal-attention/)；个人答案、实现、测试与结果仍只存在私人仓库。
 
 **Acceptance：** Score/Weight、逐 Head Output Shape 和两个非零坐标 Oracle 通过；Future Token 不可见、Weight 沿历史 Token Axis 归一化，Head/Batch 互不污染；A2 与完整回归无退化。
 

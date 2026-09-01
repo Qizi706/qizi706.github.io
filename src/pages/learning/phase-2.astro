@@ -9,6 +9,22 @@ const current = progress.current;
 const currentDocumentHref = getLabArtifactDisplayHref('p2-inference-systems', current.document);
 const labInstructionsHref = getLabArtifactDisplayHref('p2-inference-systems', current.assignment);
 const labReadmeHref = getLabArtifactDisplayHref('p2-inference-systems', 'README.md');
+const archivedM2BTaskHref = getLabArtifactDisplayHref(
+	'p2-inference-systems',
+	'assignments/m2-b-causal-attention.md',
+);
+const blankCheckoffHrefs = [
+	['P0', 'checkoffs/p0-numpy-semantics.md'],
+	['M0', 'checkoffs/m0-kv-cache.md'],
+	['M1', 'checkoffs/m1-batch-size-scan.md'],
+	['M2-A1', 'checkoffs/m2-a1-split-heads.md'],
+	['M2-A2', 'checkoffs/m2-a2-qkv-projection.md'],
+	['M2-B', 'checkoffs/m2-b-causal-attention.md'],
+	['M2-C', 'checkoffs/m2-c-cached-mha.md'],
+].map(([label, artifactPath]) => ({
+	label,
+	href: getLabArtifactDisplayHref('p2-inference-systems', artifactPath),
+}));
 const labHomeHref = '/labs/p2-inference-systems/';
 const labArchiveHref = '/labs/p2-inference-systems.tar.gz';
 const description =
@@ -122,6 +138,18 @@ const routeRows = [
 			</li>
 			<li>
 				<strong>证据：</strong>{progress.evidence.tests} 项回归测试、{progress.evidence.rawSamples} 条原始样本；个人实现、工作表和原始结果保存在私人作答仓库。
+			</li>
+			<li>
+				<strong>历史：</strong><a href={archivedM2BTaskHref}>M2-B 任务书</a>；<strong
+					>空白工作表：</strong
+				>{
+					blankCheckoffHrefs.map(({ label, href }, index) => (
+						<>
+							{index > 0 && ' | '}
+							<a href={href}>{label}</a>
+						</>
+					))
+				}
 			</li>
 			<li>
 				<strong>文章：</strong>
