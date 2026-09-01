@@ -2,7 +2,11 @@ import unittest
 
 import numpy as np
 
-from inference_lab.multi_head_attention import project_qkv, split_heads
+from inference_lab.multi_head_attention import (
+    multi_head_causal_attention,
+    project_qkv,
+    split_heads,
+)
 
 BATCH_SIZE = 2
 SEQUENCE_LENGTH = 5
@@ -204,6 +208,33 @@ class TestMultiHeadContractValidation(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, message_pattern),
             ):
                 action()
+
+
+class TestNoCacheMHARegression(unittest.TestCase):
+    def test_zero_scores_produce_visible_prefix_means(self) -> None:
+        q = np.zeros((2, 3, 4, 5), dtype=np.float64)
+        k = np.zeros_like(q)
+        v = sequential_array(q.shape, offset=1.0)
+
+        output, weights = multi_head_causal_attention(q, k, v)
+
+        for query_index in range(q.shape[-2]):
+            visible = query_index + 1
+            np.testing.assert_allclose(
+                weights[:, :, query_index, :visible],
+                1.0 / visible,
+            )
+            np.testing.assert_array_equal(weights[:, :, query_index, visible:], 0.0)
+            np.testing.assert_allclose(
+                output[:, :, query_index],
+                v[:, :, :visible].mean(axis=-2),
+            )
+
+    def test_invalid_attention_shape_raises_value_error(self) -> None:
+        q = np.zeros((2, 3, 4, 5), dtype=np.float64)
+
+        with self.assertRaisesRegex(ValueError, r"same"):
+            multi_head_causal_attention(q, q[:, :, :-1], q)
 
 
 if __name__ == "__main__":

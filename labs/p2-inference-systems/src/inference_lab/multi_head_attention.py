@@ -1,4 +1,13 @@
+import math
+
 import numpy as np
+
+
+def softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
+    """Return a numerically stable softmax along one axis."""
+    shifted = x - np.max(x, axis=axis, keepdims=True)
+    exponentials = np.exp(shifted)
+    return exponentials / np.sum(exponentials, axis=axis, keepdims=True)
 
 
 def split_heads(projected: np.ndarray, num_heads: int) -> np.ndarray:
@@ -74,12 +83,7 @@ def multi_head_causal_attention(
     k: np.ndarray,
     v: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Return per-head output and attention weights without a KV cache.
-
-    M2-B asks you to finish this function. Keep the educational interface small:
-    Q/K/V enter as [B, H, T, D_head], and the function returns Output followed by
-    Weight. Do not merge heads or add a cache in this exercise.
-    """
+    """Return per-head output and attention weights without a KV cache."""
     tensors = (("q", q), ("k", k), ("v", v))
     for name, tensor in tensors:
         if tensor.ndim != 4:
@@ -91,6 +95,28 @@ def multi_head_causal_attention(
     if any(dimension <= 0 for dimension in q.shape):
         raise ValueError("B, H, T, and D_head must all be positive")
 
-    raise NotImplementedError(
-        "M2-B TODO: implement scaled dot-product causal attention"
+    _, _, num_tokens, head_dim = q.shape
+    causal_mask = np.triu(
+        np.full((num_tokens, num_tokens), -np.inf, dtype=np.float64),
+        k=1,
     )
+    scores = (q @ np.swapaxes(k, -1, -2)) / math.sqrt(head_dim)
+    weights = softmax(scores + causal_mask, axis=-1)
+    output = weights @ v
+    return output, weights
+
+
+def cached_multi_head_attention(
+    q: np.ndarray,
+    k: np.ndarray,
+    v: np.ndarray,
+    k_cache: np.ndarray | None = None,
+    v_cache: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Run one decode step and return output, weights, K cache, and V cache.
+
+    Current Q/K/V use [B, H, 1, D_head]. Existing caches are either both None
+    or both [B, H, past_T, D_head]. M2-C asks you to append the current K/V and
+    attend the current Query over the complete visible cache.
+    """
+    raise NotImplementedError("M2-C TODO: append K/V and compute cached attention")

@@ -2,7 +2,7 @@
 title: '只有编辑器和构建工具，如何从零构建一个完整系统？'
 description: '以正在生长的 KV Cache 与 Serving Lab 为例：从一条可观察行为开始，经过测试、失败、自动化、重构和交接，让完整、可读的项目自然长出来。'
 pubDate: '2026-08-19T23:20:00+08:00'
-updatedDate: '2026-08-25T04:03:46+08:00'
+updatedDate: '2026-09-01T11:50:00+08:00'
 categories:
   - '随笔'
 tags:
@@ -216,7 +216,7 @@ summarize_batch_size_scan.py   读取事实，生成解释材料
 
 ### 5.3 第三次压力：单 Head 模型解释不了真实 KV 容量
 
-当前项目正在推进 M2。已有的 `attention.py` 仍是单 Head；M2-A1 已经把 Head 轴从扁平特征中可靠地拆出，M2-A2 又把这套规则迁移到 Q/K/V，并增加输入契约。A2 定向 6 项、完整 12 项回归测试和闭卷 Shape 推导均已通过。
+当前项目正在推进 M2。已有的 `attention.py` 仍是单 Head；M2-A1 已经把 Head 轴从扁平特征中可靠地拆出，M2-A2 又把这套规则迁移到 Q/K/V，并增加输入契约。M2-B 随后在 `H_q=H_kv` 条件下完成无 Cache Causal MHA，把每个 Batch、Head 和 Query Token 的 Score、Mask、Softmax 与 Value 聚合连接起来。
 
 这时项目才增加：
 
@@ -234,7 +234,7 @@ def split_heads(projected: np.ndarray, num_heads: int) -> np.ndarray:
 
 为什么如此小？因为 `[B, T, H × D_head] -> [B, H, T, D_head]` 有两个不同的失败方式：Shape 可以正确，Head 和 Sequence 的元素位置却仍然放反。最小的 Shape 测试加一个非零坐标的元素映射测试，恰好能暴露这两个问题。
 
-Head 轴有了 A1 的测试保护后，M2-A2 把同一规则迁移到 Q/K/V，并在 `reshape` 前检查输入维度、Head 整除关系和一致的 `D_head`。当前 M2-B 才开始在 `H_q=H_kv` 下实现无 Cache MHA；之后依次进入 Cached MHA、GQA 映射和容量公式。模块的名字和边界由已经理解的机制决定，而不是由想象中的最终 Transformer 决定。
+Head 轴有了 A1 的测试保护后，M2-A2 把同一规则迁移到 Q/K/V，并在 `reshape` 前检查输入维度、Head 整除关系和一致的 `D_head`。M2-B 又用独立标量 Oracle 验证了缩放点积、Causal Mask、稳定 Softmax、逐 Head Output、Future Token 不可见以及 Batch/Head 隔离；定向评分为 `60/60`，整份作业为 `100/100`，16 项私人回归全部通过。下一步才进入 Cached MHA，之后再处理 GQA 映射和容量公式。模块的名字和边界由已经理解的机制决定，而不是由想象中的最终 Transformer 决定。
 
 ### 5.4 第四次压力：Toy 实验回答不了真实服务问题
 
@@ -381,7 +381,7 @@ q[b, h, t, d]
 
 ### 第一遍：跟着一条窄路径做出来
 
-只阅读当前步骤所需的最小材料，写下运行前预测，然后实现一条能被测试的路径。M2-A1 与 M2-A2 的私人工作表已经保存 Head 轴与 Q/K/V 投影证据；当前 B 只增加无 Cache Score、Mask、Softmax、逐 Head Output 和隔离性测试，不顺手完成 Cached MHA 或 GQA。
+只阅读当前步骤所需的最小材料，写下运行前预测，然后实现一条能被测试的路径。M2-A1、M2-A2 与 M2-B 的私人工作表依次保存了 Head 轴、Q/K/V 投影和无 Cache MHA 证据；B 只增加 Score、Mask、Softmax、逐 Head Output 和隔离性测试，没有顺手完成 Cached MHA 或 GQA。
 
 这一遍练的是“把知识变成行为”。
 
@@ -397,31 +397,31 @@ q[b, h, t, d]
 
 这一遍练的是迁移。能够修改一个条件而不推倒重来，才说明脑中形成了机制，而不是记住了文件。
 
-<CodeCard title="一次 120 分钟练习应该留下什么？" path="labs/p2-inference-systems/checkoffs/m2-b-causal-attention.md">
+<CodeCard title="一次 120 分钟练习应该留下什么？" path="labs/p2-inference-systems/checkoffs/m2-c-cached-mha.md">
 
 ```text
 Question:
-  Q/K/V 已是 [B,H,T,D_head] 时，怎样证明 Score、Mask、Softmax
-  没有混合 Batch、Head 或 Future Token？
+  单步 Q/K/V 是 [B,H,1,D_head] 时，怎样证明 Cached Output
+  与完整前缀重算的最后位置数值等价？
 
 Prediction:
-  B=2,H=3,T=4,D_head=5 时，Score/Weight=[2,3,4,4]
-  逐 Head Output=[2,3,4,5]，Future Token 不改变历史输出
+  第 t 步 Cache=[2,3,t+1,5]、Weight=[2,3,1,t+1]
+  逐 Head Output=[2,3,1,5]，Batch/Head 互不污染
 
 Pre-read:
-  matmul stacked matrices + swapaxes + triu（15 min）
+  Hugging Face Caching 的 Cache update 与逐 Token Shape（15 min）
 
 Action:
-  先写独立标量 Oracle、Causal 与隔离性测试；再实现无 Cache MHA
+  先写逐位置 Full-Recompute 对照、Cache 内容与隔离性测试；再追加 K/V
 
 Feedback:
-  unittest 的第一个失败 + 手算 Score/Output 坐标 + 完整回归
+  unittest 的第一个失败 + 每一步 Shape/前缀检查 + M2-B 完整回归
 
 Artifact:
-  multi_head_attention.py、test_multi_head_attention.py、checkoffs/m2-b-causal-attention.md
+  multi_head_attention.py、test_multi_head_attention.py、checkoffs/m2-c-cached-mha.md
 
 Transfer:
-  关闭代码后重做推导；下一轮进入 Cached MHA
+  关闭代码后重做逐步推导；下一轮才进入 GQA Head 映射
 ```
 
 </CodeCard>
@@ -438,20 +438,21 @@ AI 最适合站在 Feedback 一侧：检查我的预测、制造反例、Review 
 - 已完成 P0 的 NumPy View/Copy、Stride 与轴语义练习；
 - 已完成 M2-A1 的 Query Head 轴变换，3 项定向测试与完整 9 项回归测试通过。
 - 已完成 M2-A2 的 Q/K/V 投影与输入契约，A2 定向 6 项、完整 12 项回归与闭卷 Shape 推导通过。
+- 已完成 M2-B 的无 Cache Causal MHA；公开定向评分 `60/60`、整份评分 `100/100`，私人仓库 16 项回归通过，并完成 Score/Output 坐标与 Softmax 轴的闭卷解释。
 
-还不能证明的是 MHA/GQA、真实 vLLM 的排队与调度、流式 TTFT/ITL、Prefix Reuse 和源码因果。这些仍是后续工作，不能因为路线图写得完整就当作系统已经完成。
+还不能证明的是 Cached MHA、GQA、真实 vLLM 的排队与调度、流式 TTFT/ITL、Prefix Reuse 和源码因果。这些仍是后续工作，不能因为路线图写得完整就当作系统已经完成。
 
-当前唯一动作是 M2-B：
+当前唯一动作转为 M2-C：
 
 ```text
-填写 Score、Weight、Output Shape、Softmax Axis 与隔离性预测
-  -> 先写标量 Oracle、Future Token 与 Head/Batch 隔离测试
-  -> 实现 H_q=H_kv 的无 Cache MHA
-  -> 运行定向测试和完整回归
-  -> 关闭代码重新推导并解释缩放与归一化轴
+冻结 Cached MHA 的输入、Cache 与逐位置 Output 契约
+  -> 用已完成的无 Cache MHA 作为 Full-Recompute Oracle
+  -> 先证明逐位置等价与 Cache Shape
+  -> 再实现追加/更新，不提前进入 GQA
+  -> 运行定向测试、完整回归和闭卷推导
 ```
 
-之后才依次进入 Cached MHA、GQA 和 KV 容量；M2 通过后停止扩展 Toy Transformer。阶段 2 的一个月核心交付只继续完成真实 vLLM 环境、稳态基线、输入长度、并发、调度预算和最终性能报告；Mixed Prefill/Decode、Prefix Reuse、源码追踪与跨环境迁移保留为进阶扩展，不再阻塞原定阶段产出。
+M2-C 通过后才依次进入 GQA 和 KV 容量；M2 通过后停止扩展 Toy Transformer。阶段 2 的一个月核心交付只继续完成真实 vLLM 环境、稳态基线、输入长度、并发、调度预算和最终性能报告；Mixed Prefill/Decode、Prefix Reuse、源码追踪与跨环境迁移保留为进阶扩展，不再阻塞原定阶段产出。
 
 整条路线看起来很长，但每天面对的仍然只是一个能失败的小问题。系统的完整性来自这些小闭环能够首尾相接，不是来自某一天突然写完了所有模块。
 

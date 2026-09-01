@@ -1,8 +1,8 @@
 ---
 title: 'LLM 推理机制实验：KV Cache、预分配与 Batch Size'
-description: '阶段 2 的中间机制产出：用最小 NumPy Causal Attention 验证 KV Cache、预分配和 Batched Decode，并为真实 vLLM Serving 实验建立可证伪预测。'
+description: '阶段 2 的中间机制产出：用最小 NumPy Attention 验证 KV Cache、预分配、Batched Decode 与无 Cache MHA Oracle，并为真实 vLLM Serving 实验建立可证伪预测。'
 pubDate: '2026-08-16T20:30:00+08:00'
-updatedDate: '2026-08-25T18:18:00+08:00'
+updatedDate: '2026-09-01T11:50:00+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -39,7 +39,7 @@ mathjax: true
 
 <Note title="先说明实验边界" class="title-underline">
 
-这不是 vLLM、GPU 或在线 Serving Benchmark，而是进入真实系统实验前的机制验证。实验只覆盖 CPU、NumPy、单 Head、等长 Sequence 和固定 Batch。它能证明最小实现中的数值不变量与耗时趋势，不能直接给出 vLLM 的 TTFT、TPOT、吞吐或 P99。
+这不是 vLLM、GPU 或在线 Serving Benchmark，而是进入真实系统实验前的机制验证。M0/M1 的性能扫描仍只覆盖 CPU、NumPy、单 Head、等长 Sequence 和固定 Batch；随后完成的 M2-B 只新增无 Cache Multi-Head Causal Attention 的正确性 Oracle，不新增性能结论。它们能证明最小实现中的数值不变量与耗时趋势，不能直接给出 vLLM 的 TTFT、TPOT、吞吐或 P99。
 
 机制背景见[《LLM 推理优化的系统视角：从 KV Cache 到调度》](/draft/llm-inference-optimization-system-view/)，完整代码与原始数据见 [`p2-inference-systems` 实验产物目录](/labs/p2-inference-systems/)。
 
@@ -364,9 +364,9 @@ KV Cache 用线性增长的状态换掉了更昂贵的历史重算；历史 Cach
 
 </Note>
 
-当前还没有覆盖：
+M2-B 已额外覆盖 `Q/K/V=[B,H,T,D_head]` 下的缩放点积、Causal Mask、稳定 Softmax、逐 Head Output 与 Batch/Head 隔离；定向评分 `60/60`、整份评分 `100/100`，私人仓库 16 项回归通过。当前还没有覆盖：
 
-- 完整 Multi-Head Attention、MQA 或 GQA；当前只有 Head 拆分和 Q/K/V 投影契约；
+- Cached MHA、MQA 或 GQA，以及 Head 合并和 Output Projection；
 - 不同长度 Sequence 的 Padding、Mask 与动态退出；
 - GPU Kernel、显存带宽、Kernel Launch 与同步；
 - Continuous Batching、PagedAttention 与 Scheduler；
@@ -374,13 +374,13 @@ KV Cache 用线性增长的状态换掉了更昂贵的历史重算；历史 Cach
 
 按当前可见产物区分学习证据层级：
 
-| 层级        | 当前状态 | 证据                                                    |
-| ----------- | -------- | ------------------------------------------------------- |
-| Explained   | 已达到   | 能区分 Batch Wall Time、摊销成本、吞吐和在线请求延迟    |
-| Implemented | 已达到   | Cache、预分配、Batched Decode 与 Batch Size CLI         |
-| Measured    | 部分达到 | Batch Length/M1 完整；Cache Strategy 缺少逐样本 CSV     |
-| Reviewed    | 尚未达到 | 正确性回归与构建检查已存在；还没有独立复现或外部 Review |
-| Transferred | 尚未达到 | 尚未把 Toy 机制迁移到真实 vLLM Scheduler 与 Serving     |
+| 层级        | 当前状态 | 证据                                                                |
+| ----------- | -------- | ------------------------------------------------------------------- |
+| Explained   | 已达到   | 能区分 Batch Wall Time、摊销成本、吞吐和在线请求延迟                |
+| Implemented | 已达到   | Cache、预分配、Batched Decode、Batch Size CLI 与无 Cache MHA Oracle |
+| Measured    | 部分达到 | Batch Length/M1 完整；Cache Strategy 缺少逐样本 CSV                 |
+| Reviewed    | 尚未达到 | 正确性回归与构建检查已存在；还没有独立复现或外部 Review             |
+| Transferred | 尚未达到 | 尚未把 Toy 机制迁移到真实 vLLM Scheduler 与 Serving                 |
 
 ## 9. 复现已经完成的实验
 
@@ -429,10 +429,12 @@ p2-inference-systems/
 ├── src/inference_lab/
 │   ├── attention.py
 │   ├── benchmark.py
-│   └── summarize_batch_size_scan.py
+│   ├── summarize_batch_size_scan.py
+│   └── multi_head_attention.py
 ├── tests/
 │   ├── test_attention.py
-│   └── test_batch_size_summary.py
+│   ├── test_batch_size_summary.py
+│   └── test_multi_head_attention.py
 └── results/
     ├── m0-length-scan/
     │   └── raw.csv
@@ -446,4 +448,4 @@ p2-inference-systems/
 
 ## 10. 结论到哪里结束？
 
-本文的结论停在 CPU/NumPy Toy Attention：它已经验证 Cache 复用、预分配与固定形状 Batched Execution 的机制和边界，但没有验证真实 vLLM Scheduler、GPU Kernel、显存带宽或在线请求指标。后续 Gate 只有在产生新的原始证据后才补充到相应实验文章；当前任务和未来计划始终留在[阶段 2 共学页](/learning/phase-2/)及其执行材料中。
+本文的结论停在 CPU/NumPy Toy Attention：它已经验证 Cache 复用、预分配、固定形状 Batched Execution，以及无 Cache MHA 的数值语义和隔离边界，但没有验证 Cached MHA/GQA、真实 vLLM Scheduler、GPU Kernel、显存带宽或在线请求指标。后续 Gate 只有在产生新的原始证据后才补充到相应实验文章；当前任务和未来计划始终留在[阶段 2 共学页](/learning/phase-2/)及其执行材料中。

@@ -114,7 +114,7 @@ export const phase2: LabPhase = {
 			acceptance:
 				'Full Recompute 与 Cached Decode 等价，GQA 映射和容量公式通过测试，闭卷完成 Shape 推导。',
 			unlocks: 'S0 冻结真实 vLLM 环境',
-			href: '/labs/p2-inference-systems/read/checkoffs/m2-b-causal-attention/',
+			href: '/labs/p2-inference-systems/read/checkoffs/m2-c-cached-mha/',
 			parts: [
 				{
 					id: 'M2-A1',
@@ -150,7 +150,7 @@ export const phase2: LabPhase = {
 				{
 					id: 'M2-B',
 					title: '无 Cache MHA Oracle',
-					status: 'active',
+					status: 'done',
 					checkoff: 'Score、Mask、Softmax、Output、隔离性',
 					preRead: [
 						{
@@ -173,7 +173,7 @@ export const phase2: LabPhase = {
 				{
 					id: 'M2-C',
 					title: 'Cached MHA',
-					status: 'pending',
+					status: 'active',
 					checkoff: '逐位置等价与 Cache Shape',
 					preRead: [
 						{

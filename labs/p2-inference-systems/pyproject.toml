@@ -1,7 +1,7 @@
 [project]
 name = "p2-inference-systems"
 version = "0.1.0"
-description = "Public starter for multi-head causal attention"
+description = "Public starter for cached multi-head attention"
 readme = "README.md"
 authors = [{ name = "Qizi706", email = "qzhou0706@gmail.com" }]
 requires-python = ">=3.14"

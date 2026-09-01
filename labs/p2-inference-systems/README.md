@@ -1,6 +1,6 @@
 # P2 推理系统 Lab：公开 Starter
 
-这是当前 **M2-B · Multi-Head Causal Attention** 的公开 Starter。网站和下载包只提供尚未完成的任务、空白工作表、公开评分器，以及运行当前任务所需的最小起点。
+这是当前 **M2-C · Cached Multi-Head Attention** 的公开 Starter。网站和下载包只提供尚未完成的任务、空白工作表、公开评分器，以及运行当前任务所需的最小起点。
 
 个人实现、已填写 Checkoff、第一次失败和历史实验结果不保存在本站仓库；它们由独立的私人 Git 仓库管理。
 
@@ -14,9 +14,9 @@ make setup
 make grade
 ```
 
-下载后可以直接编辑 `src/`、`tests/` 和本地工作表。当前 Starter 预期通过 M2-A1/M2-A2，并在尚未实现的 M2-B 处失败。
+下载后可以直接编辑 `src/`、`tests/` 和本地工作表。当前 Starter 已保留 M2-A1、M2-A2 与 M2-B 的最小可运行前置能力，并在尚未实现的 M2-C 处失败。
 
-当前任务书：[M2-B · Multi-Head Causal Attention](assignments/m2-b-causal-attention.md)。阶段依赖与状态从 [AI Infra 实验路线](/learning/)进入。
+当前任务书：[M2-C · Cached Multi-Head Attention](assignments/m2-c-cached-mha.md)。阶段依赖与状态从 [AI Infra 实验路线](/learning/)进入。
 
 ## 本站维护者的私人仓库
 
@@ -34,13 +34,13 @@ git status
 
 ## 公开文件边界
 
-| 路径 | 公开内容 |
-| --- | --- |
-| `assignments/m2-b-causal-attention.md` | 当前未完成任务 |
-| `checkoffs/m2-b-causal-attention.md` | 未填写的工作表模板 |
-| `src/inference_lab/multi_head_attention.py` | 带 M2-B `TODO` 的 Starter |
-| `tests/test_multi_head_attention.py` | 前置能力回归测试 |
-| `grader_tests/test_m2_b_causal_attention.py` | 当前任务公开评分器 |
+| 路径                                        | 公开内容                    |
+| ------------------------------------------- | --------------------------- |
+| `assignments/m2-c-cached-mha.md`            | 当前未完成任务              |
+| `checkoffs/m2-c-cached-mha.md`              | 未填写的工作表模板          |
+| `src/inference_lab/multi_head_attention.py` | M2-B 前置能力与 M2-C `TODO` |
+| `tests/test_multi_head_attention.py`        | 前置能力回归测试            |
+| `grader_tests/test_m2_c_cached_mha.py`      | 当前任务公开评分器          |
 
 `lab.json` 使用 `unfinished-only` 发布策略。构建门禁会拒绝公开历史 `results/`、已完成 Checkoff，以及当前工作表之外的其他 Checkoff。
 

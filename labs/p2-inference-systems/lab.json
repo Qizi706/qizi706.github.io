@@ -10,8 +10,8 @@
 	"usage": {
 		"mode": "starter",
 		"readme": "README.md",
-		"currentTask": "assignments/m2-b-causal-attention.md",
-		"currentCheckoff": "checkoffs/m2-b-causal-attention.md",
+		"currentTask": "assignments/m2-c-cached-mha.md",
+		"currentCheckoff": "checkoffs/m2-c-cached-mha.md",
 		"publicSource": "src",
 		"privateSource": ".work",
 		"publicationPolicy": "unfinished-only"
@@ -23,12 +23,12 @@
 		"grade-lab",
 		"pyproject.toml",
 		"uv.lock",
-		"assignments/m2-b-causal-attention.md",
-		"checkoffs/m2-b-causal-attention.md",
+		"assignments/m2-c-cached-mha.md",
+		"checkoffs/m2-c-cached-mha.md",
 		"src/inference_lab/__init__.py",
 		"src/inference_lab/multi_head_attention.py",
 		"tests/test_multi_head_attention.py",
-		"grader_tests/test_m2_b_causal_attention.py"
+		"grader_tests/test_m2_c_cached_mha.py"
 	],
 	"notes": [
 		"The published src directory is the intentionally unfinished Starter, not the maintainer's local implementation.",
@@ -39,22 +39,22 @@
 	"checks": {
 		"required": [
 			"README.md",
-			"assignments/m2-b-causal-attention.md",
+			"assignments/m2-c-cached-mha.md",
 			"Makefile",
 			"grade-lab",
-			"grader_tests/test_m2_b_causal_attention.py",
-			"checkoffs/m2-b-causal-attention.md",
+			"grader_tests/test_m2_c_cached_mha.py",
+			"checkoffs/m2-c-cached-mha.md",
 			"src/inference_lab/multi_head_attention.py",
 			"tests/test_multi_head_attention.py"
 		],
 		"starterContains": {
 			"src/inference_lab/multi_head_attention.py": [
-				"M2-B TODO: implement scaled dot-product causal attention",
+				"M2-C TODO: append K/V and compute cached attention",
 				"raise NotImplementedError"
 			]
 		},
 		"immutableTemplates": {
-			"checkoffs/m2-b-causal-attention.md": "be4a7a7439b544889d51888f986306ea88c0eb18a95ac98e95a4b14226977101"
+			"checkoffs/m2-c-cached-mha.md": "cf7aafd6ab79773ca1d2ed94bb789ca94209c8b571be70cc77ed3adb7d7bdd22"
 		}
 	}
 }

@@ -2,7 +2,7 @@
 title: '给 C++ 使用者的 Python 复健：为 LLM 推理实验补齐最小基础'
 description: '面向当前 AI Infra 学习任务的 Python 最小知识集：从对象绑定、类型注解和工程结构，到 NumPy Shape、view/copy、broadcasting、Benchmark 与 asyncio。'
 pubDate: '2026-08-17T22:30:00+08:00'
-updatedDate: '2026-08-25T04:03:46+08:00'
+updatedDate: '2026-09-01T11:50:00+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -832,17 +832,19 @@ finish_ns       stream finishes or fails
 
 **Result：** 240 条原始样本与两张曲线可重建；`B=8` 首次满足相邻吞吐增幅低于 10% 的 Knee 定义。
 
-### 9.3 M2-B：无 Cache MHA Oracle（进行中）
+### 9.3 M2-B：无 Cache MHA Oracle（已完成）
 
 **Question：** Q/K/V 已经是 `[B,H,T,D_head]` 时，怎样证明批量矩阵乘法没有混合 Batch 或 Head，并且每个位置只能读取历史 Token？
 
 **Action：** A1/A2 已完成 Head 拆分、Q/K/V 投影和输入契约；B 先写独立标量 Oracle、Future Token 与 Head/Batch 隔离测试，再实现 `H_q=H_kv` 的无 Cache MHA。
 
-**Artifact：** `multi_head_attention.py`、`test_multi_head_attention.py` 与 [M2-B 工作表](/labs/p2-inference-systems/read/checkoffs/m2-b-causal-attention/)。
+**Artifact：** 私人仓库中的 `multi_head_attention.py`、`test_multi_head_attention.py` 与已填写 M2-B 工作表。M2-B 完成后，其任务书和工作表已从网站发布白名单移除；网站现在只公开尚未完成的 M2-C Starter 与空白模板。
 
 **Acceptance：** Score/Weight、逐 Head Output Shape 和两个非零坐标 Oracle 通过；Future Token 不可见、Weight 沿历史 Token Axis 归一化，Head/Batch 互不污染；A2 与完整回归无退化。
 
-## 10. 按今天的进度，下一次学习怎样安排？
+**Result：** `make m2-b` 的 5 项公开评分全部通过并得到 `60/60`；整份作业为 `100/100`，私人仓库 16 项完整回归通过。工作表已保存 Mask 首次失败、修正规则、两个坐标求和范围，以及缩放与 Softmax 轴的闭卷解释。
+
+## 10. M2-B 完成后，下一次学习怎样安排？
 
 当前已经完成的不是“看过 NumPy 和 Batch 定义”，而是下面这条证据链：
 
@@ -851,49 +853,40 @@ P0：预测并验证 View / Copy / Stride / Buffer
   -> M1：B=1/2/4/8 正确性 + 240 条原始样本 + Knee=B=8
   -> M2-A1：split_heads 的 Shape + 元素映射 + 内存共享
   -> M2-A2：project_qkv + 两个非零坐标 Oracle + 五类非法配置
-  -> A2 定向 6 项 + 完整 12 项回归 + 闭卷 Shape 推导通过
+  -> M2-B：Scaled Score + Causal Mask + 稳定 Softmax + Weight @ V
+  -> B 定向 5 项 60/60 + 整份评分 100/100 + 完整 16 项回归
 ```
 
-所以下一次学习只推进一个问题：**怎样让已经拆好 Head 的 Q/K/V 完成无 Cache Causal Attention，并证明 Batch、Head 与 Future Token 没有相互污染？**
+所以下一次学习只推进一个问题：**怎样在逐 Token Decode 时复用历史 K/V，同时证明 Cached MHA 与已经通过验收的无 Cache MHA 逐位置等价？**
 
-### 10.1 10 分钟：先预测
+### 10.1 先冻结 M2-C 契约
 
-关闭实现，固定：
+开始实现前先写清楚：
 
 ```text
-B=2, H_q=H_kv=3, T=4, D_head=5
-Q/K/V=[2,3,4,5]
+Full-Recompute Oracle：M2-B multi_head_causal_attention
+每步输入：当前 Query，以及到当前位置为止可见的 K/V
+Cache：保留独立的 Batch、Head、Token 与 D_head 轴
+输出：当前 Decode 位置的逐 Head Output
 ```
 
-在 [M2-B 工作表](/labs/p2-inference-systems/read/checkoffs/m2-b-causal-attention/) 中填写 K 转置、Score、Mask、Weight 与 Output 的 Shape，指出 Softmax Axis，再手算至少两个非零坐标。还要预测修改 Future Token、一个 Head 或一个 Batch 分别会影响哪些输出。
+最重要的验收不是“Cache 长出来了”，而是每个位置的 Cached Output 都与 M2-B Full-Recompute Output 数值等价，并且不同 Batch/Head 的 Cache 状态互不污染。
 
-### 10.2 15 分钟：只读当天会用到的文档
+### 10.2 只增加 Cache，不改变 Attention 语义
 
-阅读范围固定，不展开教程：
+M2-C 继续使用 M2-B 已验证的缩放、Softmax Axis 和 Value 聚合规则。新问题只包括：
 
-- Harvard [The Annotated Transformer](https://nlp.seas.harvard.edu/annotated-transformer/)：只看 Scaled Dot-Product Attention 的缩放、Mask、Softmax，以及 Multi-Head Attention 第 2 步；
-- NumPy [`matmul`](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html)：只看 stacks of matrices 如何保留 `[B,H]` 前导维；
-- NumPy [`triu`](https://numpy.org/doc/stable/reference/generated/numpy.triu.html)：只看 `k=1` 如何选择严格上三角。
+- 新 K/V 写入哪个 Token 位置；
+- 当前 Query 能读取多长的有效历史；
+- Cache 容量与有效长度怎样区分；
+- 怎样逐位置对照 Full-Recompute Oracle；
+- 怎样证明一个 Batch/Head 的更新不会污染其他切片。
 
-每份材料只留一句“它确认或修正了哪条预测”。预测必须在阅读前保存，15 分钟到点后立即进入测试。
+本轮不加入 GQA Head 映射、Head 合并、Output Projection 或真实 Serving 调度。先建立 M2-C 的任务书、空白工作表和失败测试，再开始实现。
 
-### 10.3 30 分钟：先写失败测试
+### 10.3 停止条件
 
-只增加五组证据：Score/Weight/Output Shape、至少两个非零坐标的独立标量 Oracle、Future Token 不可见、Head/Batch 隔离，以及非法四维契约。先保存缺少实现时的第一次失败，不调用待测函数或生产 `softmax` 生成 Oracle。
-
-### 10.4 45 分钟：实现并修正最小 Attention
-
-用前 30 分钟实现输入契约、`Q @ K^T / sqrt(D_head)`、Causal Mask、稳定 Softmax 和 `Weight @ V`，后 15 分钟只依据失败信息修正 Axis、Mask 或边界。本轮返回逐 Head Output 与 Weight，禁止加入 KV Cache、GQA Head 映射、Head 合并和 Output Projection。
-
-### 10.5 20 分钟：回归与闭卷重建
-
-先运行 M2-B 定向测试和完整测试套件；最后关闭代码，重新推导一个 Score 与 Output 坐标，并解释为什么除以 `sqrt(D_head)`、为什么 Softmax 沿最后一个历史 Token Axis。
-
-<CoreCard title="本次停止条件" class="title-underline">
-
-Shape、独立标量 Oracle、因果性、归一化、Head/Batch 隔离、非法 Shape、A2 与完整回归全部通过，并能关闭代码重做坐标推导。满足后进入 M2-C Cached MHA；任一项失败就继续修正 M2-B，不用更多阅读量掩盖失败。
-
-</CoreCard>
+只有逐位置数值等价、Cache Shape/有效长度、Batch/Head 隔离、非法输入和 M2-B 完整回归同时通过，才进入 M2-D GQA。任一项失败时都继续修正 M2-C，不用更多功能掩盖 Cache 语义错误。
 
 ## 11. 什么时候算“具备当前需要的 Python 基础”？
 
@@ -912,7 +905,7 @@ Shape、独立标量 Oracle、因果性、归一化、Head/Batch 隔离、非法
 
 <Note title="真正的复健方式" class="title-underline">
 
-不要先花一周看完 Python 教程，再回来做实验。正确顺序是：先保存预测，只读当天第一段代码会用到的小节，然后立即修改、测试和解释。P0 与 M1 已把 Python 基础变成可审查能力；当前 A2 用矩阵 Shape、输入校验和失败测试继续复用它，而不是重新开始一轮教程。
+不要先花一周看完 Python 教程，再回来做实验。正确顺序是：先保存预测，只读当天第一段代码会用到的小节，然后立即修改、测试和解释。P0 与 M1 已把 Python 基础变成可审查能力；刚完成的 M2-B 又用矩阵 Shape、输入校验、标量 Oracle 和隔离性测试继续复用它。进入 M2-C 时仍沿用同一方法，而不是重新开始一轮教程。
 
 </Note>
 

@@ -16,48 +16,38 @@ const nextPart = orderedParts[activePartIndex + 1];
 if (!nextPart) throw new Error(`No next Lab task follows ${activePart.id}.`);
 
 const taskDetails = {
-	'M2-B': {
-		period: '2026.08.25 · 120 min',
+	'M2-C': {
+		period: '2026.09.01 · 120 min',
 		objective:
-			'在 H_q=H_kv 条件下，让每个 Batch、每个 Head 独立完成 Scaled Dot-Product Causal Attention，并用独立 Oracle 证明 Score 轴、Mask、Softmax 轴和输出元素都正确。',
+			'在 H_q=H_kv 条件下逐 Token 追加 K/V Cache，并证明每一步 Cached Output 都与 M2-B Full-Recompute Oracle 的当前位置数值等价。',
 		question:
-			'给定 Q/K/V=[B,H,T,D_head]，怎样证明批量矩阵乘法没有混合 Batch 或 Head，并且每个位置只能对历史 Token 归一化？',
+			'给定当前 Q/K/V=[B,H,1,D_head] 与历史 Cache，怎样证明追加后的 Cache、Weight 和 Output 只包含可见前缀，并且没有混合 Batch 或 Head？',
 		prediction:
-			'固定 B=2、H=3、T=4、D_head=5 时，Score/Weight=[2,3,4,4]、逐 Head 输出=[2,3,4,5]；修改未来 Token、其他 Head 或其他 Batch 不应污染目标位置。',
+			'固定 B=2、H=3、T=4、D_head=5 时，第 t 步 Cache=[2,3,t+1,5]、Weight=[2,3,1,t+1]、Output=[2,3,1,5]；逐步输出应等于完整前缀重算的最后一个位置。',
 		preRead: [
 			{
-				label: 'Harvard · Scaled Dot-Product Attention',
-				href: 'https://nlp.seas.harvard.edu/annotated-transformer/',
-				focus: '只看缩放原因、Mask 位置、Softmax 轴和 MHA 第 2 步。',
-			},
-			{
-				label: 'NumPy · matmul',
-				href: 'https://numpy.org/doc/stable/reference/generated/numpy.matmul.html',
-				focus: '只看 stacks of matrices 的最后两轴规则。',
-			},
-			{
-				label: 'NumPy · triu',
-				href: 'https://numpy.org/doc/stable/reference/generated/numpy.triu.html',
-				focus: '只看 k=1 如何选择严格未来位置。',
+				label: 'Hugging Face · Caching',
+				href: 'https://huggingface.co/docs/transformers/main/cache_explanation',
+				focus: '只看 Cache update、Attention mask 与逐 Token Shape。',
 			},
 		],
 		artifact:
-			'multi_head_attention.py、test_multi_head_attention.py，以及 M2-B 工作表中的 Shape 推导、独立标量 Oracle、首次失败和闭卷解释。',
+			'multi_head_attention.py、Cached MHA 定向测试，以及 M2-C 工作表中的逐步 Shape、首次失败、等价性证据和闭卷解释。',
 		acceptance:
-			'Score、Weight 与逐 Head 输出 Shape 正确；至少两个非零坐标匹配独立标量 Oracle；因果性、Batch/Head 隔离、输入契约与完整回归全部通过；关闭代码后能解释缩放与 Softmax 轴。',
+			'每一步 Cached Output 与完整前缀重算的最后位置数值等价；Cache/Weight/Output Shape、前缀内容、Batch/Head 隔离、输入契约与 M2-B 回归全部通过。',
 		steps: [
-			'10 min：关闭实现，填写 Q@K^T、Mask、Softmax 与 Output 的 Shape/轴预测。',
-			'15 min：只读 Annotated Transformer、matmul 与 triu 的指定段落，各留一句确认或修正。',
-			'30 min：先写独立标量 Oracle、Future Token、Head/Batch 隔离和非法 Shape 测试，保存第一次失败。',
-			'30 min：实现无 Cache MHA 核心，只返回逐 Head Output 与 Weight，不合并 Head。',
-			'15 min：只依据失败信息修正 Score、Mask 或 Softmax Axis。',
-			'10 min：运行 M2-B 定向测试与完整回归测试。',
-			'10 min：关闭代码重做坐标推导，并解释为什么除以 sqrt(D_head)。',
+			'10 min：关闭实现，填写第 t 步输入、Cache、Weight 与 Output Shape。',
+			'15 min：只读 Hugging Face Caching 的指定段落，记录它确认或修正了哪条预测。',
+			'30 min：先写逐位置 Full-Recompute 对照、Cache 内容、隔离性和非法输入测试，保存第一次失败。',
+			'30 min：实现单步 K/V 追加与当前 Query 对完整 Cache 的 Attention。',
+			'15 min：只依据失败信息修正 Token Axis、Cache 更新或返回顺序。',
+			'10 min：运行 M2-C 定向测试与 M2-B 完整回归测试。',
+			'10 min：关闭代码解释为什么单步 Decode 不需要显式 Causal Mask，以及 Cache 为什么只追加 K/V。',
 		],
 		nextDecision:
-			'M2-B 全部门禁通过后进入 M2-C Cached MHA；任一项失败就继续修正 B，不提前实现 Cache、GQA Head 映射或 Output Projection。',
-		document: 'checkoffs/m2-b-causal-attention.md',
-		assignment: 'assignments/m2-b-causal-attention.md',
+			'M2-C 全部门禁通过后进入 M2-D GQA Head 映射；任一项失败就继续修正 Cache 语义，不提前实现 GQA、Head 合并或 Output Projection。',
+		document: 'checkoffs/m2-c-cached-mha.md',
+		assignment: 'assignments/m2-c-cached-mha.md',
 	},
 } as const;
 
@@ -113,13 +103,21 @@ export const phase2Progress = {
 				'project_qkv 已通过 Shape、两个非零坐标 Oracle 和五类非法配置测试；A2 定向 6 项与完整 12 项回归测试通过，并完成闭卷 Shape 推导。',
 			featured: true,
 		},
+		{
+			id: 'M2-B',
+			period: '2026.08.25 — 2026.09.01',
+			title: '无 Cache Multi-Head Causal Attention',
+			summary:
+				'Score、Causal Mask、稳定 Softmax、逐 Head Output、Future Token 与 Batch/Head 隔离全部通过；定向评分 60/60，整份作业 100/100，私人仓库 16 项回归通过。',
+			featured: true,
+		},
 	],
 	current: { ...activePart, ...currentDetails },
 	next: { id: nextPart.id, title: nextPart.title },
 	evidence: {
-		tests: 12,
+		tests: 16,
 		rawSamples: 540,
 		summary:
-			'A2 projection contracts · 300 length-scan + 240 batch-size samples · rebuildable aggregates · two figures · Knee analysis',
+			'M2-B causal-attention Oracle and isolation · 300 length-scan + 240 batch-size samples · rebuildable aggregates · two figures · Knee analysis',
 	},
 } as const;
