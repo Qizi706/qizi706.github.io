@@ -250,7 +250,6 @@ export const phase2: LabPhase = {
 			artifact: '不可变环境快照、端点样本与能力矩阵。',
 			acceptance: '任何后续结果都能回指同一环境；不沿用 Phase 1 的旧快照。',
 			unlocks: 'S1 单并发稳态基线',
-			href: '/labs/p2-inference-systems/read/roadmap/#gate-s0冻结真实-vllm-环境',
 		},
 		{
 			id: 'S1',
@@ -275,7 +274,6 @@ export const phase2: LabPhase = {
 			artifact: '三轮 Raw 结果、稳定性检查与显存组成表。',
 			acceptance: 'P50/P95/P99 可重建；轮间差异可解释；客户端与服务端时间口径不混淆。',
 			unlocks: 'S2 Input Length',
-			href: '/labs/p2-inference-systems/read/roadmap/#gate-s1单并发稳态基线',
 		},
 		{
 			id: 'S2',
@@ -300,7 +298,6 @@ export const phase2: LabPhase = {
 			artifact: '输入长度曲线、Raw 样本和异常点复测。',
 			acceptance: '只对测量范围内趋势下结论，并用状态量或服务端指标排除竞争解释。',
 			unlocks: 'S3 Client Concurrency',
-			href: '/labs/p2-inference-systems/read/roadmap/#gate-s2input-length',
 		},
 		{
 			id: 'S3',
@@ -325,7 +322,6 @@ export const phase2: LabPhase = {
 			artifact: '吞吐—延迟曲线、饱和点和服务端状态对照。',
 			acceptance: '区分 Client Concurrency、Active Sequences 和实际 Scheduler Batch。',
 			unlocks: 'S4 Scheduler Budget',
-			href: '/labs/p2-inference-systems/read/roadmap/#gate-s3client-concurrency',
 		},
 		{
 			id: 'S4',
@@ -350,7 +346,6 @@ export const phase2: LabPhase = {
 			artifact: '两组单变量扫描、实际批量对照和配置边界表。',
 			acceptance: '不能仅凭客户端相关性声称 Scheduler 因果；配置值、实际行为和结果三者能够对应。',
 			unlocks: 'F0 核心综合',
-			href: '/labs/p2-inference-systems/read/roadmap/#gate-s4scheduler-budget',
 		},
 		{
 			id: 'F0',
@@ -376,7 +371,6 @@ export const phase2: LabPhase = {
 			acceptance:
 				'所有核心 Gate 通过；原始数据可重建；文章中的每条性能结论都有明确证据和适用范围。',
 			unlocks: 'Core Complete；再按问题选择进阶扩展',
-			href: '/labs/p2-inference-systems/read/roadmap/#gate-f0原始阶段产出与核心完成',
 		},
 	],
 };

@@ -9,7 +9,6 @@ const current = progress.current;
 const currentDocumentHref = getLabArtifactDisplayHref('p2-inference-systems', current.document);
 const labInstructionsHref = getLabArtifactDisplayHref('p2-inference-systems', current.assignment);
 const labReadmeHref = getLabArtifactDisplayHref('p2-inference-systems', 'README.md');
-const planHref = getLabArtifactDisplayHref('p2-inference-systems', 'roadmap.md');
 const labHomeHref = '/labs/p2-inference-systems/';
 const labArchiveHref = '/labs/p2-inference-systems.tar.gz';
 const description =
@@ -57,7 +56,7 @@ const routeRows = [
 			</li>
 			<li>
 				<a href="/learning/">实验路线</a>；<a href="/learning/phase-1/">Phase 1</a>；
-				<a href={planHref}>完整阶段计划</a>
+				<a href="#route">Phase 2 核心路线</a>
 			</li>
 		</ul>
 	</header>
@@ -131,8 +130,7 @@ const routeRows = [
 				>
 			</li>
 			<li>
-				<strong>进阶：</strong>S5、S6、R0、T0 不阻塞核心路线；完成 F0 后再从
-				<a href={planHref}>阶段计划</a>中选择。
+				<strong>进阶：</strong>S5、S6、R0、T0 不阻塞核心路线；完成 F0 后再选择。
 			</li>
 		</ul>
 	</section>
