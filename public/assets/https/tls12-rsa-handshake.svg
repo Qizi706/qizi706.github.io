@@ -69,9 +69,9 @@
 
   <rect x="42" y="1010" width="1116" height="36" rx="8" fill="#eff6ff" />
   <text x="600" y="1035" text-anchor="middle" class="phase">⑤ 握手验证与加密切换（Finalization）</text>
-  <text x="600" y="1081" text-anchor="middle" class="message">Change Cipher Spec · Finished（含 MAC 校验）</text>
+  <text x="600" y="1081" text-anchor="middle" class="message">Change Cipher Spec · Finished（握手记录校验）</text>
   <line x1="250" y1="1098" x2="950" y2="1098" class="line" />
-  <text x="600" y="1140" text-anchor="middle" class="message">Change Cipher Spec · Finished（含 MAC 校验）</text>
+  <text x="600" y="1140" text-anchor="middle" class="message">Change Cipher Spec · Finished（握手记录校验）</text>
   <line x1="950" y1="1157" x2="250" y2="1157" class="line" />
 
   <rect x="160" y="1195" width="880" height="54" rx="12" fill="#dcfce7" stroke="#22c55e" stroke-width="2" />

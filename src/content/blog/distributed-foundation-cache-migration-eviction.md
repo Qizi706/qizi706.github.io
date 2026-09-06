@@ -1,7 +1,10 @@
 ---
 title: '分布式基础：缓存策略、迁移与淘汰'
-description: '背景 前面已经学习了几组基础： 这些内容更偏系统正确性：对象状态要清楚，远程调用要可靠，副本要一致，故障后要能恢复。 接下来进入更贴近 KV Cache 工作内容的一组：缓存策略、迁移与淘汰。 KV Cache 系统的核心矛盾是： 所以系统必须不断做决策： 这篇文章的目标是：理解 KV Cache / Block...'
+description: '在 HBM、内存、SSD 和远端之间比较缓存命中、迁移与重算成本，结合 pin、epoch 和水位控制分析预取及安全淘汰。'
 pubDate: '2026-07-14T16:30:00+08:00'
+updatedDate: '2026-09-07T00:33:57+08:00'
+readingOrder: 7
+readingNote: '资源：决定缓存放置与安全回收'
 categories:
   - '分布式'
 tags:
@@ -13,79 +16,11 @@ draft: false
 mathjax: false
 ---
 
-## 背景
+> 系列入口：[分布式阅读路径](/category/分布式/)。 前置：[故障处理](/blog/distributed-foundation-failure-handling/)。 下一篇：[调度和负载均衡](/blog/distributed-foundation-scheduling-load-balancing/)。
 
-前面已经学习了几组基础：
+## 本文要解决的问题
 
-```text
-操作系统、网络、并发与存储。
-RPC 和远程调用。
-状态机、分片、路由与元数据。
-副本和一致性。
-故障处理。
-```
-
-这些内容更偏系统正确性：对象状态要清楚，远程调用要可靠，副本要一致，故障后要能恢复。
-
-接下来进入更贴近 KV Cache 工作内容的一组：缓存策略、迁移与淘汰。
-
-KV Cache 系统的核心矛盾是：
-
-```text
-GPU HBM 很快，但容量小。
-CPU Memory 容量更大，但访问慢。
-SSD 容量更大，但延迟更高。
-远端存储可以扩展容量，但网络访问更贵。
-```
-
-所以系统必须不断做决策：
-
-```text
-哪些 KV Cache 应该留在 GPU HBM？
-哪些可以下沉到 CPU Memory？
-哪些可以放到 SSD 或远端？
-哪些应该预取回来？
-哪些应该淘汰？
-哪些不能动，因为正在被请求使用？
-```
-
-这篇文章的目标是：理解 KV Cache / BlockGroup 系统如何在多级存储之间做取舍，以及迁移和淘汰为什么必须和状态机、元数据、ref_count、pin_count、epoch 一起设计。
-
-## 学习目标
-
-这一组需要掌握：
-
-```text
-cache hit / miss
-多级缓存
-cache placement
-cache migration
-cache eviction
-cache prefetch
-LRU
-LFU
-TTL
-Cost-aware eviction
-watermark
-pin/ref_count
-热点和冷数据
-迁移成本
-重算成本
-局部性
-```
-
-对 KV Cache 场景，要能回答：
-
-```text
-显存满了，应该删哪个 BlockGroup？
-远端有 cache，本地没有，要不要拉回来？
-请求马上要 decode，cache 却正在迁移，怎么办？
-以 block 还是 block group 为单位迁移？
-什么时候从 GPU HBM 下沉到 CPU Memory？
-什么时候从 CPU Memory 下沉到 SSD？
-哪些 cache 不能淘汰？
-如何根据 ref_count 和 pin_count 判断是否安全？
-```
+显存不足时，删除哪个 BlockGroup、迁移到哪里、是否直接重算，需要同时考虑访问成本与对象状态。本文沿 HBM、CPU Memory、SSD 和远端存储比较这些选择，重点解释迁移提交点、pin 保护和高低水位，避免局部性能优化破坏请求正确性。
 
 ## Cache Hit 和 Cache Miss
 
@@ -737,7 +672,7 @@ GPU HBM 余量。
 7. 读取。
 ```
 
-每一步都可能失败，所以它和前面学习的 RPC、状态机、元数据、故障处理是连在一起的。
+每一步都可能失败，所以它需要结合 [RPC 的失败语义](/blog/distributed-foundation-rpc-remote-call/)、[状态与元数据契约](/blog/distributed-foundation-state-machine-sharding-metadata/)和[故障恢复路径](/blog/distributed-foundation-failure-handling/)一起分析。
 
 ## 常见错误设计
 
@@ -940,62 +875,11 @@ miss 主要发生在哪一层？
 15. 调度是否考虑 cache locality？
 ```
 
-## 推荐学习顺序
+## 应用：比较迁移与重算
 
-这一组可以按下面顺序学：
+为一个候选 BlockGroup 记录大小、pin 状态、预期复用次数与重算耗时。用同一单位比较远端读取、迁移后复用和重新计算的成本，再把一次取消或迁移失败插入流程。安全可回收是选择候选的前提；策略收益要结合实际命中和尾延迟验证。
 
-```text
-1. cache hit / miss：理解缓存命中和未命中的成本差异。
-2. 多级缓存：理解 HBM、CPU Memory、SSD、Remote Store。
-3. Block 和 BlockGroup 粒度：理解管理粒度。
-4. cache placement：理解数据应该放在哪里。
-5. cache migration：理解数据如何移动。
-6. 迁移状态机：理解迁移为什么不是简单拷贝。
-7. prefetch：理解提前拉取和预测风险。
-8. eviction：理解空间不足时删谁。
-9. LRU、LFU、TTL：理解基础淘汰策略。
-10. cost-aware eviction：理解 KV Cache 为什么需要综合打分。
-11. watermark：理解水位触发和抖动控制。
-12. 热点处理：理解高频数据和局部性。
-13. 结合调度：理解为什么 cache locality 会影响调度决策。
-```
+## 参考与对照
 
-最后要能回答：
-
-```text
-这个 BlockGroup 现在应该放在哪一层？
-如果显存满了，应该淘汰谁？
-这个 BlockGroup 能不能迁移？
-迁移收益是否大于成本？
-预取是否值得？
-远端读取、迁移本地、重新计算，哪个更好？
-```
-
-## 总结
-
-缓存策略、迁移与淘汰，是 KV Cache 系统里最贴近性能和资源效率的一组内容。
-
-核心不是简单地“命中就快，未命中就慢”，而是要理解多级存储之间的取舍：
-
-```text
-HBM 快但小。
-CPU Memory 大但慢。
-SSD 更大但延迟高。
-远端存储可扩展但受网络影响。
-迁移能提升局部性，但有成本。
-淘汰能释放空间，但可能增加 miss 或重算。
-预取能降低延迟，但预测错误会浪费资源。
-```
-
-对 BlockGroup 来说，最重要的原则是：
-
-```text
-1. 正在使用的数据不能淘汰。
-2. 迁移和淘汰必须经过状态机。
-3. 每次关键状态变化都要带 epoch。
-4. 源副本不要过早删除。
-5. 淘汰策略要考虑重算成本、大小、热度、优先级和局部性。
-6. 后台任务不能抢占在线请求资源。
-```
-
-掌握这一组之后，下一步可以继续学习调度和负载均衡。因为缓存放在哪里、请求调到哪里、是否迁移数据，本质上是一个联合决策问题。
+- [Redis Key eviction](https://redis.io/docs/latest/develop/reference/eviction/)：对照 LRU、LFU、TTL 候选集和淘汰指标；这些策略不能替代对象使用中的安全检查。
+- [vLLM Automatic Prefix Caching 设计](https://docs.vllm.ai/en/latest/design/prefix_caching/)：对照 KV block 哈希、引用计数和空闲队列，区分可复用缓存与正在使用的块。

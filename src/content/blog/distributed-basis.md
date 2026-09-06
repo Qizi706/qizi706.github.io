@@ -1,7 +1,10 @@
 ---
 title: '分布式基础：初步学习路径'
-description: '背景 刚开始实习时，组内方向是训练-推理一体存储，尤其是围绕 KV Cache 做存储、调度、迁移或复用，那么“分布式”不是一个单独的理论章节，而是会贯穿在每一次请求、每一份缓存、每一次节点故障和每一个性能指标里。 我目前的目标不是一下子掌握所有分布式系统，而是先建立一张够用的地图： 这篇博客先从这些问题出发，总...'
+description: '以分布式 KV Cache 为场景，建立从网络与 RPC 到状态机、一致性、故障恢复和调度的知识地图，并给出各主题的阅读入口。'
 pubDate: '2026-07-06T15:59:28+08:00'
+updatedDate: '2026-09-07T00:33:57+08:00'
+readingOrder: 1
+readingNote: '总览：选择要解决的系统问题'
 categories:
   - '分布式'
 tags:
@@ -9,6 +12,8 @@ tags:
 draft: false
 mathjax: false
 ---
+
+> 系列入口：[分布式阅读路径](/category/分布式/)。 下一篇：[操作系统、网络、并发与存储](/blog/distributed-foundation-os-network-concurrency-storage/)。
 
 ## 背景
 
@@ -44,14 +49,15 @@ mathjax: false
 
 ## 第一个月应该掌握的分布式知识地图
 
-我认为可以按下面这条主线学习：
+按前置知识，可以沿下面的路径阅读。本文保留全局问题地图，各专题展开具体接口和故障边界：
 
-```text
-网络通信 -> RPC -> 分片与路由 -> 副本与一致性 -> 共识与元数据
-         -> 故障处理 -> 调度与负载均衡 -> 可观测性 -> 性能优化
-```
-
-这条线不是严格的先后关系，但它基本覆盖了一个分布式存储/推理系统每天都会遇到的问题。
+1. [操作系统、网络、并发与存储](/blog/distributed-foundation-os-network-concurrency-storage/)
+2. [RPC 和远程调用](/blog/distributed-foundation-rpc-remote-call/)
+3. [状态机、分片、路由与元数据](/blog/distributed-foundation-state-machine-sharding-metadata/)
+4. [副本和一致性](/blog/distributed-foundation-replication-consistency/)
+5. [故障处理](/blog/distributed-foundation-failure-handling/)
+6. [缓存策略、迁移与淘汰](/blog/distributed-foundation-cache-migration-eviction/)
+7. [调度和负载均衡](/blog/distributed-foundation-scheduling-load-balancing/)
 
 ## 网络通信基础
 
@@ -1040,18 +1046,12 @@ cache block 到底有哪些状态？
 13. P99 延迟变差时，应该先看哪些指标？
 ```
 
-## 总结
+## 从地图选一个问题
 
-对刚开始实习的我来说，分布式基础不应该只停留在 Raft、Paxos、CAP 这些名词上，而要和实际系统里的问题对应起来。
+先选择一条能观测的请求路径，标出数据位置、状态拥有者和失败返回点。遇到调用超时先进入 RPC 篇；遇到旧路由进入状态与元数据篇；已经能保证正确性但延迟偏高，再进入缓存和调度篇。每次追踪一个问题，并保留对应日志或最小反例。
 
-在训练-推理一体存储和 KV Cache 场景下，最核心的是：
+## 参考与对照
 
-```text
-1. 数据怎么分布：分片、路由、元数据。
-2. 数据怎么可靠：副本、一致性、故障恢复。
-3. 数据怎么高效：局部性、调度、迁移、淘汰。
-4. 状态怎么正确：版本、epoch、幂等、状态机。
-5. 问题怎么定位：metrics、logs、traces。
-```
-
-掌握这些之后，再继续深入具体算法、系统实现和论文，会更容易把知识和真实工作联系起来。
+- [Raft 原论文](https://raft.github.io/raft.pdf)：第 2 节的复制状态机模型与第 5 节的选举、日志复制，可对照本文“共识与元数据”部分。
+- [gRPC Deadlines](https://grpc.io/docs/guides/deadlines/)：对照调用预算与跨服务传播，避免把远程调用当成无限等待的本地函数。
+- [vLLM Automatic Prefix Caching 设计](https://docs.vllm.ai/en/latest/design/prefix_caching/)：对照真实 KV block 的复用、引用和回收；本文的通用分布式模型不等同于 vLLM 的完整实现。

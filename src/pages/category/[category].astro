@@ -34,6 +34,13 @@ export async function getStaticPaths() {
 const { category, posts } = Astro.props;
 const description = `共 ${posts.length} 篇归档于 ${category} 分类的文章`;
 const isAiInfra = getCategorySlug(category) === 'ai-infra';
+const readingPosts = posts
+	.filter((post) => post.data.readingOrder !== undefined)
+	.sort((a, b) => a.data.readingOrder! - b.data.readingOrder!);
+const otherPosts = posts.filter((post) => post.data.readingOrder === undefined);
+if (new Set(readingPosts.map((post) => post.data.readingOrder)).size !== readingPosts.length) {
+	throw new Error(`Duplicate readingOrder in category: ${category}`);
+}
 const archiveDateFormatter = new Intl.DateTimeFormat('zh-CN', {
 	year: 'numeric',
 	month: '2-digit',
@@ -54,41 +61,51 @@ const archiveRange =
 <PageLayout title={`${category} | ${SITE_TITLE}`} {description} mainClass="wiki-index-page">
 	<header class="wiki-page-header">
 		<h1>{category}</h1>
-		{
-			isAiInfra ? (
-				<ul class="wiki-index-list">
-					<li>学习主题：LLM 推理与 Serving</li>
-					<li>当前阶段：请求链路、Prefill、Decode、KV Cache 与本地推理服务</li>
-					<li>文章：共 {posts.length} 篇；理论知识与验证实验并列阅读</li>
-				</ul>
-			) : (
-				<ul class="wiki-index-list">
-					<li>{description}</li>
-					{archiveRange && <li>收录时间：{archiveRange}</li>}
-					<li>文章按发布时间由旧到新排列，编号即建议阅读顺序</li>
-				</ul>
-			)
-		}
+		<ul class="wiki-index-list">
+			<li>{description}</li>
+			{archiveRange && <li>收录时间：{archiveRange}</li>}
+			<li>
+				{
+					readingPosts.length > 0
+						? '建议路径按前置知识安排；已熟悉的主题可以跳过。'
+						: '文章按发布时间由旧到新归档，可按感兴趣的主题阅读。'
+				}
+			</li>
+			{
+				isAiInfra && (
+					<li>
+						阶段安排与当前任务见 <a href="/learning/phase-2/">AI Infra 实验路线</a>。
+					</li>
+				)
+			}
+		</ul>
 	</header>
 
-	<section class="wiki-index-section" aria-label={`${category} 分类下的文章`}>
-		<h2>{isAiInfra ? '学习内容' : '文章目录'}</h2>
-		{
-			isAiInfra ? (
+	{
+		readingPosts.length > 0 && (
+			<section class="wiki-index-section" aria-label={`${category} 建议阅读路径`}>
+				<h2>建议阅读路径</h2>
 				<ol class="wiki-route-list">
-					<li>
-						<span class="route-family is-gray">推理基础</span>
-						{posts.map((post, index) => (
-							<>
-								{index > 0 && <span class="route-separator"> | </span>}
-								<a href={getPostUrl(post)}>{post.data.title}</a>
-							</>
-						))}
-					</li>
+					{readingPosts.map((post) => (
+						<li>
+							<a href={getPostUrl(post)}>{post.data.title}</a>
+							{post.data.readingNote && (
+								<div>
+									<small>{post.data.readingNote}</small>
+								</div>
+							)}
+						</li>
+					))}
 				</ol>
-			) : (
+			</section>
+		)
+	}
+	{
+		otherPosts.length > 0 && (
+			<section class="wiki-index-section" aria-label={`${category} 文章归档`}>
+				<h2>{readingPosts.length > 0 ? '补充文章（按发布时间）' : '文章目录'}</h2>
 				<ol class="wiki-route-list">
-					{posts.map((post) => (
+					{otherPosts.map((post) => (
 						<li>
 							<time class="route-family is-gray" datetime={post.data.pubDate.toISOString()}>
 								{formatArchiveDate(post.data.pubDate)}
@@ -97,7 +114,7 @@ const archiveRange =
 						</li>
 					))}
 				</ol>
-			)
-		}
-	</section>
+			</section>
+		)
+	}
 </PageLayout>

@@ -1,7 +1,10 @@
 ---
 title: '分布式基础：RPC 和远程调用'
-description: '背景 学习分布式系统时，一个非常重要的转变是：不能再把函数调用理解成本地调用。 在单机程序里，调用一个函数通常是： 但在分布式系统里，调用另一个模块经常意味着通过网络访问另一台机器上的服务。这时一次“函数调用”会变成： 因此，远程调用不是本地调用。它更慢，也更容易失败。 对训练-推理一体存储和 KV Cache...'
+description: '围绕响应丢失后的重复执行，解释 RPC 超时、重试与幂等，并用可运行的 SQLite 示例验证事务去重、进程重启和操作 ID 冲突。'
 pubDate: '2026-07-07T10:30:00+08:00'
+updatedDate: '2026-09-07T00:33:57+08:00'
+readingOrder: 3
+readingNote: '通信：分析超时、重试与幂等'
 categories:
   - '分布式'
 tags:
@@ -12,75 +15,11 @@ draft: false
 mathjax: false
 ---
 
-## 背景
+> 系列入口：[分布式阅读路径](/category/分布式/)。 前置：[操作系统、网络、并发与存储](/blog/distributed-foundation-os-network-concurrency-storage/)。 下一篇：[状态机、分片、路由与元数据](/blog/distributed-foundation-state-machine-sharding-metadata/)。
 
-学习分布式系统时，一个非常重要的转变是：不能再把函数调用理解成本地调用。
+## 本文要解决的问题
 
-在单机程序里，调用一个函数通常是：
-
-```text
-参数已经在本地内存里。
-函数要么返回结果，要么抛出异常。
-调用成本很低。
-失败边界相对清晰。
-```
-
-但在分布式系统里，调用另一个模块经常意味着通过网络访问另一台机器上的服务。这时一次“函数调用”会变成：
-
-```text
-序列化请求
-通过网络发送
-远端排队
-远端执行
-序列化响应
-通过网络返回
-本地反序列化
-```
-
-因此，远程调用不是本地调用。它更慢，也更容易失败。
-
-对训练-推理一体存储和 `KV Cache` 系统来说，RPC 会出现在很多关键路径上：
-
-```text
-worker 查询 metadata server。
-scheduler 调度 model worker。
-cache manager 读取远端 block group。
-cache manager 迁移 block group。
-worker pin/unpin 某份 KV Cache。
-后台任务淘汰或预取 cache。
-```
-
-这一篇重点学习第二组基础：`RPC` 和远程调用。
-
-## 学习目标
-
-这一组基础的目标是理解：
-
-```text
-为什么分布式接口都要考虑 timeout、retry 和幂等。
-```
-
-需要掌握：
-
-```text
-RPC 是什么
-请求/响应模型
-序列化和反序列化
-timeout
-retry
-幂等
-限流
-熔断
-连接池
-```
-
-最关键的一句话是：
-
-```text
-远程调用失败，不代表服务端没有执行。
-```
-
-这句话是理解 RPC 失败语义的核心。
+一个请求超时后，客户端往往不知道服务端是否已经修改了状态。本文围绕这个不确定性，解释 deadline、重试预算、幂等与操作 ID，并用一个可运行案例观察“已提交但响应丢失”之后该怎样重试。
 
 ## RPC 是什么？
 
@@ -270,6 +209,82 @@ evict_block_group(bg_1)
 如果请求过期了，服务端是否应该拒绝？
 ```
 
+## 可运行案例：已提交，但客户端没有收到结果
+
+下面是为解释失败语义构造的最小示例。它用 SQLite 保存一个 BlockGroup 的预留计数，使用子进程退出来制造“没有响应”；没有建立真实网络连接，也不测量 RPC 性能。
+
+### 先冻结请求与不变量
+
+客户端希望为 `bg_1` 预留一个单位，第一次请求和所有重试都使用同一个操作 ID：
+
+```json
+{"operation_id": "reserve-1", "block_group": "bg_1", "epoch": 7, "slots": 1}
+```
+
+初始状态是 `epoch=7, reserved=0`。希望保持的不变量是：**同一逻辑操作即使重试，也只增加一次计数。** 不同操作使用不同 ID；相同 ID 携带不同参数时必须拒绝，不能默默当成重试。
+
+### 第一版为什么会重复执行？
+
+第一版只在一个事务里增加计数，然后返回成功：
+
+| 步骤 | 服务端持久状态 | 客户端观察 |
+| --- | --- | --- |
+| 收到首次请求 | `reserved=0` | 等待 |
+| 增加计数并提交事务 | `reserved=1` | 仍未收到响应 |
+| 服务端在返回前退出 | `reserved=1` | 没有结果，无法确定是否提交 |
+| 新进程收到相同请求 | `reserved=2` | 收到成功，但副作用已重复 |
+
+这个反例中的每次数据库更新都是原子的。问题在于接口没有识别“两次调用其实是同一个逻辑操作”，所以单次更新正确仍不足以保证重试正确。
+
+### 第二版：把操作结果与副作用一起提交
+
+增加一张操作表，保存 `operation_id`、规范化请求参数和原始结果。一次请求按下面的事务执行：
+
+```text
+BEGIN IMMEDIATE
+  查询 operation_id
+  已存在：参数相同则返回保存的结果；不同则拒绝
+  不存在：校验当前 epoch，更新 reserved
+          插入 operation_id、请求参数和本次结果
+COMMIT
+返回结果
+```
+
+操作结果与计数在**同一个事务**里提交：
+
+- 提交前退出：计数修改与操作记录一起回滚，重试可以真正执行一次。
+- 提交后、返回前退出：计数和操作记录都保留，新进程查到记录后返回原始结果。
+- 并发重试：示例的 `BEGIN IMMEDIATE` 串行化写事务，后续请求在同一检查路径看到已保存的 ID。
+
+如果先增加计数并提交，再单独记录 ID，那么两次提交之间退出仍会重复执行。只在 Python 字典里记住 ID 也不够：进程重启会丢失去重信息。
+
+### 下载、运行与实际结果
+
+[完整脚本：rpc-idempotency.py](/examples/rpc-idempotency.py) 只依赖 Python 3.10+ 标准库中的 SQLite 支持。以下命令将它下载到新建临时目录，脚本自己创建并清理临时数据库：
+
+```bash
+rpc_demo_dir=$(mktemp -d)
+curl --fail --location https://zqwiki.cn/examples/rpc-idempotency.py \
+  --output "$rpc_demo_dir/rpc-idempotency.py"
+python3 "$rpc_demo_dir/rpc-idempotency.py"
+```
+
+2026-09-07 使用 Python 3.14.7 / SQLite 3.53.4 在本地运行该脚本，得到以下结果。每次请求都由新的子进程执行；两种故障点使用 `os._exit` 直接退出，避免正常清理替我们完成事务处理：
+
+```text
+unsafe / response lost + retry: reserved=2 (duplicate effect)
+safe / restart + same ID: reserved=1 (saved result replayed)
+safe / crash before commit: reserved=0; retry -> reserved=1
+safe / same ID + changed parameters: rejected; reserved=1
+safe / new ID + stale epoch: rejected; reserved=1
+safe / 4 concurrent retries: reserved=1
+PASS: 6 failure/contract scenarios
+```
+
+这些检查支持的是单机数据库边界内的副作用去重。它们没有验证磁盘损坏、断电、跨数据库事务或分布式共识，也没有证明网络能提供“恰好一次投递”。SQLite 原子提交依赖的环境条件见 [Atomic Commit](https://sqlite.org/atomiccommit.html)。
+
+还需要明确三个接口边界：操作表的保存时间必须覆盖允许的重试窗口；多租户服务的去重键需要包含相应作用域；返回缓存结果表示该操作当时成功，不代表 BlockGroup 的当前状态仍与当时相同。真正的 GPU 资源释放或跨节点迁移若无法纳入这一个事务，就需要额外的状态机、补偿或查询机制。
+
 ## Timeout：超时
 
 远程调用必须设置超时。
@@ -316,9 +331,7 @@ get_block_group(block_group_id, epoch)
 
 ### 超时不是取消
 
-客户端 timeout 只代表客户端不等了，不代表服务端停止执行。
-
-这点非常重要。
+客户端 timeout 只代表客户端不等了，不保证服务端应用工作已经停止。[gRPC Deadlines](https://grpc.io/docs/guides/deadlines/) 会传播取消状态，但服务端仍需让自己启动的工作检查取消并退出；已经提交的副作用也不会因此自动回滚。
 
 例如：
 
@@ -988,62 +1001,12 @@ latency_ms
 14. 日志里是否包含 request_id、operation_id、block_group_id 和 epoch？
 ```
 
-## 推荐学习顺序
+## 把接口契约写完整
 
-这一组基础可以按下面顺序学：
+选一个 `evict`、`migrate` 或 `pin` 接口，写出相同操作 ID 的重试结果、参数变化时的拒绝方式、旧 epoch 的处理，以及服务端重启后的查询入口。用前面的响应丢失案例检查每个提交点，而不是只验证一次正常返回。
 
-```text
-1. RPC 是什么：理解远程调用和本地调用的区别。
-2. 请求/响应模型：理解正常路径和异常路径。
-3. 序列化：理解对象如何变成网络字节流。
-4. timeout：理解为什么不能无限等待。
-5. retry：理解为什么重试既有用也危险。
-6. 幂等：理解为什么写接口要能承受重复请求。
-7. operation_id：理解长操作如何去重和查询状态。
-8. 限流：理解如何保护下游。
-9. 熔断：理解如何限制故障扩散。
-10. 连接池：理解 RPC 并发和排队。
-11. 控制面/数据面分离：理解大块 KV 数据为什么不适合普通 RPC。
-12. 结合 KV Cache 设计 evict/migrate/pin/unpin 接口。
-```
+## 参考与对照
 
-最后一步最重要。不要只停留在 RPC 框架怎么用，而是要能设计出可靠的接口：
-
-```text
-evict(block_group_id, epoch, operation_id)
-migrate(block_group_id, src, dst, epoch, operation_id)
-pin(block_group_id, request_id, epoch)
-unpin(block_group_id, request_id, epoch)
-```
-
-然后逐个回答：
-
-```text
-这个接口能不能重试？
-重复请求会不会改变结果？
-客户端超时后服务端是否可能还在执行？
-服务端如何识别重复操作？
-旧 epoch 的请求是否会被拒绝？
-失败后客户端应该查状态、重试还是刷新元数据？
-```
-
-## 总结
-
-RPC 是分布式系统里最基础、也最容易被低估的一层。
-
-它看起来像函数调用，但本质上是跨网络、跨进程、跨故障边界的通信。
-
-对 KV Cache 和 Block Group 管理来说，RPC 设计的重点不是“能调通”，而是：
-
-```text
-1. 每个远程调用都必须有 timeout。
-2. 不是所有失败都能安全 retry。
-3. 能 retry 的接口必须尽量幂等。
-4. 写接口要带 epoch/version，防止旧状态写入。
-5. 长操作要带 operation_id，避免重复执行。
-6. pin/unpin 要按 request_id 去重，避免计数错乱。
-7. 大块 KV 数据最好和控制面 RPC 分离。
-8. 限流和熔断是保护系统的必要机制。
-```
-
-掌握这些之后，再学习元数据、一致性、故障恢复和调度时，会更容易理解为什么分布式系统不能只写正常路径。
+- [gRPC Deadlines](https://grpc.io/docs/guides/deadlines/)：区分客户端停止等待、RPC 取消通知和应用主动停止后台工作。
+- [gRPC Retry](https://grpc.io/docs/guides/retry/)：核对可重试状态、退避与调用提交点；框架重试不替代业务副作用去重。
+- [SQLite Atomic Commit](https://sqlite.org/atomiccommit.html)：对照示例中状态修改与操作结果的原子提交，以及它对文件系统的假设。
