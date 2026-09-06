@@ -2,7 +2,7 @@
 title: 'LLM 推理机制实验：KV Cache、预分配与 Batch Size'
 description: '阶段 2 的中间机制产出：用最小 NumPy Attention 验证 KV Cache、预分配、Batched Decode 与无 Cache MHA Oracle，并为真实 vLLM Serving 实验建立可证伪预测。'
 pubDate: '2026-08-16T20:30:00+08:00'
-updatedDate: '2026-09-01T14:55:00+08:00'
+updatedDate: '2026-09-07T00:06:00+08:00'
 categories:
   - 'AI Infra'
 tags:
@@ -40,7 +40,9 @@ mathjax: true
 
 这不是 vLLM、GPU 或在线 Serving Benchmark，而是进入真实系统实验前的机制验证。M0/M1 的性能扫描仍只覆盖 CPU、NumPy、单 Head、等长 Sequence 和固定 Batch；随后完成的 M2-B 只新增无 Cache Multi-Head Causal Attention 的正确性 Oracle，不新增性能结论。它们能证明最小实现中的数值不变量与耗时趋势，不能直接给出 vLLM 的 TTFT、TPOT、吞吐或 P99。
 
-机制背景见[《LLM 推理优化的系统视角：从 KV Cache 到调度》](/draft/llm-inference-optimization-system-view/)，完整代码与原始数据见 [`p2-inference-systems` 实验产物目录](/labs/p2-inference-systems/)。
+机制背景见[《LLM 推理优化的系统视角：从 KV Cache 到调度》](/draft/llm-inference-optimization-system-view/)。
+
+[`p2-inference-systems` 公开材料目录](/labs/p2-inference-systems/)提供当前 Starter 及其运行文件、当前与历史任务书、空白工作表和当前评分器。个人实现、已填写工作表，以及仍保留的原始样本、汇总和图表由私人作答仓库管理，不随网站发布。本文公开实验结果与解释，当前下载包不包含完整的 M0/M1 复现材料。
 
 </Note>
 
@@ -175,13 +177,13 @@ q_t @ np.swapaxes(k_cache, -1, -2)
 
 所有计时都使用 <code>perf_counter_ns()</code>，正确性 Oracle 不进入计时区间，每个分组保留 30 条正式样本。当前 Harness 默认每条 Path 先 Warm-up 10 次；M0 的早期汇总曾使用 3 次 Warm-up，因此历史表格与当前代码复跑不应被视为完全相同的协议。
 
-当前公开产物的可审计状态如下：
+下表沿用作者实验记录中的证据状态，不是公开下载包的文件清单。Batch Length 与 Batch Size 的原始 CSV 和重建材料由私人作答仓库管理，读者无法仅凭当前公开包独立重算结果。
 
-| 实验                | 当前原始样本 | 可重建产物                         | 审计状态                                  |
+| 实验                | 记录的原始样本 | 记录中的产物                       | 证据边界                                  |
 | ------------------- | -----------: | ---------------------------------- | ----------------------------------------- |
 | Cache Strategy      |            0 | 仅保留正文中的历史中位数汇总       | 历史结论保留；当前复现性为 `Inconclusive` |
-| Batch Length，`B=2` |          300 | 5 个 T × 2 条路径 × 30 次          | 可从 `raw.csv` 重新计算                   |
-| Batch Size，`T=128` |          240 | 汇总 CSV、P50/P95 图、吞吐图、Knee | 可从 `raw.csv` 完整重建                   |
+| Batch Length，`B=2` |          300 | 5 个 T × 2 条路径 × 30 次          | 重算依赖私人仓库的 `raw.csv`；未公开      |
+| Batch Size，`T=128` |          240 | 汇总 CSV、P50/P95 图、吞吐图、Knee | 重建依赖私人仓库的代码与数据；未公开      |
 
 当前 Batch Length Harness 仍按固定路径顺序执行，温度、频率或长期漂移可能形成顺序效应，因此结论关注跨长度趋势，不把某个亚毫秒差异解释成稳定的系统常数。
 
@@ -199,14 +201,14 @@ M1 的 Batch Size Scan 随机化 B 的执行顺序，并将每条 Path 的 Warm-
 
 <Note title="这一组结果的证据状态" class="title-underline">
 
-下面保留的是 M0 当时记录的 30 次中位数和机制解释。实现与正确性单测仍然存在，但对应的 450 条 Cache Strategy 原始样本已经不在当前公开归档中，所以读者无法从现有文件独立重算这些中位数。
+下面保留的是 M0 当时记录的 30 次中位数和机制解释。本文记录的 450 条 Cache Strategy 原始样本缺口仍未补齐，无法从现有汇总重算这些中位数。这项证据缺失与其他实验的数据仅未公开不同，不能因为材料转由私人仓库管理就视为已经修复。
 
 | 判断维度     | 状态           | 依据                                                        |
 | ------------ | -------------- | ----------------------------------------------------------- |
 | 历史结论     | `Supported`    | 当时记录的五个长度中，Preallocated 中位数都低于 Concatenate |
 | 当前可复现性 | `Inconclusive` | 缺少逐样本 CSV，无法重新聚合、检查分布或核对原测量协议      |
 
-因此，下面的表格是**历史结果记录**，不是当前复现包中证据完整的一组测量。以后重跑产生的数据必须作为新实验保存，不能冒充原始样本。
+因此，下面的表格是**历史结果记录**，不是逐样本证据完整的一组可复核测量。以后重跑产生的数据必须作为新实验保存，不能冒充原始样本。
 
 </Note>
 
@@ -228,7 +230,7 @@ M1 的 Batch Size Scan 随机化 B 的执行顺序，并将每条 Path 的 Warm-
 
 **H2 的历史结论：`Supported`。** 五个长度上，Preallocated 的中位数都低于 Concatenate。到 <code>T=256</code> 时，耗时从 3.083 ms 降到 2.509 ms，减少约 18.6%。
 
-**H2 的当前可复现性：`Inconclusive`。** 在重新生成独立的 <code>results/cache-strategy/raw.csv</code> 之前，这个趋势不能从当前归档重新聚合、检查分布或核对测量协议。新的复跑只能形成新的证据版本，不能补写成当时的原始数据。
+**H2 的当前可复现性：`Inconclusive`。** 在重新生成独立的 <code>results/cache-strategy/raw.csv</code> 之前，这个趋势不能从本文保留的汇总记录重新聚合、检查分布或核对测量协议。新的复跑只能形成新的证据版本，不能补写成当时的原始数据。
 
 No Cache 与 Preallocated 的差距从 1.51x 扩大到 16.18x。这里不是 Cache 让 Attention 消失了，而是它不再对每个 Decode Step 的完整前缀重复构造 Q/K/V 和 Score Matrix。
 
@@ -371,7 +373,7 @@ M2-B 已额外覆盖 `Q/K/V=[B,H,T,D_head]` 下的缩放点积、Causal Mask、�
 - Continuous Batching、PagedAttention 与 Scheduler；
 - Client Concurrency、Queue、TTFT、TPOT、P99 与真实 Token Throughput。
 
-按当前可见产物区分学习证据层级：
+以下学习证据层级沿用作者的实验记录；“已达到”不表示对应实现或数据已公开，也不代表外部复核已经完成：
 
 | 层级        | 当前状态 | 证据                                                                |
 | ----------- | -------- | ------------------------------------------------------------------- |
@@ -381,12 +383,14 @@ M2-B 已额外覆盖 `Q/K/V=[B,H,T,D_head]` 下的缩放点积、Causal Mask、�
 | Reviewed    | 尚未达到 | 正确性回归与构建检查已存在；还没有独立复现或外部 Review             |
 | Transferred | 尚未达到 | 尚未把 Toy 机制迁移到真实 vLLM Scheduler 与 Serving                 |
 
-## 9. 复现已经完成的实验
+## 9. 历史复跑流程与材料边界
 
-<CoreCard title="运行正确性测试与 Benchmark" class="title-underline">
+以下保留 M0/M1 的复跑命令。执行前需要取得对应版本的实验代码和依赖环境，并进入保存这些代码的私人作答仓库根目录；当前公开 Starter 不包含这些 Benchmark CLI 和结果目录，不能直接运行下面的流程。当前练习的启动方式以[公开 Lab 使用说明](/labs/p2-inference-systems/read/README/)为准。
+
+<CoreCard title="历史命令：需对应实验代码与环境" class="title-underline">
 
 ```bash
-cd labs/p2-inference-systems
+# 在包含 M0/M1 Benchmark CLI 的私人作答仓库根目录执行
 make setup
 make test
 
@@ -412,7 +416,7 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
 
 </CoreCard>
 
-若要修复 Cache Strategy 的证据缺口，应单独执行下面的命令并把新数据视为一次新的测量；它使用当前 10 次 Warm-up 的 Harness，不能冒充早期表格的原始样本：
+若重新开展 Cache Strategy 测量，应在具备对应 Benchmark CLI 的环境中单独执行下面的命令，并把结果作为新实验保存。这个流程采用 10 次 Warm-up，不能补写成早期表格的原始样本：
 
 ```bash
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
@@ -421,7 +425,7 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
   --csv results/cache-strategy/raw.csv
 ```
 
-本文涉及的个人实现、填写后的工作表、原始样本、汇总和图表保存在私人作答仓库，不由网站的 Lab 文件目录发布。公开 Lab 包保留当前 Starter、当前与历史任务书、未填写工作表模板和当前评分器。
+下面是本文实验记录涉及的目录结构，用于说明私人实验材料的组织方式，不是当前公开下载包的文件清单。公开内容以 [`p2-inference-systems` 材料目录](/labs/p2-inference-systems/)为准；Cache Strategy 缺失的原始样本不在下列已记录产物中。
 
 ```text
 p2-inference-systems/

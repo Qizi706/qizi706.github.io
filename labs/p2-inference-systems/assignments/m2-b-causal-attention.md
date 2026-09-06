@@ -2,7 +2,7 @@
 
 状态：**Archived · 历史任务书**。本页公开 M2-B 当时的题目、范围和验收方法，不包含本站维护者的实现、测试答案或填写记录。当前任务从[阶段 2 路线页](/learning/phase-2/)进入。
 
-> 页面中的评分命令和初始分数描述对应 M2-B 当时的 Starter；当前下载包已经前进到 M2-C，不保证继续提供历史评分入口。
+> 页面中的评分命令、初始分数和文件布局对应 [M2-B 的固定历史版本 `00a531c`](https://github.com/Qizi706/qizi706.github.io/tree/00a531c5b9b1429dd759acd934065a7a8d36be5a/labs/p2-inference-systems)。当前下载包只提供 M2-C 评分入口；开始当前练习请阅读 [M2-C 任务书](m2-c-cached-mha.md)。
 
 M2-B 用最小 NumPy 实现建立 Attention Oracle：先把投影结果拆成多个 Head，再完成 Q/K/V 投影，最后实现不带 KV Cache 的 Multi-Head Causal Attention。完成它之后，Cached MHA、GQA 和真实 Serving 实验才有可信的数值基线。
 
@@ -42,27 +42,20 @@ Phase 1 Checkoff
 <p>只编辑 <code>src/inference_lab/multi_head_attention.py</code> 和自己的测试记录。让每个 Batch、每个 Head 独立完成 Scaled Dot-Product Causal Attention；不要提前加入 KV Cache、GQA、Head 合并或 Output Projection。</p>
 </div>
 
-## 获取代码并启动 Lab
+## 获取历史 Starter
 
-如果已经在本站仓库中：
+需要复查当时的起点和评分时，在单独目录检出固定版本：
 
 <pre>
+$ <kbd>git clone --no-checkout https://github.com/Qizi706/qizi706.github.io.git p2-m2-b-archive</kbd>
+$ <kbd>cd p2-m2-b-archive</kbd>
+$ <kbd>git checkout --detach 00a531c5b9b1429dd759acd934065a7a8d36be5a</kbd>
 $ <kbd>cd labs/p2-inference-systems</kbd>
 $ <kbd>make setup</kbd>
 $ <kbd>make grade</kbd>
 </pre>
 
-如果从网站单独下载：
-
-<pre>
-$ <kbd>curl -LO https://zqwiki.cn/labs/p2-inference-systems.tar.gz</kbd>
-$ <kbd>tar -xzf p2-inference-systems.tar.gz</kbd>
-$ <kbd>cd p2-inference-systems</kbd>
-$ <kbd>make setup</kbd>
-$ <kbd>make grade</kbd>
-</pre>
-
-初始评分应该呈现这个状态：
+该历史版本的初始评分应该呈现这个状态：
 
 <pre>
 $ <kbd>make grade</kbd>
@@ -74,7 +67,7 @@ Score: 40/100
 Still working: m2-b
 </pre>
 
-只运行当前练习可以使用任一命令：
+在该历史版本中，只运行 M2-B 可以使用任一命令：
 
 <pre>
 $ <kbd>make m2-b</kbd>
@@ -84,7 +77,7 @@ $ <kbd>make GRADEFLAGS=m2-b grade</kbd>
 
 <kbd>make test</kbd> 只运行已经完成的回归测试，因此在 M2-B 尚未实现时仍应通过。<kbd>make grade</kbd> 代表整份作业的当前完成度，会在 `TODO` 处失败。
 
-## 评分方式
+## 历史评分方式
 
 | Exercise | 内容                                         | 分值 | 定向命令              |
 | -------- | -------------------------------------------- | ---: | --------------------- |
@@ -92,7 +85,7 @@ $ <kbd>make GRADEFLAGS=m2-b grade</kbd>
 | M2-A2    | Q/K/V 投影、GQA Shape 契约与非法输入         |   20 | <kbd>make m2-a2</kbd> |
 | M2-B     | Score、Causal Mask、Softmax、Oracle 与隔离性 |   60 | <kbd>make m2-b</kbd>  |
 
-公开评分测试位于 [`grader_tests/test_m2_b_causal_attention.py`](../grader_tests/test_m2_b_causal_attention.py)。先根据任务说明写自己的最小测试；卡住时再逐级查看工作表、错误输出和公开评分测试，不要直接从测试倒推并粘贴实现。
+M2-B 的公开评分测试保存在[固定历史版本的 `grader_tests/test_m2_b_causal_attention.py`](https://github.com/Qizi706/qizi706.github.io/blob/00a531c5b9b1429dd759acd934065a7a8d36be5a/labs/p2-inference-systems/grader_tests/test_m2_b_causal_attention.py)，当前 M2-C 下载包不包含该文件。先根据任务说明写自己的最小测试；卡住时再逐级查看工作表、错误输出和公开评分测试，不要直接从测试倒推并粘贴实现。
 
 ## 已完成的起点
 
@@ -184,7 +177,7 @@ $ <kbd>git diff --check</kbd>
 <p>最终评分必须是 <code>Score: 100/100</code>。然后回到私人作答仓库的 M2-B 工作表填写第一次失败、修正规则与闭卷解释；只有验收清单全部完成，才进入 M2-C Cached MHA。网站上的同名页面始终保持为空白模板。</p>
 </div>
 
-## 文件布局
+## 历史文件布局
 
 ```text
 p2-inference-systems/

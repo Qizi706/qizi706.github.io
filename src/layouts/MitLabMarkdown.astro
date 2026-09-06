@@ -9,9 +9,10 @@ const { title } = Astro.props;
 ---
 
 <!doctype html>
-<html>
+<html lang="zh-CN">
 	<head>
 		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>{title}</title>
 	</head>
 	<body>
@@ -22,6 +23,17 @@ const { title } = Astro.props;
 <style is:global>
 	body {
 		font-family: 'Times New Roman', Times, serif;
+		overflow-wrap: anywhere;
+	}
+
+	pre,
+	.katex-display {
+		max-width: 100%;
+		overflow-x: auto;
+	}
+
+	.katex-display {
+		overflow-y: hidden;
 	}
 
 	table {

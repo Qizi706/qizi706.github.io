@@ -33,10 +33,6 @@
 			"destination": "/labs/__raw_text__/:splat.js.txt"
 		},
 		{
-			"source": "/labs/*.json",
-			"destination": "/labs/__raw_text__/:splat.json.txt"
-		},
-		{
 			"source": "/labs/*.lock",
 			"destination": "/labs/__raw_text__/:splat.lock.txt"
 		},

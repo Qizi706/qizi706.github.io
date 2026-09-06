@@ -8,6 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
 import labDevServer from './src/integrations/lab-dev-server.mjs';
 import rehypeCallouts from './src/plugins/rehype-callouts.mjs';
+import rehypeScrollableTables from './src/plugins/rehype-scrollable-tables.mjs';
 import { legacyPostRedirects } from './src/legacy-post-redirects.mjs';
 import { pygmentsDefaultTheme } from './src/themes/pygments-default.mjs';
 
@@ -43,7 +44,7 @@ export default defineConfig({
 	markdown: {
 		processor: unified({
 			remarkPlugins: [remarkMath],
-			rehypePlugins: [rehypeKatex, rehypeCallouts],
+			rehypePlugins: [rehypeKatex, rehypeCallouts, rehypeScrollableTables],
 		}),
 		syntaxHighlight: {
 			type: 'shiki',
