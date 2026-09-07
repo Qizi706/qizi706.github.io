@@ -30,6 +30,10 @@ const isUnlistedPathname = (pathname) => {
 export default defineConfig({
 	site: 'https://zqwiki.cn',
 	trailingSlash: 'ignore',
+	image: {
+		layout: 'constrained',
+		responsiveStyles: true,
+	},
 	redirects: legacyPostRedirects,
 	integrations: [
 		mdx(),

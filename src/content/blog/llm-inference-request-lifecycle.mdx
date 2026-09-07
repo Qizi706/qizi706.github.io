@@ -17,6 +17,7 @@ mathjax: true
 ---
 
 import ArticleImage from '../../components/ArticleImage.astro';
+import LlmBlackBoxReaction from '../../assets/llm-inference-request-lifecycle/llm-black-box-reaction-transparent.png';
 
 ## 1. Aside: 一条请求真的有那么简单吗？
 
@@ -43,10 +44,10 @@ Response: KV Cache 是……
 > 这条路径看起来短到只剩下两个动作：**输入**和**输出**。
 
 <ArticleImage
- src="/assets/llm-inference-request-lifecycle/llm-black-box-reaction-transparent.png"
- alt="面对看似简单的 LLM 黑盒请求时略显紧张的卡通人物"
- width={320}
- maxWidth="100%"
+	src={LlmBlackBoxReaction}
+	alt="面对看似简单的 LLM 黑盒请求时略显紧张的卡通人物"
+	width={320}
+	maxWidth="100%"
 />
 
 </SlideCard>

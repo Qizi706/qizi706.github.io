@@ -120,16 +120,16 @@ int main() {
 
 ### 图片
 
-文章图片建议放在 `public/assets/` 的独立目录中：
+文章图片建议放在 `src/assets/` 的独立目录中，让 Astro 在构建时完成尺寸推断、响应式输出和格式优化：
 
 ```text
-public/assets/linux-process/process-tree.png
+src/assets/linux-process/process-tree.png
 ```
 
-然后在文章中从网站根目录引用：
+然后在文章中使用相对路径引用：
 
 ```md
-![Linux 进程树](/assets/linux-process/process-tree.png)
+![Linux 进程树](../../assets/linux-process/process-tree.png)
 ```
 
 图片会保持原始比例显示，不带黑框、圆角或阴影。请填写有意义的替代文本，方便无障碍阅读，也便于图片加载失败时辨认内容。
@@ -138,9 +138,10 @@ public/assets/linux-process/process-tree.png
 
 ```mdx
 import ArticleImage from '../../components/ArticleImage.astro';
+import ProcessTreeImage from '../../assets/linux-process/process-tree.png';
 
 <ArticleImage
-	src="/assets/linux-process/process-tree.png"
+	src={ProcessTreeImage}
 	alt="Linux 进程树"
 	width={560}
 	maxWidth="100%"
@@ -184,10 +185,10 @@ $$
 
 ### 静态图表
 
-图表使用 SVG 或普通图片实现，存放到 `public/assets/<文章名>/` 后按普通 Markdown 图片引用：
+图表使用 SVG 或普通图片实现，存放到 `src/assets/<文章名>/` 后按相对路径引用：
 
 ```md
-![从源码到可执行文件的构建流程](/assets/cpp-build-tools/build-flow.svg)
+![从源码到可执行文件的构建流程](../../assets/cpp-build-tools/build-flow.svg)
 ```
 
 优先使用 SVG：文字和线条在高分屏上保持清晰，页面也不需要加载额外的客户端图表渲染器。

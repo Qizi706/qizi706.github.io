@@ -15,12 +15,14 @@ mathjax: true
 import ReasoningLoop from '../../components/ReasoningLoop.astro';
 import CoreCard from '../../components/CoreCard.astro';
 import ArticleImage from '../../components/ArticleImage.astro';
+import TravelingSalesmanProblem from '../../assets/conjecture-verification-practice/traveling-salesman-problem.png';
+import PnpDiagram from '../../assets/conjecture-verification-practice/p-np-nphard-npc-venn.svg';
 
 export const reasoningStages = [
- { label: '猜想', description: '从约束、样例与经验中生成候选解。' },
- { label: '验证', description: '用证明、反例与实验检查候选解。' },
- { label: '反馈', description: '定位候选解与事实之间的偏差。' },
- { label: '更正', description: '保留有效部分，提交下一轮猜想。' },
+	{ label: '猜想', description: '从约束、样例与经验中生成候选解。' },
+	{ label: '验证', description: '用证明、反例与实验检查候选解。' },
+	{ label: '反馈', description: '定位候选解与事实之间的偏差。' },
+	{ label: '更正', description: '保留有效部分，提交下一轮猜想。' },
 ];
 
 ## 1. Aside: 开始之前
@@ -181,10 +183,10 @@ ans: 1  3  1  7  1 3  1  15 1  3  1  7  1  3  1  31...
   - P、NP、NP-complete 等概念首先都是对这类判定问题进行分类。
 
 <ArticleImage
- src="/assets/conjecture-verification-practice/traveling-salesman-problem.png"
- alt="旅行商问题中错误路线与较短路线的对比"
- width={460}
- maxWidth="100%"
+	src={TravelingSalesmanProblem}
+	alt="旅行商问题中错误路线与较短路线的对比"
+	width={460}
+	maxWidth="100%"
 />
 
 </SlideCard>
@@ -208,7 +210,7 @@ ans: 1  3  1  7  1 3  1  15 1  3  1  7  1  3  1  31...
 - 如果任何一个 NP-complete 问题存在多项式时间算法，那么所有 NP 问题都能在多项式时间内求解
 
 <ArticleImage
- src="/assets/conjecture-verification-practice/p-np-nphard-npc-venn.svg"
+ src={PnpDiagram}
  alt="P、NP、NP-hard 与 NP-complete 的文氏关系图"
  width={560}
  maxWidth="100%"

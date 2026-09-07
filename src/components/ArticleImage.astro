@@ -1,8 +1,11 @@
 ---
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+
 type ImageSize = number | string;
 
 interface Props {
-	src: string;
+	src: ImageMetadata;
 	alt: string;
 	width?: ImageSize;
 	height?: ImageSize;
@@ -27,8 +30,8 @@ const {
 	loading = 'lazy',
 } = Astro.props;
 
-const toCssSize = (value: ImageSize) =>
-	typeof value === 'number' ? `${value}px` : value;
+const toCssSize = (value: ImageSize) => (typeof value === 'number' ? `${value}px` : value);
+const optimizedWidth = Math.min(typeof width === 'number' ? width : 688, src.width);
 
 const figureStyle = [
 	`--article-image-width: ${toCssSize(width)}`,
@@ -38,16 +41,15 @@ const figureStyle = [
 ].join('; ');
 ---
 
-<figure
-	class:list={['article-image', `article-image--${align}`, className]}
-	style={figureStyle}
->
-	<img
+<figure class:list={['article-image', `article-image--${align}`, className]} style={figureStyle}>
+	<Image
 		class="article-image__media"
 		src={src}
 		alt={alt}
+		width={optimizedWidth}
 		loading={loading}
 		decoding="async"
+		layout="constrained"
 	/>
 	{caption && <figcaption>{caption}</figcaption>}
 </figure>

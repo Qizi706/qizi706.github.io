@@ -17,6 +17,7 @@ mathjax: false
 ---
 
 import ArticleImage from '../../components/ArticleImage.astro';
+import M2ToServingEvidence from '../../assets/build-a-complete-system-from-scratch/m2-to-serving-evidence.webp';
 
 ## 1. 我把“完整系统”讲复杂了
 
@@ -33,7 +34,7 @@ import ArticleImage from '../../components/ArticleImage.astro';
 这里的“只有编辑器和构建工具”不是说计算机上没有操作系统、编译器或 Python Runtime；它的意思是：**不依赖 IDE 中不可见的按钮和状态**。编辑器负责改变文件，构建工具负责把“如何得到结果”变成可重复的命令。换成 C++，它可以是 CMake；在本文的 Python Lab 里，它是 `uv` 和 `pyproject.toml`。
 
 <ArticleImage
-	src="/assets/build-a-complete-system-from-scratch/m2-to-serving-evidence.webp"
+	src={M2ToServingEvidence}
 	alt="从 Attention 与 KV Cache 的最小实现出发，逐步进入 Batch 实验、真实 Serving、源码追踪和复现交付"
 	width="100%"
 	maxWidth="100%"
