@@ -12,6 +12,7 @@ const currentGate = phase2Progress.current;
 	pubDate={new Date('2026-08-06')}
 	updatedDate={new Date('2026-09-07')}
 	hideTitleDivider
+	pageType="profile"
 >
 	<section class="profile-brief" aria-label="技术方向与工作方法">
 		<h2>技术方向</h2>
@@ -45,7 +46,10 @@ const currentGate = phase2Progress.current;
 					<li>基于 page fault 实现 lazy allocation 与 copy-on-write fork，维护物理页引用计数。</li>
 					<li>扩展 trap 与 syscall 机制，实现 alarm 系统调用和用户态定时回调。</li>
 					<li>实现非抢占式用户级线程库，支持线程创建、上下文保存/恢复与协作式调度。</li>
-					<li>扩展 xv6 文件系统，支持<a href="/blog/6-s081-lab8/">二级间接索引、软链接</a>、mmap/munmap 与按需映射回写。</li>
+					<li>
+						扩展 xv6 文件系统，支持<a href="/blog/6-s081-lab8/">二级间接索引、软链接</a
+						>、mmap/munmap 与按需映射回写。
+					</li>
 				</ul>
 			</div>
 		</section>

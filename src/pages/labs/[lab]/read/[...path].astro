@@ -58,8 +58,12 @@ const title =
 	(typeof frontmatter.title === 'string' && frontmatter.title) ||
 	rendered.metadata.headings.find((heading) => heading.depth === 1)?.text ||
 	path.posix.basename(artifactPath, '.md');
+const description =
+	(typeof frontmatter.description === 'string' && frontmatter.description) ||
+	`${labName} 的公开实验文档：${title}`;
+const math = rendered.code.includes('class="katex"');
 ---
 
-<MitLabMarkdown {title}>
+<MitLabMarkdown {title} {description} {math}>
 	<Fragment set:html={rendered.code} />
 </MitLabMarkdown>

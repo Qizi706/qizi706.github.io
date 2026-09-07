@@ -11,7 +11,9 @@ type Props = Pick<BlogData, 'title' | 'description' | 'pubDate' | 'updatedDate' 
 	categories?: BlogData['categories'];
 	tags?: BlogData['tags'];
 	draft?: BlogData['draft'];
+	mathjax?: BlogData['mathjax'];
 	hideTitleDivider?: boolean;
+	pageType?: 'article' | 'profile';
 };
 
 const {
@@ -23,13 +25,26 @@ const {
 	draft = false,
 	categories = [],
 	tags = [],
+	mathjax = false,
 	hideTitleDivider = false,
+	pageType = 'article',
 } = Astro.props;
 ---
 
 <html lang="zh-CN" class="jyy-typography">
 	<head>
-		<BaseHead title={title} description={description} noindex={draft} />
+		<BaseHead
+			{title}
+			{description}
+			image={heroImage}
+			noindex={draft}
+			type={pageType}
+			{pubDate}
+			{updatedDate}
+			{categories}
+			{tags}
+			math={mathjax}
+		/>
 		<style>
 			main {
 				display: block;

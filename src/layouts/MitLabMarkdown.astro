@@ -1,42 +1,75 @@
 ---
-import 'katex/dist/katex.min.css';
+import { Font } from 'astro:assets';
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import MetadataHead from '../components/MetadataHead.astro';
+import { SITE_TITLE } from '../consts';
 
 interface Props {
 	title: string;
+	description: string;
+	math?: boolean;
 }
 
-const { title } = Astro.props;
+const { title, description, math = false } = Astro.props;
 ---
 
 <!doctype html>
 <html lang="zh-CN">
 	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>{title}</title>
+		<MetadataHead title={`${title} | ${SITE_TITLE}`} {description} {math} />
+		<Font cssVariable="--font-merienda" preload />
 	</head>
-	<body>
-		<slot />
+	<body class="mit-lab-document">
+		<Header />
+		<main class="mit-lab-main">
+			<article class="mit-lab-content">
+				<slot />
+			</article>
+		</main>
+		<Footer />
 	</body>
 </html>
 
 <style is:global>
-	body {
+	:root {
+		--black: 15, 23, 42;
+		--font-heading: var(--font-merienda, 'Merienda One'), Arial, Helvetica, sans-serif;
+	}
+
+	html {
+		background: #fff;
+		font-size: 100%;
+	}
+
+	body.mit-lab-document {
+		margin: 0;
+		background: #fff;
+		color: #000;
 		font-family: 'Times New Roman', Times, serif;
 		overflow-wrap: anywhere;
 	}
 
-	pre,
-	.katex-display {
+	.mit-lab-main {
+		display: block;
+		margin: 8px;
+	}
+
+	.mit-lab-content {
+		min-width: 0;
+	}
+
+	.mit-lab-content pre,
+	.mit-lab-content .katex-display {
 		max-width: 100%;
 		overflow-x: auto;
 	}
 
-	.katex-display {
+	.mit-lab-content .katex-display {
 		overflow-y: hidden;
 	}
 
-	table {
+	.mit-lab-content table {
 		border-collapse: collapse;
 		display: block;
 		width: max-content;
@@ -46,21 +79,21 @@ const { title } = Astro.props;
 		white-space: nowrap;
 	}
 
-	th,
-	td {
+	.mit-lab-content th,
+	.mit-lab-content td {
 		padding: 0.4em 0.9em;
 	}
 
-	th:first-child,
-	td:first-child {
+	.mit-lab-content th:first-child,
+	.mit-lab-content td:first-child {
 		padding-left: 0.3em;
 	}
 
-	div.required,
-	div.challenge,
-	div.question,
-	div.warning,
-	div.prereq {
+	.mit-lab-content div.required,
+	.mit-lab-content div.challenge,
+	.mit-lab-content div.question,
+	.mit-lab-content div.warning,
+	.mit-lab-content div.prereq {
 		width: 80%;
 		margin: 1em auto;
 		padding-right: 1em;
@@ -68,33 +101,33 @@ const { title } = Astro.props;
 		background-color: #e0e0ff;
 	}
 
-	div.required .header,
-	div.question .header {
+	.mit-lab-content div.required .header,
+	.mit-lab-content div.question .header {
 		font-weight: bold;
 	}
 
-	div.challenge .header {
+	.mit-lab-content div.challenge .header {
 		font-style: italic;
 	}
 
-	div.required,
-	div.question {
+	.mit-lab-content div.required,
+	.mit-lab-content div.question {
 		border: 1px solid #c0c0ff;
 		background-color: #e0e0ff;
 	}
 
-	div.challenge,
-	div.warning {
+	.mit-lab-content div.challenge,
+	.mit-lab-content div.warning {
 		border: 1px solid #ffc0c0;
 		background-color: #ffe0e0;
 	}
 
-	div.prereq {
+	.mit-lab-content div.prereq {
 		border: 1px solid #ffc0c0;
 		background-color: #ffefd5;
 	}
 
-	kbd {
+	.mit-lab-content kbd {
 		color: #007700;
 		font-family: monospace;
 		font-weight: bold;
