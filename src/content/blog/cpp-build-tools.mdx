@@ -1,0 +1,1032 @@
+---
+title: '从零理解 CMake：亲手构建、拆开、修好一个 C++ 项目'
+description: '从手动编译一个加法程序开始，通过增量构建、target、依赖传播和自动测试实验，逐步搭出库、程序与测试组成的 C++ 工程，并学会定位构建错误。'
+pubDate: '2026-07-23T16:00:00+08:00'
+updatedDate: '2026-09-07T21:33:00+08:00'
+readingOrder: 2
+readingNote: '动手：从空目录构建库、程序与测试，观察并修复构建错误'
+categories:
+  - 'C/C++'
+tags:
+  - 'C++工程'
+  - '构建工具'
+  - 'CMake'
+draft: false
+mathjax: false
+---
+
+<SlideCard title="从会运行命令，到能独立构建">
+
+## 我们已经会什么？
+
+我在 xv6 里运行过 `make qemu`，在 Bustub 里运行过 `cmake ..` 和 `make`。但“把别人的项目编译出来”和“知道自己应该怎样组织项目”之间，还隔着一段距离。
+
+## 读者需要哪些基础？
+
+这篇教程从这段距离开始。假设你会写函数、知道 `#include`，能在终端切换目录；不假设你理解目标文件、链接器、Makefile 或 CMake。
+
+## 完成后应该能做到什么？
+
+最终我们要从空目录做出一个小工程：一个提供 `add()` 的库、一个调用它的程序、一个自动检查结果的测试。更重要的是，拿走其中一条构建规则时，你能预测它在哪里失败，再用日志解释原因。
+
+</SlideCard>
+
+## Review & Comments
+
+<SlideCard title="本讲目标：把命令变成可以解释的行为">
+
+## 学习方法
+
+不要一次复制全文。每节都按这个顺序做：**写下预测 → 执行命令 → 检查证据 → 解释差异**。失败实验做完后，按文中的要求恢复，再进入下一节。
+
+## 学习安排
+
+建议分三次完成：
+
+| 阶段       | 要解决的问题                           | 完成标志                             |
+| ---------- | -------------------------------------- | ------------------------------------ |
+| 第 0～2 节 | 代码怎样变成程序，为什么需要构建工具？ | 能解释编译、链接和增量构建           |
+| 第 3～5 节 | CMake 怎样描述项目和依赖？             | 能解释库的头文件路径为什么传给程序   |
+| 第 6～9 节 | 怎样配置、测试和维护工程？             | 能从空目录重建，并定位故意引入的错误 |
+
+## 实验平台
+
+全文命令使用 Linux/macOS 的终端；Windows 读者可以在 WSL 中完成。示例采用 `c++` 作为编译器命令，主线固定使用 Unix Makefiles，避免不同生成器的默认行为干扰观察。
+
+</SlideCard>
+
+## 0. 实验环境
+
+<SlideCard title="开始之前：我们需要什么？">
+
+## 检查工具
+
+执行：
+
+```bash
+c++ --version
+cmake --version
+make --version
+```
+
+需要可用的 GCC 或 Clang、CMake 3.20 或更新版本，以及 Make。某条命令不存在时，先补齐对应工具；这时还没有进入项目构建，不要修改 `CMakeLists.txt` 来“修复”环境。
+
+## 创建工作目录
+
+在一个你选定的工作目录下新建项目。如果同名目录已经存在，换一个名字，不要覆盖旧文件。
+
+```bash
+mkdir cmake-lab
+cd cmake-lab
+mkdir -p include src tests
+pwd
+```
+
+## 后续命令在哪里执行？
+
+**后面的命令一律在 `cmake-lab/` 根目录执行，不需要 `cd build`。** 每个文件块都标明路径，用编辑器创建即可。`build-manual/`、`build-make/`、`build/` 分别存放不同阶段的产物，不与源码混放。
+
+</SlideCard>
+
+<SlideCard title="我们的小程序：声明、实现、调用">
+
+## 创建源码
+
+先创建三个文件。
+
+`include/add.h`：
+
+```cpp
+#pragma once
+
+int add(int a, int b);
+```
+
+`src/add.cpp`：
+
+```cpp
+#include "add.h"
+
+int add(int a, int b) {
+    return a + b;
+}
+```
+
+`src/main.cpp`：
+
+```cpp
+#include <iostream>
+#include "add.h"
+
+int main() {
+    std::cout << add(1, 2) << '\n';
+}
+```
+
+</SlideCard>
+
+<SlideCard title="Quiz：编译器会自动找到实现吗？">
+
+## 目录与职责
+
+目录现在应该是：
+
+```text
+cmake-lab/
+├── include/add.h
+├── src/add.cpp
+├── src/main.cpp
+└── tests/                 # 暂时为空
+```
+
+## 声明与实现
+
+`add.h` 声明“存在这样的函数”，`add.cpp` 给出函数实现。编译 `main.cpp` 时看到声明，就能检查调用是否合理；函数的机器代码来自哪里，要到链接时才能解决。
+
+</SlideCard>
+
+## 1. 不用 CMake，先让程序跑起来
+
+<SlideCard title="实验 1A：一条命令里发生了什么？">
+
+## 先运行，再观察
+
+先预测下面会输出什么，再执行：
+
+```bash
+mkdir -p build-manual
+c++ -std=c++20 -Iinclude src/main.cpp src/add.cpp -o build-manual/demo
+./build-manual/demo
+```
+
+## 观察输出，读懂参数
+
+应该输出 `3`。其中：
+
+| 参数                   | 含义                                         |
+| ---------------------- | -------------------------------------------- |
+| `-std=c++20`           | 按 C++20 模式处理源码                        |
+| `-Iinclude`            | 把当前目录下的 `include/` 加入头文件搜索路径 |
+| 两个 `.cpp`            | 本次要处理的源文件                           |
+| `-o build-manual/demo` | 指定输出文件路径                             |
+
+## 一条命令不等于一个阶段
+
+`c++` 是驱动整个流程的命令。这一条命令把编译、汇编、链接等工作串在了一起。为了观察边界，我们把它拆开。
+
+</SlideCard>
+
+<SlideCard title="实验 1B：编译成功，为什么还不能运行？">
+
+## 把编译和链接拆开
+
+```bash
+c++ -std=c++20 -Iinclude -c src/main.cpp -o build-manual/main.o
+c++ -std=c++20 -Iinclude -c src/add.cpp -o build-manual/add.o
+c++ build-manual/main.o build-manual/add.o -o build-manual/demo
+./build-manual/demo
+```
+
+## 观察目标文件
+
+`-c` 让编译器生成目标文件后停止，不进行链接。`.o` 包含机器代码等信息，但仍可能有尚未解决的符号引用，不是这里要运行的完整程序。
+
+## 画出数据流
+
+我们先用一个简化模型：
+
+```text
+main.cpp + 它包含的头文件 → main.o ─┐
+                                  ├→ 链接 → demo
+add.cpp  + 它包含的头文件 → add.o  ─┘
+```
+
+头文件通过 `#include` 参与编译。编译器不会因为看到了 `add.h`，就自动替你找到并编译 `add.cpp`。
+
+</SlideCard>
+
+<SlideCard title="实验 1C：亲手制造两种不同的错误">
+
+## 两个失败，两个阶段
+
+下面两条命令**分别执行**，它们应该失败。
+
+## 实验：缺少声明
+
+先不提供头文件搜索路径：
+
+```bash
+c++ -std=c++20 -c src/main.cpp -o build-manual/missing-header.o
+```
+
+预期证据是类似 `add.h: file not found` 的诊断。这是处理源码时找不到头文件，连这个 `.o` 都无法生成。修复方向是检查文件、`#include` 和搜索路径。
+
+## 实验：缺少实现
+
+再提供头文件，但只链接 `main.o`：
+
+```bash
+c++ build-manual/main.o -o build-manual/missing-symbol
+```
+
+预期证据是 `undefined reference` 或 `Undefined symbols`，并提到 `add`。这次编译已经成功，链接器却没有找到实现。修复方向是把 `add.o` 或包含实现的库交给链接器；再加一个 `-I` 没有用。
+
+<Note title="Quiz">
+
+## 自检问题
+
+不看上文，解释“头文件找不到”和“函数实现找不到”为什么是两个不同阶段的问题。若解释不清，先重做实验 1C。
+
+</Note>
+
+</SlideCard>
+
+## 2. 增量构建：从命令到依赖图
+
+<SlideCard title="Quiz：只改一个函数，需要重做什么？">
+
+## 只重新生成必要的产物
+
+现在只修改 `src/add.cpp`，把 `a + b` 改成 `a + b + 10`。
+
+先预测：`main.cpp` 没变，它对应的机器代码需要重新生成吗？在这个例子中不需要。可以复用已有的 `main.o`，只执行：
+
+```bash
+c++ -std=c++20 -Iinclude -c src/add.cpp -o build-manual/add.o
+c++ build-manual/main.o build-manual/add.o -o build-manual/demo
+./build-manual/demo
+```
+
+## 观察与恢复
+
+输出应变成 `13`。完成后把实现恢复为 `a + b`。
+
+这就是增量构建要解决的问题：**哪些产物已经过期，哪些命令必须重新执行？** 文件多起来后，不应该靠人记住答案。
+
+</SlideCard>
+
+<SlideCard title="写一个最小 Makefile">
+
+## 把依赖写成规则
+
+在根目录创建 `Makefile`。命令行前面必须是实际的 Tab，不是几个空格。
+
+```makefile
+CXX := c++
+CXXFLAGS := -std=c++20 -Iinclude
+
+build-make/demo: build-make/main.o build-make/add.o
+	$(CXX) build-make/main.o build-make/add.o -o build-make/demo
+
+build-make/main.o: src/main.cpp include/add.h
+	mkdir -p build-make
+	$(CXX) $(CXXFLAGS) -c src/main.cpp -o build-make/main.o
+
+build-make/add.o: src/add.cpp include/add.h
+	mkdir -p build-make
+	$(CXX) $(CXXFLAGS) -c src/add.cpp -o build-make/add.o
+```
+
+## 规则怎样被执行？
+
+一条规则的结构是 `目标: 前置依赖`，下面是生成目标的命令。`$(CXX)` 和 `$(CXXFLAGS)` 展开为前面赋的值。这里 `make` 默认尝试生成第一条普通规则的目标 `build-make/demo`。
+
+它递归更新前置依赖；目标不存在，或前置依赖的修改时间比目标新时，执行规则中的命令。它主要比较时间戳，不是逐字比较源文件。
+
+```bash
+make
+./build-make/demo
+make
+```
+
+第一次应编译两个源文件并链接，程序输出 `3`；第二次应没有编译和链接命令。
+
+## 预测哪些源文件会重新编译
+
+接下来每次只做一行操作，再运行一次 `make`：
+
+| 操作                          | 先写下预测，再核对                 |
+| ----------------------------- | ---------------------------------- |
+| 给 `src/add.cpp` 加一行注释   | 只重编译 `add.cpp`，然后重新链接   |
+| 给 `include/add.h` 加一行注释 | 两个 `.cpp` 都重编译，然后重新链接 |
+| 不修改任何文件                | 不编译、不链接                     |
+
+如果文件系统时间精度导致结果难以观察，隔一秒再保存文件重试。注释不一定改变机器代码，但文件时间戳已经变了，Make 仍会执行规则。
+
+</SlideCard>
+
+<SlideCard title="故意遗漏一条依赖">
+
+## 删掉一条边会怎样？
+
+把 `build-make/main.o` 那条规则中的 `include/add.h` 暂时删掉，再修改头文件。
+
+观察 `main.cpp` 是否重编译。它不会，因为你没有把这条边告诉 Make。Make 不会自动读懂 C++ 的 `#include`。实验结束后恢复依赖。
+
+## 这份最小规则的边界
+
+真实工程可以让编译器生成头文件依赖文件，例如使用 `-MMD -MP`；不是所有 Makefile 都需要手写每个头文件。这里手写，是为了让依赖图可见。
+
+另一个边界是：这个最小 Makefile 没有追踪编译选项变化。只改 `CXXFLAGS`，已经存在的 `.o` 不一定会重建。工程工具需要维护的不只是源文件列表。
+
+<Note title="Quiz">
+
+## 自检问题
+
+你应该能画出 `demo`、两个 `.o` 和头文件之间的依赖关系，并解释删除一条边为什么可能产生过期结果。
+
+</Note>
+
+</SlideCard>
+
+## 3. CMake：描述项目，生成规则
+
+<SlideCard title="CMake 到底替我们写了什么？">
+
+## 从底层命令到工程描述
+
+如果项目需要多个库、测试程序、不同编译器，我们希望描述的是“程序由哪些源码组成、依赖哪个库”，而不是反复维护每一条底层命令。
+
+CMake 负责把这份描述转成构建后端可以执行的规则。主线中的角色是：
+
+```text
+CMakeLists.txt
+      │ cmake 配置和生成
+      ▼
+build/Makefile 等构建规则
+      │ cmake --build 调用 Make
+      ▼
+编译器、链接器 → 目标文件、库、程序
+```
+
+</SlideCard>
+
+<SlideCard title="实验 3A：第一个 CMakeLists.txt">
+
+## 描述第一个目标
+
+在根目录创建 `CMakeLists.txt`，完整内容如下：
+
+```cmake
+cmake_minimum_required(VERSION 3.20)
+project(cmake_lab LANGUAGES CXX)
+
+add_executable(demo src/main.cpp src/add.cpp)
+target_compile_features(demo PRIVATE cxx_std_20)
+target_include_directories(demo PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+```
+
+## 第一步：配置和生成
+
+先只执行：
+
+```bash
+cmake -S . -B build -G "Unix Makefiles"
+```
+
+`-S .` 指定源码根目录；`-B build` 指定构建目录，CMake 会创建它；`-G` 明确选择生成器。
+
+查看 `build/`，应该能找到 `CMakeCache.txt`、`Makefile`、`CMakeFiles/` 等文件。在这个新目录中，此时还没有我们的 `demo`。配置期间可能发生编译器探测，但那不是在构建应用程序。
+
+## 第二步：构建和运行
+
+再执行：
+
+```bash
+cmake --build build --parallel 2 --verbose
+./build/demo
+```
+
+`--parallel 2` 允许最多两个并行任务；`--verbose` 显示实际执行的命令。程序仍应输出 `3`。
+
+## 在日志里寻找证据
+
+在日志里找出三份证据：编译 `main.cpp` 的命令、编译 `add.cpp` 的命令、生成 `demo` 的链接命令。再找一找 `include/` 的绝对路径和标准选项。默认语言模式已经满足要求时，标准选项不一定需要额外出现。
+
+</SlideCard>
+
+<SlideCard title="这五行分别建立了什么？">
+
+## 命令与工程事实
+
+| CMake 语句                        | 建立的事实                                 |
+| --------------------------------- | ------------------------------------------ |
+| `cmake_minimum_required(...)`     | 最低版本要求，并设置对应的策略兼容基线     |
+| `project(... LANGUAGES CXX)`      | 项目名称，以及需要启用 C++ 工具链          |
+| `add_executable(demo ...)`        | 创建名为 `demo` 的可执行目标，登记它的源码 |
+| `target_compile_features(...)`    | 这个目标至少需要 C++20 的标准级别          |
+| `target_include_directories(...)` | 编译这个目标时需要哪些头文件搜索目录       |
+
+## target 是什么？
+
+`demo` 是 CMake 认识的一个对象，叫 **target**。它有类型、源码和编译要求，生成器根据这些信息推导具体命令。它不是源文件，也不只是一个字符串变量。
+
+`cxx_std_20` 表达最低标准要求，不等于强制关闭编译器扩展。如果需要关闭扩展，可以设置 `CXX_EXTENSIONS OFF`，但这不是当前实验的重点。
+
+## 读懂最少的语法
+
+第一次遇到 CMake 语法，只需读懂：`命令(参数...)` 调用命令；换行用于排版；`${名字}` 展开变量；`#` 开始注释；给路径加引号可以避免空格造成歧义。`CMAKE_CURRENT_SOURCE_DIR` 是当前处理的 `CMakeLists.txt` 所在源码目录。
+
+</SlideCard>
+
+<SlideCard title="实验 3B：CMake 也维护头文件依赖吗？">
+
+## 观察自动维护的依赖
+
+重复上一节的三次操作，每次运行：
+
+```bash
+cmake --build build --parallel 2 --verbose
+```
+
+修改 `add.cpp` 时只应重编译它；修改 `add.h` 时两个源文件都应重编译；没有修改时不应出现新的编译和链接命令。后端可能仍打印检查依赖等信息。
+
+## 解释观察到的行为
+
+这次我们没有在 `CMakeLists.txt` 中列出 `add.h` 的依赖边。CMake 生成的构建规则会利用编译器提供的依赖信息处理这个例子。
+
+<Note title="Quiz">
+
+## 自检问题
+
+“运行 `cmake`”和“运行 `cmake --build`”分别做什么？为什么不要直接修改生成的 `build/Makefile`？答案应包含：规则由 CMake 生成，手改的内容可能在下一次生成时被覆盖。
+
+</Note>
+
+</SlideCard>
+
+## 4. 库与 target
+
+<SlideCard title="新需求：让多个程序复用同一份实现">
+
+## 新的复用需求
+
+现在增加一个需求：将来另一个程序、测试也要用 `add()`，不想给每个可执行目标都重复登记 `src/add.cpp`。
+
+</SlideCard>
+
+<SlideCard title="根目录：只描述目标之间的关系">
+
+## 完整的构建描述
+
+把根目录 `CMakeLists.txt` **整体替换**为：
+
+```cmake
+cmake_minimum_required(VERSION 3.20)
+project(cmake_lab LANGUAGES CXX)
+
+add_library(math_utils STATIC src/add.cpp)
+target_compile_features(math_utils PRIVATE cxx_std_20)
+target_include_directories(math_utils PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
+add_executable(demo src/main.cpp)
+target_compile_features(demo PRIVATE cxx_std_20)
+target_link_libraries(demo PRIVATE math_utils)
+```
+
+```bash
+cmake -S . -B build -G "Unix Makefiles"
+cmake --build build --parallel 2 --verbose
+./build/demo
+```
+
+## 观察库的产物
+
+应该仍输出 `3`，并新增静态库 `build/libmath_utils.a`。`STATIC` 明确要求静态库，避免受到 `BUILD_SHARED_LIBS` 默认配置的影响。
+
+在这个例子中，静态库可以先理解为目标文件的归档。链接器从中取出程序需要的实现。它本身没有 `main()`，不需要被直接运行。
+
+</SlideCard>
+
+<SlideCard title="链接关系：不只是一条库文件路径">
+
+## 连接两个 target
+
+关键的一行是：
+
+```cmake
+target_link_libraries(demo PRIVATE math_utils)
+```
+
+## 产物与使用要求
+
+它让 CMake 知道 `demo` 使用 `math_utils`：不仅需要链接库的产物，还需要读取库对使用者声明的要求。因此 `demo` 没有手写头文件搜索路径，也能找到 `add.h`。
+
+不要把它理解成“库的所有工作结束后才允许编译程序”。独立的源码编译可能并行；我们需要保证的是最终链接所需的产物与依赖关系正确。
+
+</SlideCard>
+
+<SlideCard title="故意切断这条边">
+
+## 先失去头文件，再失去实现
+
+暂时注释掉 `target_link_libraries(demo PRIVATE math_utils)`，重新配置、构建。
+
+在这个项目中，你很可能先看到 `add.h` 找不到，因为它同时失去了来自库的头文件使用要求。现在临时加上：
+
+```cmake
+target_include_directories(demo PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+```
+
+## 补齐声明之后
+
+再次构建。这次可以编译，但会在链接时找不到 `add`。
+
+这两步实验把“找到声明”和“找到实现”拆开了。完成后删掉临时的 `target_include_directories(demo ...)`，恢复链接关系并确认构建成功。
+
+<Note title="Quiz">
+
+## 自检问题
+
+解释为什么仅仅把头文件放进项目目录，不代表程序就已经依赖了库。
+
+</Note>
+
+</SlideCard>
+
+## 5. 使用要求的传播
+
+<SlideCard title="PRIVATE / PUBLIC / INTERFACE">
+
+## 要求给谁使用？
+
+它们描述的是**这一项要求给谁用**，不是 C++ 类成员访问权限。
+
+对于包含目录、编译特性等使用要求，可以先用这张表理解：
+
+| 作用范围    | 当前目标自身使用 | 使用当前目标的其他目标接收 |
+| ----------- | ---------------- | -------------------------- |
+| `PRIVATE`   | 是               | 否                         |
+| `PUBLIC`    | 是               | 是                         |
+| `INTERFACE` | 否               | 是                         |
+
+## 注意：范围与目标类型不同
+
+这是属性的作用范围，不是说用了 `INTERFACE` 的目标就不产生编译产物。普通库也可以设置只给使用者的要求。链接项还有静态库等细节，不要把“PRIVATE”理解成所有底层链接依赖都会完全消失。进一步解释见 [CMake 构建系统手册](https://cmake.org/cmake/help/latest/manual/cmake-buildsystem.7.html)。
+
+</SlideCard>
+
+<SlideCard title="实验 5A：把 PUBLIC 改成 PRIVATE">
+
+## 只让库自身使用路径
+
+只改 `math_utils` 的头文件目录这一行：
+
+```cmake
+target_include_directories(math_utils PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+```
+
+为避免旧产物干扰观察，用一个新的构建目录：
+
+```bash
+cmake -S . -B build-private -G "Unix Makefiles"
+cmake --build build-private --parallel 2 --verbose
+```
+
+## 预测与核对
+
+预测两个问题：`add.cpp` 能找到 `add.h` 吗？`main.cpp` 呢？
+
+预期是库自身可以编译，程序找不到头文件。比较两条编译命令，只有库的编译命令有相应的 `-I` 路径。
+
+</SlideCard>
+
+<SlideCard title="实验 5B：再改成 INTERFACE">
+
+## 只向使用者提供路径
+
+```cmake
+target_include_directories(math_utils INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+```
+
+```bash
+cmake -S . -B build-interface -G "Unix Makefiles"
+cmake --build build-interface --parallel 2 --verbose
+```
+
+## 观察与恢复
+
+这次库的 `add.cpp` 自己找不到头文件，因为该路径只提供给使用者。整体构建失败后，后端不一定还会执行程序的编译；不要把日志顺序当成语义定义。
+
+最后恢复 `PUBLIC`，回到 `build/` 重新配置并构建成功。
+
+</SlideCard>
+
+<SlideCard title="为什么程序链接库时写 PRIVATE，仍能得到头文件路径？">
+
+## 接收要求与继续传播
+
+因为这里的 `PRIVATE` 控制的是：`demo` 是否继续把这条使用关系作为自己的接口向外提供。它不会阻止 `demo` 消费 `math_utils` 的公开使用要求。
+
+## Quiz：什么要求应该公开？
+
+还有一个判断练习：当前 `add.h` 只有普通函数声明，本身没有要求 C++20，所以把 C++20 作为库的 `PRIVATE` 编译要求足够。如果公开头文件使用了 C++20 语法，才需要把相应要求通过 `PUBLIC` 提供给使用者。
+
+</SlideCard>
+
+<SlideCard title="Aside: header-only 库是什么？">
+
+## 只用头文件提供功能
+
+如果库只有头文件，可以用 `add_library(name INTERFACE)` 创建主要承载使用要求的目标，再用 `target_include_directories(name INTERFACE ...)` 提供搜索路径。它与前面的普通静态库是不同的目标类型。
+
+## 可选练习
+
+先不改当前项目。等你能解释实验 5A、5B，再把 `add()` 改成头文件中的 `inline` 定义，尝试做成 header-only 库；不要把非 `inline` 函数定义直接塞进多个源文件都会包含的头文件。
+
+</SlideCard>
+
+## 6. 配置不是编译：看懂构建目录里的状态
+
+<SlideCard title="一个源码目录，可以对应多个构建目录">
+
+## 分别构建 Debug 和 Release
+
+```bash
+cmake -S . -B build-debug -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-debug --parallel 2 --verbose
+./build-debug/demo
+
+cmake -S . -B build-release -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release --parallel 2 --verbose
+./build-release/demo
+```
+
+## 比较编译选项
+
+两个程序都应输出 `3`。比较编译命令：Debug 通常启用调试信息；Release 通常启用优化并定义 `NDEBUG`。具体选项取决于编译器和平台，别把某组固定参数当成所有工具链的规定。
+
+`-D名字=值` 设置 CMake 缓存变量，不是直接给 C++ 定义宏。想给某个目标添加 C++ 宏，应使用 `target_compile_definitions()`。
+
+## 查看配置缓存
+
+打开 `build-debug/CMakeCache.txt`，搜索 `CMAKE_BUILD_TYPE`、`CMAKE_CXX_COMPILER`、`CMAKE_GENERATOR`。你会看到配置状态保存在构建目录。以后在同一个目录配置时，没有再次指定的缓存值可能继续沿用。
+
+因此：换生成器或工具链时，使用新的构建目录；不要在同一个 `build/` 上来回试不同配置，再靠猜测判断当前状态。
+
+## Aside: 多配置生成器
+
+> [!NOTE]
+> 上面的 `CMAKE_BUILD_TYPE` 用法针对 Unix Makefiles、普通 Ninja 等单配置生成器。Visual Studio、Xcode、Ninja Multi-Config 使用构建时的 `--config Debug` 等选项选择配置，不能直接照搬。参考 [CMAKE_BUILD_TYPE](https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html)。
+
+</SlideCard>
+
+<SlideCard title="给 clangd 一份真实的编译命令">
+
+## 导出编译数据库
+
+```bash
+cmake -S . -B build -G "Unix Makefiles" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+```
+
+## 读取真实的编译命令
+
+打开 `build/compile_commands.json`，找到 `main.cpp`。它记录编译工作目录、源码路径和实际编译命令。现在应该能解释其中的头文件路径为什么出现。
+
+## 让编辑器找到它
+
+clangd 和 clang-tidy 可以消费这份信息。编辑器配置还要让工具找到该文件，例如让 clangd 使用 `--compile-commands-dir=build`；不要假设所有编辑器都自动找到任意名字的构建目录。
+
+这个导出功能由 Makefile 和 Ninja 生成器实现，其他生成器不能保证生成。它也不是链接命令数据库。参考 [CMAKE_EXPORT_COMPILE_COMMANDS](https://cmake.org/cmake/help/latest/variable/CMAKE_EXPORT_COMPILE_COMMANDS.html)。
+
+</SlideCard>
+
+## 7. 自动测试
+
+<SlideCard title="我们需要一个会报告失败的程序">
+
+## 用退出状态报告结果
+
+到这里我们每次都在肉眼看 `3`。程序多起来后，需要一个命令自动判断结果是否正确。
+
+## 实现最小测试
+
+先不用 GoogleTest，也不下载第三方库。创建 `tests/add_test.cpp`：
+
+```cpp
+#include <iostream>
+#include "add.h"
+
+int main() {
+    if (add(1, 2) != 3 || add(-1, 1) != 0) {
+        std::cerr << "add test failed\n";
+        return 1;
+    }
+    std::cout << "add test passed\n";
+    return 0;
+}
+```
+
+## 为什么不用 assert？
+
+返回 `0` 表示成功，非零表示失败。这里不用 `assert`，是为了避免测试在定义 `NDEBUG` 的配置中失去检查。
+
+</SlideCard>
+
+<SlideCard title="从可执行文件到 CTest 测试">
+
+## 创建并注册测试目标
+
+在当前根目录 `CMakeLists.txt` **末尾追加**：
+
+```cmake
+enable_testing()
+
+add_executable(add_test tests/add_test.cpp)
+target_compile_features(add_test PRIVATE cxx_std_20)
+target_link_libraries(add_test PRIVATE math_utils)
+
+add_test(NAME add.basic COMMAND add_test)
+```
+
+## 目标名称与测试名称
+
+这里有两个名字：`add_test` 是可执行目标；`add.basic` 是注册给 CTest 的测试名称。`add_test()` 命令把两者关联起来，CMake 会把目标名解析为可执行文件路径。
+
+```bash
+cmake -S . -B build -G "Unix Makefiles"
+cmake --build build --parallel 2
+ctest --test-dir build -N
+ctest --test-dir build --output-on-failure
+```
+
+## 核对测试列表与结果
+
+`-N` 只列出已注册测试，应看到 `add.basic`；最后一条命令应显示一个测试通过。普通 `ctest` 不负责先编译程序，改过代码要先构建。
+
+</SlideCard>
+
+<SlideCard title="实验 7A：故意让测试变红">
+
+## 制造一个逻辑错误
+
+把 `add.cpp` 的实现改成 `a - b`，然后：
+
+```bash
+cmake --build build --parallel 2
+ctest --test-dir build --output-on-failure
+```
+
+## 观察与修复
+
+预期：构建成功，测试失败。这是行为错误，不是 CMake 配置错误。
+
+再恢复 `a + b`，重新构建并确认通过。测试成功与失败都观察过，才能确信测试真的在检查结果。
+
+</SlideCard>
+
+<SlideCard title="实验 7B：有测试程序，不代表注册了测试">
+
+## 移除测试注册
+
+暂时注释掉 `add_test(NAME add.basic COMMAND add_test)`，重新配置，再执行 `ctest --test-dir build -N`。`add_test` 二进制仍可存在，但注册列表应变为空。
+
+## 恢复并区分三个动作
+
+恢复这一行并重新配置。记住三个不同动作：**创建测试目标 → 编译测试程序 → 向 CTest 注册并运行测试**。[add_test 官方说明](https://cmake.org/cmake/help/latest/command/add_test.html)提供了进一步细节。
+
+<Note title="Quiz">
+
+## 自检问题
+
+“编译通过但测试失败”和“没有发现测试”，分别优先检查什么？
+
+</Note>
+
+</SlideCard>
+
+## 8. 组织工程
+
+<SlideCard title="把库放进子目录">
+
+## 移动库的源码和接口
+
+现在你已经有库、程序、测试，才需要学习拆分构建文件。
+
+执行：
+
+```bash
+mkdir -p lib/math_utils/include
+mv src/add.cpp lib/math_utils/add.cpp
+mv include/add.h lib/math_utils/include/add.h
+```
+
+这一步会移动文件。前面手写编译和 Makefile 示例使用旧路径，之后不再运行它们；最终项目以这一节的路径为准。
+
+## 库管理自己的构建要求
+
+创建 `lib/math_utils/CMakeLists.txt`：
+
+```cmake
+add_library(math_utils STATIC add.cpp)
+target_compile_features(math_utils PRIVATE cxx_std_20)
+target_include_directories(math_utils PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+```
+
+把根目录 `CMakeLists.txt` **整体替换**为：
+
+```cmake
+cmake_minimum_required(VERSION 3.20)
+project(cmake_lab LANGUAGES CXX)
+
+add_subdirectory(lib/math_utils)
+
+add_executable(demo src/main.cpp)
+target_compile_features(demo PRIVATE cxx_std_20)
+target_link_libraries(demo PRIVATE math_utils)
+
+enable_testing()
+add_executable(add_test tests/add_test.cpp)
+target_compile_features(add_test PRIVATE cxx_std_20)
+target_link_libraries(add_test PRIVATE math_utils)
+add_test(NAME add.basic COMMAND add_test)
+```
+
+</SlideCard>
+
+<SlideCard title="Demo：从全新的构建目录启动">
+
+## 检查最终源码结构
+
+源码部分现在是：
+
+```text
+cmake-lab/
+├── CMakeLists.txt
+├── lib/math_utils/
+│   ├── CMakeLists.txt
+│   ├── add.cpp
+│   └── include/add.h
+├── src/main.cpp
+└── tests/add_test.cpp
+```
+
+## 理解子目录的作用
+
+`add_subdirectory()` 让 CMake 处理子目录的构建描述。子目录中的 `CMAKE_CURRENT_SOURCE_DIR` 指向 `lib/math_utils/`，所以库可以用自身的相对位置描述接口。
+
+根目录只需要知道库目标叫 `math_utils`，不需要重复写它的内部头文件路径。`src/main.cpp` 和测试中的 `#include "add.h"` 都不用改。
+
+## 验证可重建性
+
+用新目录验收，排除之前构建缓存的帮助：
+
+```bash
+cmake -S . -B build-final -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake --build build-final --parallel 2 --verbose
+./build-final/demo
+ctest --test-dir build-final --output-on-failure
+```
+
+应输出 `3` 并通过一个测试。最终库产物现在位于构建树的 `lib/math_utils/` 下，不再是最初的位置。
+
+</SlideCard>
+
+## 9. MiniLab：独立重建一个工程
+
+<SlideCard title="任务与验收">
+
+## 从空目录重新开始
+
+关闭上面的 CMake 代码块，在另一个空目录里重建最终工程。允许查官方命令手册，但不要整段复制构建文件。
+
+## 交付要求
+
+完成以下任务，每项都要有日志或运行结果作为证据：
+
+1. 构建 `math_utils`、`demo`、`add_test`，运行程序和测试。
+2. 增加 `sub()` 的声明、实现和测试，并解释是否需要修改源码列表：写进已有 `.cpp` 不需要，新增 `.cpp` 则需要登记。
+3. 把库的包含目录改成 `PRIVATE`，在看日志前预测哪个目标失去路径，再修复。
+4. 删掉程序的链接关系，区分头文件错误与链接错误，恢复构建。
+5. 修改库实现，只重编译必要的源文件，解释为什么两个可执行文件需要重新链接。
+6. 使用新的 Release 构建目录运行测试，确认检查仍有效。
+7. 指出一次配置命令、一次编译命令、一次链接命令和一次测试执行分别在哪里发生。
+
+能独立完成这些，你已经掌握了从零搭建小型 CMake 工程的核心。大型项目的高级功能仍需按需求学习，但不会再只是模仿命令。
+
+</SlideCard>
+
+## 10. Debugging
+
+<SlideCard title="第一条具体错误在哪里？">
+
+## 按失败阶段寻找证据
+
+| 现象                         | 优先检查的证据              | 常见修复方向                       |
+| ---------------------------- | --------------------------- | ---------------------------------- |
+| 找不到 `CMakeLists.txt`      | `pwd`、`-S` 路径            | 回到源码根目录或修正路径           |
+| 配置时报命令、目标或依赖错误 | 第一条 CMake 错误及文件行号 | 检查描述与 `add_subdirectory` 顺序 |
+| generator 不匹配             | 构建目录里的缓存            | 给新生成器使用新构建目录           |
+| 编译时报头文件不存在         | 对应 `.cpp` 的完整编译命令  | 检查包含目录与 PUBLIC/PRIVATE      |
+| 链接时报未定义符号           | 链接命令、源码列表          | 检查实现是否被编译及库是否链接     |
+| CTest 没有测试               | `ctest -N`、是否重新配置    | 检查启用测试和注册语句             |
+| CTest 找不到测试程序         | 构建结果、构建目录          | 先构建对应目标，再运行测试         |
+| 程序输出错误但构建成功       | 实际执行路径、测试结果      | 检查代码逻辑，以及是否执行了旧产物 |
+
+## 从第一条具体诊断开始
+
+不要从最后一行 `Error 2` 开始猜。它往往只是上层工具转述失败；向前找第一条具体诊断，再检查失败命令。
+
+## 查询本机手册
+
+遇到不认识的命令，可以直接读安装版本的手册：
+
+```bash
+cmake --help-command target_link_libraries
+cmake --help-command target_include_directories
+cmake --help-command add_subdirectory
+cmake --help-variable CMAKE_BUILD_TYPE
+```
+
+</SlideCard>
+
+## 11. 阅读真实工程
+
+<SlideCard title="阅读已有工程时，只追一条目标链">
+
+## 从熟悉的项目出发
+
+回到你自己的 xv6 checkout，找到 `qemu` 规则，沿前置依赖追到内核与文件系统镜像，再看 recipe 怎样启动模拟器。每看到一条规则，都问“它消费什么文件，产生什么结果”。不要先逐行背完整 Makefile。
+
+## 沿一个测试目标追踪
+
+回到你自己的 Bustub checkout，选一个正在用的测试目标，搜索它的定义和链接关系。版本不同，目标名和组织方式可能变化，因此以你实际的源码为准。先回答：
+
+- 哪个 `add_subdirectory()` 把这部分加入了工程？
+- 哪些源文件形成这个目标？
+- 它依赖的库提供了哪些头文件目录和编译要求？
+- 它是否注册为 CTest 测试，还是通过项目的其他命令运行？
+
+## 用日志验证理解
+
+接着用 `cmake --build <构建目录> --target <实际目标名> --verbose` 对照日志。尖括号是占位符，要替换，不要原样复制。你熟悉的项目，现在可以成为验证模型的材料。
+
+</SlideCard>
+
+<SlideCard title="Ninja 只是换一个执行规则的后端">
+
+## 使用独立的构建目录
+
+这是可选实验，先用 `ninja --version` 确认已经安装。对最终工程使用独立目录：
+
+```bash
+cmake -S . -B build-ninja -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-ninja --parallel 2 --verbose
+ctest --test-dir build-ninja --output-on-failure
+```
+
+## 观察什么变了、什么没变
+
+项目的 target 描述不变，生成的构建文件和调用的后端变了。`cmake --build` 帮你调用相应工具，所以不必把主线中的每条命令改成 `ninja`。
+
+</SlideCard>
+
+<SlideCard title="第三方依赖：先拆成“从哪里来”和“怎么使用”">
+
+## 查找与获取是两件事
+
+`find_package()` 通常查找已经能被当前环境发现的包，不等于自动联网安装。包被找到后，可以提供类似 `fmt::fmt` 的目标；使用者通过 `target_link_libraries()` 消费它的使用要求。这与你刚刚使用 `math_utils` 的思路一致。
+
+## 获取依赖的方式
+
+`FetchContent` 可以在配置阶段准备依赖源码；系统包管理器、vcpkg、Conan 则提供不同的获取和集成方式。主线暂不混用这些工具。下一次练习只选一个库、一种获取方式，并记录版本、配置前提和使用目标。
+
+## 接入测试框架时保留哪些步骤？
+
+如果下一步引入 GoogleTest，要保留第 7 节建立的三个动作：构建测试程序、启用测试、注册测试。`GTest::gtest_main` 提供测试入口，并不自动完成 CTest 注册；可以参考 [GoogleTest 模块](https://cmake.org/cmake/help/latest/module/GoogleTest.html)使用 `gtest_discover_tests()`。
+
+</SlideCard>
+
+## Take-away message
+
+<SlideCard title="从黑盒命令到可观察的构建过程">
+
+## 五个可以验证的事实
+
+- 编译消费源文件与头文件；链接解决实现之间的引用。
+- 构建后端维护依赖图，判断哪些工作需要重新执行。
+- CMake 用 target 描述产物、源码与使用要求，再生成后端规则。
+- 依赖传播可以从真实的编译命令里观察，不必只靠记忆。
+- 编译成功、测试注册、测试通过是三个不同的事实。
+
+## 把模型带回自己的项目
+
+离开这篇讲义时，应该带走的是一套可以自己验证的模型：**源码和使用要求 → 构建规则 → 编译与链接 → 可执行程序 → 自动验证**。
+
+</SlideCard>
+
+## 阅读材料
+
+<SlideCard title="从当前的问题出发查手册">
+
+## 围绕当前问题阅读
+
+- [CMake 命令行手册](https://cmake.org/cmake/help/latest/manual/cmake.1.html)：查询配置、生成与构建命令。
+- [CMake 构建系统手册](https://cmake.org/cmake/help/latest/manual/cmake-buildsystem.7.html)：进一步理解 target、使用要求与链接关系。
+- 你实际使用的 xv6 Makefile 和 Bustub CMakeLists.txt：只追一个目标，把预测与日志对照。
+
+## 下一轮实验
+
+动态库的导出与运行时查找、安装与导出包、交叉编译工具链、Presets、Sanitizer，留作下一轮带着具体需求的实验。
+
+</SlideCard>
