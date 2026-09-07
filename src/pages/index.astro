@@ -118,10 +118,11 @@ const currentStage = phase2Progress.current;
 					<h2 id="draft-heading">
 						<a href="/draft/">本地草稿</a>
 					</h2>
-					<span class="draft-badge">仅本地可见 · {draftPosts.length} 篇</span>
+					<span class="draft-badge">首页仅本地展示 · {draftPosts.length} 篇</span>
 				</div>
 				<p class="draft-description">
-					这些页面只在本地开发服务器中生成。点击标题可直接检查文章内容和渲染效果。
+					草稿页面可通过正式站点的直达链接访问，但不会进入文章归档、RSS 或
+					sitemap；本区块仅在本地首页展示。
 				</p>
 				<ul class="draft-links">
 					{draftPosts.map((post) => {
