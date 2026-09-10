@@ -71,7 +71,7 @@ const formatArchiveDate = (date: Date) => archiveDateFormatter.format(date).repl
 			<section class="wiki-index-section" aria-label="草稿目录">
 				<h2>草稿目录</h2>
 				{page.posts.length > 0 ? (
-					<ol class="wiki-route-list">
+					<ul class="wiki-route-list">
 						{page.posts.map((post) => {
 							const lastModified = post.data.updatedDate ?? post.data.pubDate;
 							return (
@@ -84,7 +84,7 @@ const formatArchiveDate = (date: Date) => archiveDateFormatter.format(date).repl
 								</li>
 							);
 						})}
-					</ol>
+					</ul>
 				) : (
 					<p class="wiki-section-note">
 						当前没有标记为 <code>draft: true</code> 的文章。

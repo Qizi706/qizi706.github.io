@@ -90,8 +90,7 @@ a:hover { color: #312e81; text-decoration: underline; }
 .breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0 0 0.25rem; color: #64748b; font-size: 0.9rem; }
 .breadcrumbs a { color: inherit; }
 .wiki-index-list, .lab-index { margin: 0.25rem 0; padding: 0 0 0 0.5rem; list-style-position: inside; }
-.wiki-index-list { list-style-type: disc; }
-.lab-index { list-style-type: decimal; }
+.wiki-index-list, .lab-index { list-style-type: disc; }
 .wiki-index-list li, .lab-index li { margin: 0.25rem 1rem; padding: 0; text-align: left; }
 .link-row { margin-top: 0.25rem !important; }
 .section-note, .lab-summary { color: #475569; }
@@ -240,7 +239,7 @@ function renderLabsHome(labs, entries) {
 <h1>Starter 与可复现实验包</h1>
 <ul class="wiki-index-list"><li>每个 Lab 页面都说明怎样下载、从哪里开始、哪些文件公开，以及维护者如何隔离本地实现。</li><li>实验顺序以 <a href="/learning/">实验路线</a> 为准；<a href="/labs/index.json">机器可读清单</a>用于自动化审计。</li></ul>
 </header>
-<section><h2>可用 Lab</h2><ol class="lab-index">${cards}</ol></section>
+<section><h2>可用 Lab</h2><ul class="lab-index">${cards}</ul></section>
 <section>
 <h2>发布目录</h2><p class="section-note">压缩包与机器可读索引。</p>
 <pre class="listing"><a href="../">../</a>\n${directoryRows}</pre>

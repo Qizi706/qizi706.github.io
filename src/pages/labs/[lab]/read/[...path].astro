@@ -6,6 +6,7 @@ import { createMarkdownProcessor, parseFrontmatter } from '@astrojs/markdown-rem
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
 import MitLabMarkdown from '../../../../layouts/MitLabMarkdown.astro';
+import rehypeBulletLists from '../../../../plugins/rehype-bullet-lists.mjs';
 import rehypeLabArtifactLinks from '../../../../plugins/rehype-lab-artifact-links.mjs';
 import rehypeLabCommands from '../../../../plugins/rehype-lab-commands.mjs';
 import {
@@ -47,6 +48,7 @@ const renderer = await createMarkdownProcessor({
 	rehypePlugins: [
 		rehypeKatex,
 		rehypeLabCommands,
+		rehypeBulletLists,
 		[rehypeLabArtifactLinks, { labName, artifactPath }],
 	],
 });

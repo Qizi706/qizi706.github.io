@@ -33,7 +33,7 @@ const formatArchiveDate = (date: Date) => archiveDateFormatter.format(date).repl
 
 	<section class="wiki-index-section" aria-label="文章目录">
 		<h2>文章目录</h2>
-		<ol class="wiki-route-list">
+		<ul class="wiki-route-list">
 			{
 				posts.map((post) => (
 					<li>
@@ -44,6 +44,6 @@ const formatArchiveDate = (date: Date) => archiveDateFormatter.format(date).repl
 					</li>
 				))
 			}
-		</ol>
+		</ul>
 	</section>
 </PageLayout>

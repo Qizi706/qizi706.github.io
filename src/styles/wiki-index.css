@@ -42,14 +42,7 @@
 	margin: 0.25rem 0;
 	padding: 0 0 0 0.5rem;
 	list-style-position: inside;
-}
-
-.wiki-index-page .wiki-index-list {
 	list-style-type: disc;
-}
-
-.wiki-index-page .wiki-route-list {
-	list-style-type: decimal;
 }
 
 .wiki-index-page .wiki-index-list li,

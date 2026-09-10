@@ -2,7 +2,7 @@
 title: '现代 C++ 长期学习计划：从工程熟练到语言专家'
 description: '结合分布式缓存工作场景，为自己制定一条三年现代 C++ 学习路线：系统掌握语言语义、标准库、模板、并发内存模型、编译链接、ABI、性能工具和标准阅读，并用实验、源码、文章与季度验收持续推进。'
 pubDate: '2026-09-02T20:00:00+08:00'
-updatedDate: '2026-09-07T00:33:57+08:00'
+updatedDate: '2026-09-08'
 readingOrder: 1
 readingNote: '总览：按目标选择学习范围与验收方式'
 categories:
@@ -186,6 +186,8 @@ cpp-semantics-lab/
 - 直接初始化、复制初始化、列表初始化、聚合初始化；
 - narrowing conversion；
 - 作用域、名字隐藏、namespace 和 using declaration。
+
+类型推导部分从[《C++ auto类型推导》](/blog/cpp-type-deduction/)展开，先理解声明模式与推导规则，再把复制、借用和返回接口的生命周期联系起来。
 
 验收任务：
 

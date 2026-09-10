@@ -3,7 +3,7 @@ title: "C++ 完美转发"
 description: '从左值与右值重载出发，演示参数经过包装函数后为何改变值类别，并用模板推导、引用折叠和 std::forward 实现完美转发。'
 pubDate: "2026-05-13T18:48:17+08:00"
 updatedDate: '2026-09-07T00:33:57+08:00'
-readingOrder: 4
+readingOrder: 5
 readingNote: '泛型：继续理解值类别与模板参数传递'
 categories:
   - "C/C++"

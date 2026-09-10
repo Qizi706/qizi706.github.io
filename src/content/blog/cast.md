@@ -3,7 +3,7 @@ title: "C++ 类型转换：从 C 风格强转到四种 cast"
 description: '比较 C 风格转换与 static_cast、dynamic_cast、const_cast、reinterpret_cast，用示例说明转换前提、失败方式和未定义行为风险。'
 pubDate: "2026-05-22T20:39:00+08:00"
 updatedDate: '2026-09-07T00:33:57+08:00'
-readingOrder: 3
+readingOrder: 4
 readingNote: '语义：理解类型转换的前提与风险'
 categories:
   - "C/C++"

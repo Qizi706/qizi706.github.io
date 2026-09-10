@@ -55,6 +55,11 @@ body {
 	overflow-wrap: break-word;
 }
 
+ul,
+ol {
+	list-style-type: disc;
+}
+
 main {
 	width: min(calc(100% - 2rem), var(--content-width));
 	margin: 0 auto;
@@ -566,20 +571,11 @@ hr {
 }
 
 .prose :is(.code-card, .note) :is(ul, ol) {
+	margin: 0.25rem 1rem;
 	list-style-position: inside;
 	padding: 0 0 0 0.5rem;
-}
-
-.prose :is(.code-card, .note) ul {
-	margin: 0.25rem 1rem;
 	list-style-type: disc;
 	text-align: left;
-}
-
-.prose :is(.code-card, .note) ol {
-	margin: 0.75rem 1rem;
-	list-style-type: decimal;
-	text-align: justify;
 }
 
 .prose :is(.code-card, .note) li {
@@ -750,20 +746,11 @@ hr {
 
 .prose .slideshow ul,
 .prose .slideshow ol {
+	margin: 0.25rem 1rem;
 	list-style-position: inside;
 	padding: 0 0 0 0.5rem;
-}
-
-.prose .slideshow ul {
-	margin: 0.25rem 1rem;
 	list-style-type: disc;
 	text-align: left;
-}
-
-.prose .slideshow ol {
-	margin: 0.75rem 1rem;
-	list-style-type: decimal;
-	text-align: justify;
 }
 
 .prose .slideshow li {

@@ -3,7 +3,7 @@ title: "C++ 线程库"
 description: '用计数器和等待唤醒示例串联线程生命周期、RAII 锁、条件变量与原子操作，区分数据竞争的未定义行为和多个原子操作之间的逻辑竞态。'
 pubDate: "2026-05-20T15:54:46+08:00"
 updatedDate: '2026-09-07T00:33:57+08:00'
-readingOrder: 5
+readingOrder: 6
 readingNote: '并发：再处理共享状态和同步契约'
 categories:
   - "C/C++"

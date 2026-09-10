@@ -7,6 +7,7 @@ import { defineConfig, fontProviders } from 'astro/config';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
 import labDevServer from './src/integrations/lab-dev-server.mjs';
+import rehypeBulletLists from './src/plugins/rehype-bullet-lists.mjs';
 import rehypeCallouts from './src/plugins/rehype-callouts.mjs';
 import rehypeScrollableTables from './src/plugins/rehype-scrollable-tables.mjs';
 import { legacyPostRedirects } from './src/legacy-post-redirects.mjs';
@@ -48,7 +49,7 @@ export default defineConfig({
 	markdown: {
 		processor: unified({
 			remarkPlugins: [remarkMath],
-			rehypePlugins: [rehypeKatex, rehypeCallouts, rehypeScrollableTables],
+			rehypePlugins: [rehypeKatex, rehypeCallouts, rehypeScrollableTables, rehypeBulletLists],
 		}),
 		syntaxHighlight: {
 			type: 'shiki',

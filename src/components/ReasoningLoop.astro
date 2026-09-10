@@ -20,7 +20,7 @@ const { steps } = Astro.props;
 
 	<div class="reasoning-loop__viewport">
 		<div class="reasoning-loop__pipeline">
-			<ol>
+			<ul>
 				{
 					steps.map((step, index) => (
 						<li>
@@ -30,7 +30,7 @@ const { steps } = Astro.props;
 						</li>
 					))
 				}
-			</ol>
+			</ul>
 
 			<div class="reasoning-loop__return" aria-hidden="true">
 				<span>feedback / retry</span>
@@ -101,7 +101,7 @@ const { steps } = Astro.props;
 		padding-bottom: 0.35rem;
 	}
 
-	ol {
+	ul {
 		display: grid;
 		grid-template-columns: repeat(4, minmax(0, 1fr));
 		margin: 0;

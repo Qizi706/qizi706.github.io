@@ -85,7 +85,7 @@ const archiveRange =
 		readingPosts.length > 0 && (
 			<section class="wiki-index-section" aria-label={`${category} 建议阅读路径`}>
 				<h2>建议阅读路径</h2>
-				<ol class="wiki-route-list">
+				<ul class="wiki-route-list">
 					{readingPosts.map((post) => (
 						<li>
 							<a href={getPostUrl(post)}>{post.data.title}</a>
@@ -96,7 +96,7 @@ const archiveRange =
 							)}
 						</li>
 					))}
-				</ol>
+				</ul>
 			</section>
 		)
 	}
@@ -104,7 +104,7 @@ const archiveRange =
 		otherPosts.length > 0 && (
 			<section class="wiki-index-section" aria-label={`${category} 文章归档`}>
 				<h2>{readingPosts.length > 0 ? '补充文章（按发布时间）' : '文章目录'}</h2>
-				<ol class="wiki-route-list">
+				<ul class="wiki-route-list">
 					{otherPosts.map((post) => (
 						<li>
 							<time class="route-family is-gray" datetime={post.data.pubDate.toISOString()}>
@@ -113,7 +113,7 @@ const archiveRange =
 							<a href={getPostUrl(post)}>{post.data.title}</a>
 						</li>
 					))}
-				</ol>
+				</ul>
 			</section>
 		)
 	}
