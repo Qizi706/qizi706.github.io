@@ -1,5 +1,5 @@
 ---
-title: 'C++ auto类型推导'
+title: 'C++ 类型推导 auto decltype'
 description: '从复制与借用的日常选择出发，逐步理解 auto、引用推导、const、数组退化、decltype 与返回类型推导，并把精确类型、对象关系和生命周期联系起来。'
 pubDate: '2026-09-08T20:54:32+08:00'
 readingOrder: 3
@@ -272,7 +272,7 @@ auto& function_reference = twice; // int (&)(int)
 
 ## 4. auto&&：先理解值类别，再看引用折叠
 
-<SlideCard title="值类别描述表达式，不描述变量的名字">
+<SlideCard title="值类别描述表达式，不描述变量的名字" class="value-category-card">
 
 ## 只建立当前需要的三个区别
 

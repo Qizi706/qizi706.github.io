@@ -185,8 +185,7 @@ p {
 	color: rgb(var(--prose-body));
 	font-family: var(--font-body);
 	line-height: 1.5;
-	text-align: justify;
-	text-justify: inter-ideograph;
+	text-align: left;
 }
 
 .prose > h1,
@@ -295,6 +294,7 @@ samp {
 
 :not(pre) > code {
 	overflow-wrap: anywhere;
+	word-break: break-all;
 	padding: 0.12em 0.38em;
 	border: 0;
 	border-radius: 1px;
@@ -565,7 +565,7 @@ hr {
 	padding: 0;
 	overflow-wrap: normal;
 	line-height: 1.625;
-	text-align: justify;
+	text-align: left;
 	text-indent: 2em;
 	word-break: normal;
 }
@@ -612,7 +612,7 @@ hr {
 	font-family: var(--font-sans);
 	font-size: 1rem;
 	line-height: 1.25rem;
-	text-align: justify;
+	text-align: left;
 	zoom: 0.85;
 }
 
@@ -724,7 +724,7 @@ hr {
 	padding: 0;
 	overflow-wrap: normal;
 	line-height: 1.625;
-	text-align: justify;
+	text-align: left;
 	text-indent: 2em;
 	word-break: normal;
 }
@@ -835,6 +835,19 @@ hr {
 .prose .slideshow .table-scroll {
 	margin-top: 1.5rem;
 	margin-bottom: 1.5rem;
+}
+
+/* Keep the expression, type, and value category readable as complete labels. */
+.prose .slideshow.value-category-card :is(th, td) {
+	padding-inline: 0.6rem;
+}
+
+.prose .value-category-card :is(th, td):nth-child(-n + 3) {
+	white-space: nowrap;
+}
+
+.prose .value-category-card :is(th, td):last-child {
+	min-width: 14rem;
 }
 
 .prose .slideshow th,
