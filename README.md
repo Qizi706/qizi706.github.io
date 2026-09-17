@@ -118,6 +118,10 @@ int main() {
 
 常见语言名称包括 `cpp`、`c`、`rust`、`go`、`python`、`javascript`、`typescript`、`bash`、`lua` 和 `text`。代码字体统一使用 Fira Mono。
 
+C++ 代码块（`cpp`、`c++`、`cc`、`cxx`、`hpp`、`hxx`）由 `src/plugins/rehype-cpp-highlight.mjs` 使用 Tree-sitter C++ 语法树高亮；其他语言继续使用 Shiki。两者复用 `src/themes/pygments-default.mjs` 的配色。Tree-sitter 的 WASM 只在构建或本地开发时运行，不发送给浏览器；不需要运行 C/C++ grammar 包的原生安装脚本。
+
+修改高亮逻辑后运行 `node --test src/plugins/rehype-cpp-highlight.test.mjs`。测试覆盖对象与函数声明、模板、多行初始化、注释、Unicode，以及现有文章的 C++ 代码片段。Tree-sitter 提供语法分析，不做编译器级类型推导；需要类型语义的歧义仍应由正文说明。
+
 ### 图片
 
 文章图片建议放在 `src/assets/` 的独立目录中，让 Astro 在构建时完成尺寸推断、响应式输出和格式优化：

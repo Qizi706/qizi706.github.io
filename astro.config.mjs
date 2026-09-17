@@ -10,7 +10,7 @@ import labDevServer from './src/integrations/lab-dev-server.mjs';
 import rehypeBulletLists from './src/plugins/rehype-bullet-lists.mjs';
 import rehypeCallouts from './src/plugins/rehype-callouts.mjs';
 import rehypeScrollableTables from './src/plugins/rehype-scrollable-tables.mjs';
-import cppInitialization from './src/plugins/shiki-cpp-initialization.mjs';
+import rehypeCppHighlight, { cppLanguages } from './src/plugins/rehype-cpp-highlight.mjs';
 import { legacyPostRedirects } from './src/legacy-post-redirects.mjs';
 import { pygmentsDefaultTheme } from './src/themes/pygments-default.mjs';
 
@@ -50,15 +50,20 @@ export default defineConfig({
 	markdown: {
 		processor: unified({
 			remarkPlugins: [remarkMath],
-			rehypePlugins: [rehypeKatex, rehypeCallouts, rehypeScrollableTables, rehypeBulletLists],
+			rehypePlugins: [
+				rehypeCppHighlight,
+				rehypeKatex,
+				rehypeCallouts,
+				rehypeScrollableTables,
+				rehypeBulletLists,
+			],
 		}),
 		syntaxHighlight: {
 			type: 'shiki',
-			excludeLangs: ['math'],
+			excludeLangs: ['math', ...cppLanguages],
 		},
 		shikiConfig: {
 			theme: pygmentsDefaultTheme,
-			transformers: [cppInitialization()],
 			langAlias: { nasm: 'asm' },
 			wrap: false,
 		},
