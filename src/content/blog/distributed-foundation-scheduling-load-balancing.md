@@ -3,7 +3,7 @@ title: '分布式基础：调度和负载均衡'
 description: '比较轮询、负载感知和局部性感知调度，结合 KV Cache 位置、请求阶段与背压，分析吞吐、排队延迟和迁移成本之间的取舍。'
 pubDate: '2026-07-23T10:30:00+08:00'
 updatedDate: '2026-09-07T00:33:57+08:00'
-readingOrder: 8
+readingOrder: 9
 readingNote: '调度：联合考虑计算、排队和局部性'
 categories:
   - '分布式'

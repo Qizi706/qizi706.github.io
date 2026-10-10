@@ -51,13 +51,14 @@ mathjax: false
 
 按前置知识，可以沿下面的路径阅读。本文保留全局问题地图，各专题展开具体接口和故障边界：
 
-1. [操作系统、网络、并发与存储](/blog/distributed-foundation-os-network-concurrency-storage/)
-2. [RPC 和远程调用](/blog/distributed-foundation-rpc-remote-call/)
-3. [状态机、分片、路由与元数据](/blog/distributed-foundation-state-machine-sharding-metadata/)
-4. [副本和一致性](/blog/distributed-foundation-replication-consistency/)
-5. [故障处理](/blog/distributed-foundation-failure-handling/)
-6. [缓存策略、迁移与淘汰](/blog/distributed-foundation-cache-migration-eviction/)
-7. [调度和负载均衡](/blog/distributed-foundation-scheduling-load-balancing/)
+- [操作系统、网络、并发与存储](/blog/distributed-foundation-os-network-concurrency-storage/)
+- [RPC 入门：一次远程调用是怎样完成的](/blog/rpc-introduction/)
+- [RPC 和远程调用](/blog/distributed-foundation-rpc-remote-call/)
+- [状态机、分片、路由与元数据](/blog/distributed-foundation-state-machine-sharding-metadata/)
+- [副本和一致性](/blog/distributed-foundation-replication-consistency/)
+- [故障处理](/blog/distributed-foundation-failure-handling/)
+- [缓存策略、迁移与淘汰](/blog/distributed-foundation-cache-migration-eviction/)
+- [调度和负载均衡](/blog/distributed-foundation-scheduling-load-balancing/)
 
 ## 网络通信基础
 

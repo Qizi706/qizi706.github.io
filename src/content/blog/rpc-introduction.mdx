@@ -3,6 +3,8 @@ title: 'RPC 入门：一次远程调用是怎样完成的'
 description: '从查询另一台机器上的文件大小出发，走完请求与响应，理解同步、异步和超时，再对照 gRPC C++ 代码认清各部分的职责。'
 pubDate: '2026-10-08'
 updatedDate: '2026-10-09'
+readingOrder: 3
+readingNote: '入门：走通一次调用，理解同步、异步与超时'
 categories:
   - '分布式'
 tags:
@@ -19,6 +21,8 @@ import CallFlow from '../../assets/rpc-introduction/call-flow.png';
 import '../../assets/rpc-introduction/lecture.css';
 
 <div className="rpc-lecture">
+
+> 系列入口：[分布式阅读路径](/category/分布式/)。 前置：[操作系统、网络、并发与存储](/blog/distributed-foundation-os-network-concurrency-storage/)。 下一篇：[RPC 和远程调用](/blog/distributed-foundation-rpc-remote-call/)。
 
 在业务代码里，我们可能见过这样的调用：给客户端对象一个文件名，拿到文件大小。真正存放文件的机器却在远处。这一行代码究竟做了什么？
 

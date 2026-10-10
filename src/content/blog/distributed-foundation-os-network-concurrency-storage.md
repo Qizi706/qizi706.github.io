@@ -16,7 +16,7 @@ draft: false
 mathjax: false
 ---
 
-> 系列入口：[分布式阅读路径](/category/分布式/)。 前置：[总览](/blog/distributed-basis/)。 下一篇：[RPC 和远程调用](/blog/distributed-foundation-rpc-remote-call/)。
+> 系列入口：[分布式阅读路径](/category/分布式/)。 前置：[总览](/blog/distributed-basis/)。 下一篇：[RPC 入门](/blog/rpc-introduction/)。
 
 ## 本文要解决的问题
 

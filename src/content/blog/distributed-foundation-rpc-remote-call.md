@@ -3,7 +3,7 @@ title: '分布式基础：RPC 和远程调用'
 description: '围绕响应丢失后的重复执行，解释 RPC 超时、重试与幂等，并用可运行的 SQLite 示例验证事务去重、进程重启和操作 ID 冲突。'
 pubDate: '2026-07-07T10:30:00+08:00'
 updatedDate: '2026-09-07T00:33:57+08:00'
-readingOrder: 3
+readingOrder: 4
 readingNote: '通信：分析超时、重试与幂等'
 categories:
   - '分布式'
@@ -15,7 +15,7 @@ draft: false
 mathjax: false
 ---
 
-> 系列入口：[分布式阅读路径](/category/分布式/)。 前置：[操作系统、网络、并发与存储](/blog/distributed-foundation-os-network-concurrency-storage/)。 下一篇：[状态机、分片、路由与元数据](/blog/distributed-foundation-state-machine-sharding-metadata/)。
+> 系列入口：[分布式阅读路径](/category/分布式/)。 前置：[RPC 入门](/blog/rpc-introduction/)。 下一篇：[状态机、分片、路由与元数据](/blog/distributed-foundation-state-machine-sharding-metadata/)。
 
 ## 本文要解决的问题
 
