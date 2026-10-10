@@ -1,0 +1,19 @@
+Use case: infographic-diagram
+Asset type: a finished explanatory illustration embedded in a Chinese programming blog, for a beginner learning RPC. Generate a brand new image.
+Primary request: a technically accurate, exceptionally readable two-lane sequence diagram of ONE SUCCESSFUL SYNCHRONOUS RPC that asks a storage server for the size of report.txt. The file exists only at the server; its size is 4096 bytes. Make the story self-explanatory.
+Style: clean university lecture-note infographic, white / very pale neutral paper background, crisp dark navy text, restrained blue client accents and green server accents, subtle rounded rectangles, thin precise arrows, ample whitespace. Small simple laptop and server/file line icons in the lane headers only. Flat orthographic 2D, no perspective or decoration. All Chinese typeset clearly in a modern sans-serif, all identifiers in clear monospace.
+Composition: portrait 3:4 canvas, high resolution. Two equal lanes with a wide communication gap. LEFT lane is the notebook program; RIGHT lane is the file-service process. Each lane's header and light vertical guide must make the process boundary unambiguous. Time flows DOWN. Large text that remains readable when the image is shown about 520 CSS pixels wide; avoid tiny footnotes and excessive words.
+Exact title at top: "一次 RPC：查询远端文件大小"
+Left header, two lines: "笔记本程序" / "Client"
+Right header, two lines: "文件服务进程" / "Server"
+
+Required chronological layout, progressing strictly DOWN the page:
+- At upper left, a box labeled "调用本地 Stub" with the code GetFileSize("report.txt") beneath it. A short downward arrow leads to another left box "编码请求".
+- A BLUE horizontal arrow from the left lane to the right lane, with its arrowhead ONLY on the RIGHT. Label the arrow ABOVE with "请求：GetFileSize" and BELOW with path = "report.txt". These are logical request contents, not a literal wire-format dump.
+- Below that request arrow, a right-lane box "解码请求，分发方法". A short downward arrow within the right lane leads to "执行文件查询", with a small secondary line "report.txt：4096 字节". A further short downward arrow goes to a right-lane box "编码响应".
+- Below the server work, a GREEN horizontal arrow from the right lane back to the left lane, with its arrowhead ONLY on the LEFT. Label this arrow ABOVE with "响应：OK" and BELOW with size_bytes = 4096.
+- Below the response arrow, a left-lane final box "解码响应，检查状态" with a second line "取得结果：4096 字节".
+- In the empty part of the left lane between sending the request and receiving the response, a subtle dashed vertical bracket labeled "调用线程等待". It represents waiting and must NOT look like another network request.
+Bottom sentence, large and short: "传递的是数据，两边各自执行代码"
+
+Technical invariants: the local Stub and request encoding are on the client side; method dispatch and actual file query are on the server side. Both network arrows must cross BETWEEN the processes, at different vertical positions, with the correct direction. Do not send a function body, pointer, whole file, or thread across the network. Show exactly one request and one response, no retries, no streaming, no shared memory, no central orchestrator. The file remains on the right. Preserve the identifiers GetFileSize, report.txt, path, size_bytes, Client, Server, Stub, and OK exactly. Use the specified labels only, do not invent prose or numbered lists. No text overlap, no text touching arrows, no cropped labels, no watermarks.

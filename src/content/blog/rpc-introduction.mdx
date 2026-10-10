@@ -1,0 +1,665 @@
+---
+title: 'RPC 入门：一次远程调用是怎样完成的'
+description: '从查询另一台机器上的文件大小出发，走完请求与响应，理解同步、异步和超时，再对照 gRPC C++ 代码认清各部分的职责。'
+pubDate: '2026-10-08'
+updatedDate: '2026-10-09'
+categories:
+  - '分布式'
+tags:
+  - 'RPC'
+  - '网络'
+  - 'gRPC'
+  - 'Protocol Buffers'
+draft: false
+mathjax: false
+---
+
+import ArticleImage from '../../components/ArticleImage.astro';
+import CallFlow from '../../assets/rpc-introduction/call-flow.png';
+import '../../assets/rpc-introduction/lecture.css';
+
+<div className="rpc-lecture">
+
+在业务代码里，我们可能见过这样的调用：给客户端对象一个文件名，拿到文件大小。真正存放文件的机器却在远处。这一行代码究竟做了什么？
+
+本文始终围绕同一个例子：**笔记本上的程序，要查询存储服务器上 `report.txt` 的大小。** 假设文件没有复制到本机，远端目录也没有挂载到本机；程序通过文件服务访问它。
+
+<Note title="怎样读这篇文章" class="title-underline">
+
+## 先走通一次调用
+
+只需要会读简单的 C++ 函数。涉及的进程、消息和通信概念，会在用到时解释。
+
+- 前四节建立调用模型：为什么要跨进程、参数怎么过去、结果怎么回来、等待和失败意味着什么。
+- 接着用 gRPC C++ 对照这个模型，认识工作代码里常见的名字。
+- 最后的进阶部分按需展开，包含异步 API、对象生命周期和重试。
+
+前半篇使用标明的伪代码，不要求搭建环境或实现 RPC 框架。先试着在脑中跟随一次请求，再回头看术语。
+
+</Note>
+
+## 本地调用与远程调用
+
+<SlideCard title="从一个熟悉的函数开始">
+
+## 文件在本机时
+
+先假设 `report.txt` 就在本机。我们已经有一个读取本地文件大小的函数，下面用伪代码表示调用：
+
+```cpp
+auto size = GetFileSize("report.txt");
+PrintSize(size);
+```
+
+当前线程进入 `GetFileSize`，函数通过本机文件系统查询信息，返回后继续执行 `PrintSize`。这里的 `"report.txt"` 按本机的文件路径解释。
+
+执行中的程序叫作**进程**。在这个普通函数调用里，调用方和 `GetFileSize` 的函数代码都属于当前进程。函数之间可以通过参数和返回值协作。
+
+</SlideCard>
+
+<SlideCard title="文件换了一台机器">
+
+## 为什么普通调用不够了？
+
+现在把场景换回来：文件放在存储服务器上。两边分别运行一个程序。
+
+| 笔记本上的程序          | 存储服务器上的文件服务 |
+| ----------------------- | ---------------------- |
+| 知道要查询 `report.txt` | 能访问实际文件         |
+| 需要拿到文件大小        | 提供查询文件大小的能力 |
+| 不直接访问远端磁盘      | 决定怎样查找和管理文件 |
+
+继续调用刚才那个本地函数，它仍然查询本机的文件。给它同样的文件名，不会自动让执行跳到另一台机器。
+
+两个进程各自运行代码，也各自管理内存。笔记本中的线程不能像调用本地函数一样，直接跳进服务器进程执行它的代码。我们需要另一条路径：**把“请查询 `report.txt`”送给服务器，让服务器执行查询，再把结果送回来。**
+
+把文件集中放在服务器上，可以让多个程序共同访问同一份存储，也便于单独管理容量和权限。代价是：访问这些能力时，需要跨过进程和机器之间的边界。
+
+</SlideCard>
+
+<SlideCard title="把远端能力组织成接口">
+
+## RPC 解决哪部分问题？
+
+我们希望业务代码仍然能清楚地表达“查询文件大小”。假设文件服务提供了一个客户端对象，调用形式可以写成下面的伪代码：
+
+```cpp
+auto size = fileClient.GetFileSize("report.txt");
+```
+
+这个对象在本机。调用它以后，客户端代码和通信框架负责发送请求、接收响应，再把结果交给业务代码。服务器中的程序负责真正的查询。
+
+这就是 **RPC，Remote Procedure Call，远程过程调用**：通过约定的接口，请另一个进程执行操作，并取得调用结果。客户端的入口通常称为 Stub，也就是本地代理；可以先把它理解为“替业务代码联系远端服务的对象”。[gRPC 的入门说明](https://grpc.io/docs/what-is-grpc/introduction/)采用的也是这个模型。
+
+如果有几十个远程方法，每次都手写消息编码、发送、接收和结果处理，会反复处理同类问题。RPC 框架把这些通信工作组织起来，让开发者主要围绕方法、参数、结果和错误写业务逻辑。
+
+“远程”还可以指同一台机器上的另一个进程。RPC 也只是跨进程协作的一种方式；如果代码和数据放在一个程序里就能满足需求，普通函数调用通常已经够用。
+
+</SlideCard>
+
+## 请求与响应
+
+<SlideCard title="先跟着数据走一遍">
+
+## 一次查询需要传什么？
+
+先不关心框架和协议。笔记本要表达两件事：调用哪个操作，以及这个操作的参数是什么。
+
+```text
+请求的含义：调用 GetFileSize，参数 path = "report.txt"
+响应的含义：查询成功，结果 size_bytes = 4096
+```
+
+这是便于阅读的内容示意，不代表某种协议实际发送的文本。`4096` 是本文假设的文件大小，单位是字节。
+
+请求到达后，服务器找到 `GetFileSize` 的处理逻辑，用 `"report.txt"` 查询自己的文件信息，再把结果放进响应。笔记本收到响应后，才拿到这个大小。
+
+这一次操作传输的是文件名和查询结果。**查询文件大小不需要把整个文件下载到笔记本。** 远端执行的价值也在这里：让能够访问数据的一方完成操作，再返回调用方需要的信息。
+
+在这次调用里，发起请求的笔记本程序是 Client（客户端），处理请求的文件服务是 Server（服务端）。这些名字描述调用关系：文件服务如果又请求别的服务，它在那一次调用中也会成为 Client。
+
+</SlideCard>
+
+<SlideCard title="给每一段工作起名字">
+
+## 从函数参数到网络消息
+
+`fileClient.GetFileSize(...)` 首先执行的是本地代理代码。这个入口知道如何表达远端的方法和参数，但真正查询文件的业务逻辑在服务器中。
+
+参数原本是当前进程里的对象。网络传输需要字节，因此发送方按照约定的格式把参数编码成字节；接收方按同一约定解析，得到自己进程中的请求对象。
+
+- **序列化（Serialization）**：把数据编码为可传输的字节。
+- **反序列化（Deserialization）**：从字节中解析出数据。
+
+例如，双方约定请求里有一个字符串 `path`。客户端编码它的内容 `"report.txt"`，服务端再得到自己的字符串对象。两边的对象值可以相同，但它们是各自进程里的对象。
+
+这也解释了为什么不能把一个 `std::string` 对象的内存原样拷过去，就期待对方直接使用：对象的本地表示可能包含指向当前进程内存的指针。远端需要的是文件名的内容，以及双方都能理解的编码格式。
+
+服务端框架收到消息后，还要判断请求对应哪个服务、哪个方法，再调用注册好的处理函数。这一步叫作**请求分发**。业务函数得到普通的请求对象，填写结果；框架再把结果编码并返回。
+
+</SlideCard>
+
+<SlideCard title="把刚才的过程连起来">
+
+## 一次成功的调用
+
+沿着图中的箭头走：蓝色箭头把请求送到文件服务，绿色箭头把结果送回笔记本。两边各自执行代码；同步调用期间，客户端的调用线程等待这次查询完成。
+
+<ArticleImage
+	src={CallFlow}
+	alt="笔记本程序调用本地 Stub，编码并发送 GetFileSize 请求；文件服务解码请求，查询 report.txt 并返回 OK 和 4096 字节；等待中的客户端收到响应后解码并检查状态"
+	width={640}
+	maxWidth="100%"
+	caption="一次成功的同步 RPC。时间从上往下，省略连接建立、认证和协议字段。"
+/>
+
+当本地代理返回结果时，远端的业务函数已经在另一个进程中执行过。调用方写的是一行调用，背后经过了请求发送、远端处理和响应返回。
+
+</SlideCard>
+
+<Note title="停一下：把边界说清楚" class="title-underline">
+
+## 谁的代码，谁的内存？
+
+试着解释：客户端调用 `GetFileSize` 时，是把这个函数的代码发给服务器吗？服务器得到的请求对象，是客户端原来的那个对象吗？
+
+<details>
+<summary>展开推理</summary>
+
+本例的查询代码事先就在服务端。客户端发送的是操作标识和参数，服务端选择已经提供的方法来执行。
+
+客户端与服务端也分别拥有自己的请求、响应对象。网络上传的是编码后的数据；客户端线程和对象的地址都不会随着调用搬到服务器中。
+
+如果能说清楚“本地入口负责发起请求，远端函数负责查询，结果通过响应回来”，这一段的主线就已经走通了。
+
+</details>
+
+</Note>
+
+## 同步 RPC 与异步 RPC
+
+我们已经知道请求和响应怎样往返。下一个问题是：响应还没回来时，调用方的线程在做什么？同步与异步接口主要在这里分开。
+
+<SlideCard title="同步调用">
+
+## 在调用点等待结果
+
+下面仍然是伪代码。为便于比较，只展示成功路径，错误稍后讨论。
+
+```cpp
+auto size = fileClient.GetFileSize("report.txt");
+PrintSize(size);
+PrepareLocalReport();
+```
+
+调用 `GetFileSize` 的线程会等待这次 RPC 结束。在取得结果之前，它不会越过这一行去执行 `PrintSize` 或 `PrepareLocalReport`。调用结束也可能是因为失败，此时程序需要走错误处理路径。
+
+这是一种同步接口：发起调用、等待完成、取得结果，集中在一个调用点。业务代码可以按书写顺序往下读。
+
+等待的是调用这个接口的线程。客户端的其他线程仍然可以工作，服务端也可以同时处理其他请求。因此，“同步 RPC”并不意味着整个系统一次只能做一件事。
+
+</SlideCard>
+
+<SlideCard title="异步调用">
+
+## 先发起，完成后再处理结果
+
+如果准备本地报告不依赖文件大小，就可以先发起查询，在结果到来之前做这部分工作。我们把“完成时要执行的代码”交给框架，这段代码叫作回调（callback）。下面用一种假想的接口表达，仍然是伪代码；其中的 lambda 就是完成回调：
+
+```cpp
+fileClient.GetFileSizeAsync("report.txt", [](Result result) {
+    if (result.ok()) {
+        PrintSize(result.size_bytes());
+    } else {
+        ReportError(result.error());
+    }
+});
+
+PrepareLocalReport();
+```
+
+发起接口不需要等远端查询结束才返回。查询完成后，框架通过回调交给我们结果，回调里的代码再决定怎样处理成功或失败。
+
+这里有两个不同的时刻：**发起接口返回**，以及**这次 RPC 完成**。前一个时刻到来时，最终结果可能还没有准备好。因此，需要文件大小的 `PrintSize` 放在完成回调里；与它无关的 `PrepareLocalReport` 可以继续执行。
+
+回调也可能很快开始执行，甚至和后面的代码并发。不要依靠这段代码的上下排列，推断 `PrintSize` 与 `PrepareLocalReport` 的先后顺序。
+
+</SlideCard>
+
+<SlideCard title="异步究竟改变了什么？">
+
+## 等待可以怎样安排
+
+| 观察点                       | 同步接口         | 异步接口                   |
+| ---------------------------- | ---------------- | -------------------------- |
+| 发起函数什么时候返回         | 本次调用结束后   | 无须等本次远端操作结束     |
+| 在哪里处理结果               | 返回后接着处理   | 在回调、完成事件等位置处理 |
+| 调用线程能否继续安排其他工作 | 要等当前调用返回 | 发起后可以继续安排         |
+| 遇到失败怎么办               | 检查调用结果     | 在完成处理时检查结果       |
+
+假设还要查询第二个文件，而且两次查询互不依赖。查询 A 耗时 80 ms，查询 B 耗时 120 ms。
+
+- 先等 A 完成，再发起 B：忽略额外开销，要等约 200 ms。
+- 把 A、B 都发起，再等两者完成：如果等待充分重叠，约 120 ms 后可以继续。
+
+这些数字只用于说明依赖关系，并非实测。缩短总等待的原因是两次操作有了重叠；也可以用两个线程分别执行同步调用来达到并发。单次查询本身的远端处理和网络耗时仍然存在。
+
+如果 B 的文件名必须从 A 的结果中取得，B 就得等 A 完成。异步接口不会消除业务上的数据依赖。
+
+<details>
+<summary>Quiz：异步发起后，立刻等待它的结果，还能和后面的工作重叠吗？</summary>
+
+如果在同一线程中发起请求后立刻等待完成，再执行后续工作，那么这段业务流程仍然是顺序等待的。使用了异步 API，并不自动产生有用的并发；还要看请求之间的依赖，以及程序把等待安排在哪里。
+
+</details>
+
+先从同步接口理解流程通常更直观。需要同时管理多个调用或把等待交给事件机制时，再考虑异步接口。两种模型的定义可对照 [gRPC Core concepts](https://grpc.io/docs/what-is-grpc/core-concepts/#synchronous-vs-asynchronous)。
+
+</SlideCard>
+
+## 失败语义
+
+<SlideCard title="远端调用会在哪里中断？">
+
+## 文件不存在，与没有收到回答
+
+继续查询 `report.txt`。客户端可能得到几种不同的结果：
+
+| 发生的事                     | 调用方知道什么                           |
+| ---------------------------- | ---------------------------------------- |
+| 服务端查询成功，响应正常到达 | 得到了这次查询的文件大小                 |
+| 服务端明确返回“文件不存在”   | 服务端按接口约定给出了查询结论           |
+| 无法连接到服务端             | 这次调用没能正常完成                     |
+| 到了截止时间还没取得结果     | 没能及时获得回答，远端执行进度可能不确定 |
+
+这解释了为什么真实 RPC 接口通常还会给出**调用状态**。业务结果和调用状态一起读，才能判断一个返回值是否可用。一个默认值为 `0` 的响应对象，并不能证明文件确实是空文件。
+
+尤其是超时：请求可能还没到服务端，也可能已经查询完，只是响应没有及时回来。**客户端超时，不能推出服务端没有执行。**
+
+</SlideCard>
+
+<SlideCard title="给等待设置边界">
+
+## 最多愿意等多久？
+
+本地程序不能一直等一个没有回答的服务。常见接口会让调用方设置等待预算：
+
+- Timeout 是允许等待的时长，例如两秒。
+- Deadline 是一个截止时刻，例如“从现在起两秒后的那个时间点”。
+
+同步调用到了截止时间，会通过错误结果结束等待；异步调用同样需要在完成通知里处理超时。异步只改变如何等待和接收结果，仍然需要限制调用持续多久。
+
+稍后的 gRPC 示例会设置 deadline。gRPC 默认没有 deadline，实际使用需要显式给出合理预算；两秒只是本文的示意值。参见 [gRPC Deadlines](https://grpc.io/docs/guides/deadlines/)。
+
+取消也需要双方配合：框架传播取消信号，服务端业务决定怎样停止后续工作。已经发生的修改不会自动撤销。这个边界在重试写操作时尤其重要，文末再用追加文件的例子讨论。
+
+</SlideCard>
+
+## 接口定义
+
+前面已经建立了 RPC 的调用模型。现在选择 gRPC 这个具体框架，看看它如何把“查询远端文件大小”变成程序里的接口。**RPC 是调用方式，gRPC 是一种具体实现。** 接下来出现的类名和 API 属于 gRPC C++。
+
+<SlideCard title="双方先约定说什么">
+
+## `file.proto`
+
+客户端要知道有哪些方法可调用，服务端要知道收到的数据怎样解释。gRPC 常用 `.proto` 文件集中描述方法，以及请求、响应的数据结构。本文使用 proto3 语法：
+
+```proto
+syntax = "proto3";
+package demo;
+
+service FileService {
+  rpc GetFileSize(GetFileSizeRequest)
+      returns (GetFileSizeResponse);
+}
+
+message GetFileSizeRequest {
+  string path = 1;
+}
+
+message GetFileSizeResponse {
+  uint64 size_bytes = 1;
+}
+```
+
+从业务含义读：`FileService` 提供 `GetFileSize` 方法，输入中有文件路径 `path`，输出中有以字节计的大小 `size_bytes`。这正是前面的请求与响应。
+
+`package demo` 让生成的 C++ 类型位于 `demo` 命名空间。`string` 和 `uint64` 描述字段类型。这里的 `= 1` 是字段编号，用于在编码后的消息里识别字段；真正的文件名和大小，要在程序执行时填写。
+
+请求和响应是两种消息，因此各自都可以有编号 `1`。同一消息内部的字段编号必须唯一，接口投入使用后也不能随意改号或复用旧号。见 [proto3：Assigning Field Numbers](https://protobuf.dev/programming-guides/proto3/#assigning)。
+
+这个文件定义了调用约定。怎样找到文件、怎样检查权限、文件不存在时返回什么，仍然需要服务端业务代码和接口约定来落实。
+
+</SlideCard>
+
+<SlideCard title="从约定生成两边的接口">
+
+## 哪些代码由工具生成？
+
+Protocol Buffers 是这里使用的消息定义和编码工具。`protoc` 配合 gRPC C++ 插件，可以从 `file.proto` 生成消息类、客户端 Stub 和服务端接口。
+
+| 生成的部分             | 在本例中的用途                        |
+| ---------------------- | ------------------------------------- |
+| `GetFileSizeRequest`   | 填写或读取文件路径，支持编码与解析    |
+| `GetFileSizeResponse`  | 填写或读取文件大小，支持编码与解析    |
+| `FileService::Stub`    | 让客户端发起 `GetFileSize` 调用       |
+| `FileService::Service` | 让服务端实现 `GetFileSize` 的业务处理 |
+
+通常能看到 `file.pb.h/.cc` 和 `file.grpc.pb.h/.cc` 这些生成文件。业务开发者调用生成的接口，并编写真正的文件查询逻辑；框架负责把这些接口接到通信流程上。生成过程可对照 [gRPC C++ Basics](https://grpc.io/docs/languages/cpp/basics/#generating-client-and-server-code)。
+
+双方也可以使用不同的受支持语言：各自生成代码，通过共同的接口和消息格式协作。跨机器传输的是约定的数据，不要求两边有相同的 C++ 对象布局。
+
+</SlideCard>
+
+## gRPC C++ 接口
+
+下面的代码用于阅读调用路径，依赖前面的 `file.proto` 生成代码和 gRPC C++ 环境，省略头文件、`main` 及完整启动与退出流程。它们不是独立的可运行工程。
+
+<SlideCard title="客户端：把一次查询写完整">
+
+## 从目标地址到调用结果
+
+`storage.example:50051` 是示意地址：主机名代表文件服务器，端口 `50051` 对应它提供的 RPC 服务。实际项目会使用自己的地址或服务发现配置。
+
+```cpp
+void QueryFileSize() {
+    auto channel = grpc::CreateChannel(
+        "storage.example:50051",
+        grpc::InsecureChannelCredentials());
+    auto stub = demo::FileService::NewStub(channel);
+
+    demo::GetFileSizeRequest request;
+    request.set_path("report.txt");
+    demo::GetFileSizeResponse response;
+
+    grpc::ClientContext context;
+    context.set_deadline(
+        std::chrono::system_clock::now() +
+        std::chrono::seconds(2));
+
+    grpc::Status status = stub->GetFileSize(
+        &context, request, &response);
+
+    if (!status.ok()) {
+        std::cerr << status.error_message() << '\n';
+        return;
+    }
+
+    std::cout << response.size_bytes() << '\n';
+}
+```
+
+先找到中间的 `stub->GetFileSize(...)`。它就是前面一直讨论的调用点：将请求交给本地 Stub，等待这次 RPC 结束，取得状态，再读取结果。成功响应的示意输出为 `4096`。
+
+再把周围的对象放回调用流程：
+
+| 名字       | 为什么需要它                                       |
+| ---------- | -------------------------------------------------- |
+| `channel`  | 配置通信目标并管理连接相关状态，解决“联系哪个服务” |
+| `stub`     | 提供 `GetFileSize` 这个本地调用入口                |
+| `request`  | 保存本次要传过去的文件路径                         |
+| `response` | 保存本次接收到的文件大小                           |
+| `context`  | 保存本次调用的设置，例如截止时间                   |
+| `status`   | 表示这次调用最终怎样结束                           |
+
+创建 Channel 和 Stub 不代表远端查询已经执行。它们也可以由外层对象持有并复用，不必每次查询都重新创建；这里放在一起，是为了看到一次调用需要哪些部分。`ClientContext` 则应为每次调用单独创建。
+
+示例中的 `InsecureChannelCredentials()` 表示这条 Channel 不使用 TLS。接口用法见 [gRPC C++：Creating the client](https://grpc.io/docs/languages/cpp/basics/#creating-the-client)。
+
+</SlideCard>
+
+<SlideCard title="服务端：执行哪个函数？">
+
+## 读取请求，填写响应
+
+在文件服务进程中，我们实现生成的服务端接口。为了让输入与输出一眼可见，下面用固定数据模拟查询：只认识 `report.txt`，它的大小是 `4096`。实际业务会在这里查询文件系统或元数据。
+
+```cpp
+class FileServiceImpl final
+    : public demo::FileService::Service {
+public:
+    grpc::Status GetFileSize(
+        grpc::ServerContext* context,
+        const demo::GetFileSizeRequest* request,
+        demo::GetFileSizeResponse* response) override {
+        if (request->path() != "report.txt") {
+            return grpc::Status(
+                grpc::StatusCode::NOT_FOUND, "file not found");
+        }
+
+        response->set_size_bytes(4096);
+        return grpc::Status::OK;
+    }
+};
+```
+
+方法读取服务端的请求对象，填写服务端的响应对象，并返回状态。对于同步服务端接口，框架会接着发送响应和状态。
+
+继承 `FileService::Service` 并重写方法，是把业务实现接到生成的接口上。服务启动时还要把这个实例注册给 gRPC Server，并监听端口；这样框架才知道把收到的 `GetFileSize` 请求交给谁处理。仅仅声明这个类，不会自动开放一个网络服务。
+
+<details>
+<summary>展开：服务实例怎样交给服务器？</summary>
+
+下面展示启动代码的关键关系，仍然是省略外围代码的阅读片段：
+
+```cpp
+FileServiceImpl service;
+grpc::ServerBuilder builder;
+builder.AddListeningPort(
+    "0.0.0.0:50051", grpc::InsecureServerCredentials());
+builder.RegisterService(&service);
+
+auto server = builder.BuildAndStart();
+if (!server) {
+    throw std::runtime_error("failed to start server");
+}
+server->Wait();
+```
+
+`RegisterService(&service)` 把处理实现交给框架；`BuildAndStart()` 启动服务。服务对象需要在服务器使用它期间保持存活。`Wait()` 等待服务器关闭，完整程序还需要自己的关闭安排。
+
+这一段运行在服务端。客户端代码中的主机名需要能找到这台服务器，两边使用对应的端口和通信配置。
+
+</details>
+
+服务端实现与注册过程可对照 [gRPC C++：Creating the server](https://grpc.io/docs/languages/cpp/basics/#creating-the-server)。
+
+</SlideCard>
+
+<Note title="把代码与消息重新对应起来" class="title-underline">
+
+## 两个 `GetFileSize`，两份 `response`
+
+客户端和服务端都有 `GetFileSize`，名字相同是为了表达同一个操作。客户端执行的是 Stub 的方法；服务器收到消息以后，在自己的线程中调用 `FileServiceImpl::GetFileSize`。
+
+客户端传入 `&response`，服务端也拿到一个响应指针。这两个指针都用于各自进程内的函数调用，指向各自的对象。框架把服务端填写的 `4096` 编码发回，再填入客户端的 `response`。
+
+到这里，可以沿着同一个值读完整条路径：
+
+```text
+客户端填入 path = "report.txt"
+→ 框架发送请求
+→ 服务端 request->path() 得到 "report.txt"
+→ 服务端填入 size_bytes = 4096
+→ 框架返回响应
+→ 客户端确认 status.ok()，再读取 response.size_bytes()
+```
+
+</Note>
+
+## 阅读工作中的 RPC 代码
+
+<SlideCard title="从调用点向两边追">
+
+## 带着具体问题读
+
+回到项目里看到一个 RPC 调用时，可以先沿着这条路线找：
+
+- **它要联系谁？** 找客户端对象的创建位置，以及 Channel、地址或服务发现配置。
+- **它把什么交给对方？** 找接口定义和请求字段，确认实际填写的值。
+- **远端在哪里处理？** 找对应的服务端方法实现，区分生成代码与业务代码。
+- **结果什么时候可用？** 看同步返回、完成回调或完成事件，再找状态检查与错误处理。
+
+如果项目封装了多层 SDK，先顺着一个方法找到这四处。连接池、负载均衡和底层网络实现，可以在调用路径清楚之后按问题继续追。
+
+<details>
+<summary>用本例自查：改了文件名之后，哪些事情会变化？</summary>
+
+把客户端的 `request.set_path("report.txt")` 改成 `request.set_path("missing.txt")`：发送的参数会变化，服务端读取到的新路径不匹配固定示例，于是返回 `NOT_FOUND`。客户端的 `status.ok()` 为假，执行错误分支，不把响应中的默认大小当作有效结果。
+
+如果请求的仍是 `report.txt`，但客户端无法及时取得响应，那么可能得到超时。仅凭这个状态，无法确定服务端是否已经执行完查询。
+
+这两个结果分别对应“远端明确回答了什么”和“调用方是否及时取得了回答”。读懂这一点，比记住全部框架类名更能帮助分析实际问题。
+
+</details>
+
+</SlideCard>
+
+<CoreCard
+    title="对照现成代码"
+    href="https://grpc.io/docs/languages/cpp/basics/"
+    path="examples/cpp/route_guide"
+    class="title-underline"
+>
+
+## 读一个同步方法就够开始
+
+gRPC 官方的 Route Guide 示例使用地理位置查询。可以先只追 `GetFeature` 这一条调用，把它与本文的 `GetFileSize` 对照：
+
+- `route_guide.proto`：方法的输入和输出分别是什么？
+- `route_guide_client.cc`：请求字段在哪里填写，结果在哪里读取？
+- `route_guide_server.cc`：对应的处理函数做了什么？
+
+先读懂一个方法的往返，再扩展到同一个项目中的其他调用。教程入口：[gRPC C++ Basics](https://grpc.io/docs/languages/cpp/basics/)。
+
+</CoreCard>
+
+## 进阶：异步 API 与重试
+
+下面补充工作代码里可能遇到的细节。可以在需要时展开，主线中的同步与异步概念并不依赖先掌握这些 API。
+
+<Note title="按问题展开" class="title-underline">
+
+<details>
+<summary>gRPC C++ 的异步回调怎样取得结果？</summary>
+
+下面使用前面的 `FileService` 和一个由外层持有的 Stub。它对应的是“一次请求、一次响应”的 Unary RPC。代码是阅读片段，省略外围函数及程序退出时的等待逻辑。
+
+```cpp
+struct CallState {
+    grpc::ClientContext context;
+    demo::GetFileSizeRequest request;
+    demo::GetFileSizeResponse response;
+};
+
+auto call = std::make_shared<CallState>();
+call->request.set_path("report.txt");
+call->context.set_deadline(
+    std::chrono::system_clock::now() + std::chrono::seconds(2));
+
+stub->async()->GetFileSize(
+    &call->context, &call->request, &call->response,
+    [call](grpc::Status status) {
+        if (status.ok()) {
+            std::cout << call->response.size_bytes() << '\n';
+        } else {
+            std::cerr << status.error_message() << '\n';
+        }
+    });
+// 发起后可以继续安排不依赖本次结果的工作。
+```
+
+`CallState` 保存本次调用要用的 Context、请求和响应。lambda 按值捕获 `shared_ptr`，让这些对象一直存活到回调处理结束，避免外层局部变量先销毁，而 RPC 还在使用它们。
+
+这只是对象生命周期安排。程序仍然需要等待正在进行的调用完成，再退出；`shared_ptr` 不能阻止进程结束。回调之外的代码如果要取得结果，也需要明确的同步方式，不能在响应仍被填写时直接读取它。
+
+取消或超时后也要处理最终完成通知，再按对应 API 的约定释放状态。不要假设回调发生在发起线程，也不要假设多个调用按发起顺序完成。回调应尽量简短，避免长时间阻塞处理线程；同时需要限制尚未完成的调用数量。
+
+示例对应 [Callback tutorial：Unary client](https://grpc.io/docs/languages/cpp/callback/#client)。当前 gRPC C++ 的 [Best Practices](https://grpc.io/docs/languages/cpp/best_practices/)推荐使用 Callback API；已有项目也可能使用下面的 CQ API。
+
+</details>
+
+<details>
+<summary>Completion Queue 是什么？为什么异步代码里还有等待？</summary>
+
+Completion Queue，简称 CQ，是另一套取得异步完成通知的方式。可以把它理解为一个完成事件队列：先登记要做的事，再从队列取出通知，识别哪个操作已经完成。
+
+| 在 Unary 客户端中看到的代码       | 对应的动作                               |
+| --------------------------------- | ---------------------------------------- |
+| `AsyncGetFileSize(...)`           | 发起调用，并把它关联到 CQ                |
+| `Finish(&response, &status, tag)` | 安排接收最终响应和状态，登记一个完成标识 |
+| `cq.Next(&tag, &ok)`              | 等待并取出一个完成事件                   |
+
+`tag` 用来识别完成的是哪个操作。对应 `Finish` 的事件被取出后，才读取这次调用的最终响应和状态。
+
+这里容易混淆三个判断：
+
+- `Next(...)` 返回 `true`：取到了事件。返回 `false` 则表示 CQ 已关闭并且事件已取完，不代表某次 RPC 失败。
+- 输出参数 `ok`：含义取决于事件类型。客户端 `Finish` 的完成事件按 API 约定应为 `true`，即使这次 RPC 最终失败。
+- `status.ok()`：本次 RPC 的最终状态是否为 `OK`。取得完成事件后，还要检查它。
+
+`Next` 本身会阻塞等待事件。如果在同一线程里发起一个调用后立刻等它，这段流程仍然要等待。也可以先发起多个独立调用，再取完成事件，或者用专门线程处理 CQ，让其他工作继续进行。
+
+所以异步表示“发起”和“完成处理”分开；程序最终仍然需要在合适的位置接收结果。流程见 [gRPC C++ Async tutorial](https://grpc.io/docs/languages/cpp/async/)，事件语义见 [`CompletionQueue::Next`](https://grpc.github.io/grpc/cpp/classgrpc_1_1_completion_queue.html)。
+
+</details>
+
+<details>
+<summary>客户端异步，服务端也必须异步吗？</summary>
+
+在服务定义和 gRPC 协议兼容的前提下，两边可以独立选择 API。
+
+| 客户端 API | 服务端 API | 客户端怎样取得结果           |
+| ---------- | ---------- | ---------------------------- |
+| 同步       | 同步或异步 | 在调用点等待，结束后检查状态 |
+| 异步       | 同步或异步 | 通过回调或完成事件检查状态   |
+
+服务端的同步处理函数填写响应并返回状态；CQ 服务端通过事件推进处理，调用 responder 的 `Finish(...)`；Callback 服务端通过 Reactor 接口提交完成结果。自定义 Reactor 在 `OnDone()` 中处理最终清理，默认 Reactor 则由框架管理。具体写法见 [Callback tutorial：Unary server](https://grpc.io/docs/languages/cpp/callback/#server)。
+
+服务端即使采用异步 RPC 接口，业务函数也可能同步等待磁盘或数据库。分析等待时，要沿着实际调用路径看。
+
+另外，Unary / streaming 描述一次 RPC 交换多少请求和响应消息；同步 / 异步描述应用怎样发起并取得结果。这是两个不同的维度：Unary RPC 同样可以使用异步 API。
+
+</details>
+
+<details>
+<summary>RPC、gRPC、Protocol Buffers、HTTP 分别处在哪一层？</summary>
+
+| 名称             | 在本文中的作用                         |
+| ---------------- | -------------------------------------- |
+| RPC              | 把对远端操作的请求组织成一次调用       |
+| gRPC             | 提供具体的 RPC 框架和调用协议          |
+| Protocol Buffers | 描述消息结构，支持代码生成、编码与解析 |
+| HTTP/2           | 标准 gRPC 用来交换请求与响应的协议     |
+
+标准 gRPC 使用 HTTP/2，常用 Protocol Buffers 作为消息格式。因此，“使用 HTTP”和“采用 RPC 调用方式”可以同时成立。RPC 这个概念本身并不限定只能使用某一种编码或传输协议。见 [gRPC FAQ](https://grpc.io/docs/what-is-grpc/faq/)。
+
+</details>
+
+<details>
+<summary>超时后为什么不能一律重试？</summary>
+
+查询文件大小不修改文件，重复读取通常不会产生额外的修改，但文件可能在两次查询之间变化，因此两次结果未必相同。
+
+现在让文件服务再提供一个操作：向文件末尾追加一行。假设它的请求含义是：
+
+```text
+AppendText(path="report.txt", text="hello\n")
+```
+
+服务端可能已经追加成功，响应却没及时到达，客户端于是超时。此时再发一次相同请求，文件里可能出现两行 `hello`。这个例子把前面的不确定性变成了实际后果：**一次超时之后，重试可能重复执行已经成功的修改。** [gRPC 的 `DEADLINE_EXCEEDED` 定义](https://grpc.io/docs/guides/status-codes/)也明确保留了这种可能。
+
+幂等性（Idempotency）关注的是：同一个操作重复执行，对业务状态的预期效果是否与执行一次相同。追加一行通常不满足这个条件；幂等也不要求每次响应、日志都完全相同。
+
+业务可以约定操作标识 `operation_id`：同一次追加的重试沿用同一个 ID 和相同参数，新的追加操作使用新 ID。服务端识别已经完成的操作，返回对应结果。要在并发、崩溃和重启后仍然正确，去重记录还需要与业务修改协调持久化和提交；只加一个 ID 字段并不足够。更完整的案例见[《分布式基础：RPC 和远程调用》](/blog/distributed-foundation-rpc-remote-call/)。
+
+还要先判断错误是否值得重试。例如文件不存在，重复查询通常不能解决问题。允许重试时，也要限制次数、整体时间预算，并通过退避与随机间隔避免请求集中重发。具体机制见 [gRPC Retry](https://grpc.io/docs/guides/retry/)。
+
+取消同样不会自动撤销已经追加的内容。服务端响应取消的边界可对照 [gRPC Cancellation](https://grpc.io/docs/guides/cancellation/)。
+
+</details>
+
+</Note>
+
+</div>
