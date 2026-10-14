@@ -1,0 +1,18 @@
+.io-lecture {
+	counter-reset: io-chapter;
+}
+
+.io-lecture > h2 {
+	counter-increment: io-chapter;
+	margin: 0;
+	padding: 1rem 0 0.25rem;
+	color: inherit;
+	font-family: var(--font-heading);
+	font-size: 1.25rem;
+	font-weight: 700;
+	line-height: 1.75rem;
+}
+
+.io-lecture > h2::before {
+	content: counter(io-chapter) '. ';
+}

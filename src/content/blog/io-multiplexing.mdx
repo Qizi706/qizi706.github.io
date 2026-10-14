@@ -1,0 +1,776 @@
+---
+title: 'select、poll 与 epoll：一个线程怎样照看多个连接'
+description: '从一次 socket 读取开始，理解阻塞、非阻塞和 I/O 多路复用，再走进 epoll 的就绪通知、LT 与 ET、缓冲区和事件循环，最后接上异步 RPC 与 Muduo 的真实代码。'
+pubDate: '2026-10-10'
+readingOrder: 4
+readingNote: '通信机制：从 socket 就绪走到事件循环与异步 RPC'
+categories:
+  - '分布式'
+tags:
+  - '网络'
+  - 'Linux'
+  - 'I/O 多路复用'
+  - 'epoll'
+  - 'RPC'
+draft: false
+mathjax: false
+---
+
+import ArticleImage from '../../components/ArticleImage.astro';
+import ReadinessFlow from '../../assets/io-multiplexing/readiness-flow.svg';
+import '../../assets/io-multiplexing/lecture.css';
+
+<div className="io-lecture">
+
+> 系列入口：[分布式阅读路径](/category/分布式/)。 前置：[RPC 入门](/blog/rpc-introduction/)。 下一篇：[RPC 和远程调用](/blog/distributed-foundation-rpc-remote-call/)。
+
+在 [RPC 入门](/blog/rpc-introduction/)里，笔记本向文件服务查询 `report.txt` 的大小。异步接口允许调用线程先继续做其他事，响应回来后再处理结果。
+
+这里还缺了一段解释：**如果同时发起一百次查询，客户端要创建一百个线程，分别等在网络连接上吗？** 如果不用，哪个线程会发现响应到了，又怎样找到应该执行的回调？
+
+`select`、`poll`、`epoll` 就处在这条链路的底层。它们帮助程序等待多个 I/O 对象的就绪状态。理解它们，要先分清“现在能读”“读到了字节”“拼出了消息”和“这次调用结束了”。
+
+<Note title="阅读范围" class="title-underline">
+
+## 从会读 C++，到能追踪一次网络事件
+
+本文只要求能读函数调用、循环和简单的错误处理。`fd`、socket、就绪通知和事件循环都会在使用前解释。
+
+- 前半篇围绕两个连接，比较阻塞读取、`select`、`poll` 和 `epoll`，再用相同的数据说明 LT 与 ET。
+- 后半篇补齐接收、发送、关闭与线程协作，把底层通知接回异步 RPC，并给出 Muduo 的源码阅读入口。
+- 文末提供一个可直接运行的小实验和自测题。正文中的片段用于说明机制；完整实验单独提供源码，不需要实现网络框架。
+
+主要讨论 **Linux 上的普通流式 socket I/O**。`select`、`poll` 的实验也可在 macOS 运行；`epoll` 是 Linux 接口。UDP、RDMA 和磁盘 I/O 不直接套用全部结论。
+
+</Note>
+
+## 从 socket 和一次读取开始
+
+<SlideCard title="先把连接放到程序里">
+
+## `fd` 到底代表什么？
+
+socket 是操作系统提供的通信端点。程序通过它收发数据。这里先假定 TCP 连接已经建立；连接的创建和建立稍后再补。
+
+在 Linux 的 C/C++ 接口里，程序用一个整数标识自己打开的资源，这个整数叫作 **文件描述符，file descriptor，简称 fd**。socket、文件、管道都可以通过 fd 操作。
+
+例如，`fd = 7` 可以代表本进程中通向文件服务的一个 socket。它既不是远端的端口号，也不是全系统唯一的连接编号。另一个进程中的 `7` 可以代表完全不同的资源；关闭后，这个数字还可能被重新使用。
+
+先记住一层关系：业务上的“这条连接”，在系统调用里往往表现为一个 fd。系统调用是程序请求内核完成某项工作的接口。
+
+</SlideCard>
+
+<SlideCard title="收到的数据先在哪里？">
+
+## `recv` 把字节读到自己的内存
+
+在本文讨论的普通接收路径中，到达本机的 TCP 数据由内核处理，暂存在 socket 的接收缓冲区。应用随后调用 `recv`，把可用字节取到自己的缓冲区。
+
+下面是一个读取片段，`fd` 是已连接的流式 socket：
+
+```cpp
+char buffer[1024];
+ssize_t n = recv(fd, buffer, sizeof buffer, 0);
+```
+
+`sizeof buffer` 表示这次最多接收多少字节，`0` 表示没有指定额外的接收标志。`ssize_t` 是有符号整数类型，因为返回值还需要表达失败。
+
+对这个**读取长度大于零**的流式 socket 调用，应这样检查结果：
+
+| 返回结果  | 含义                                                                            |
+| --------- | ------------------------------------------------------------------------------- |
+| `n > 0`   | 这次实际取到了 `n` 个字节，只能使用 `buffer[0..n)`                              |
+| `n == 0`  | 接收方向到达 EOF（End of File，输入结束），对端已结束发送，之前的数据也已经读完 |
+| `n == -1` | 检查 `errno`，区分暂时不可读、中断和真正的错误                                  |
+
+即使数组有 1024 字节，`recv` 也可能只返回 7。它不会因为数组大，就默认等到装满才返回；收到的内容也不会自动补上字符串结尾的 `\0`。[recv(2)](https://man7.org/linux/man-pages/man2/recv.2.html) 定义了这些返回语义。
+
+`errno` 用于给出失败原因，在这里仅当 `recv` 返回 `-1` 时检查；调用成功后，不能拿它之前留下的值判断本次失败。
+
+这里说的是字节数量，还没有涉及“这一条 RPC 响应是否完整”。
+
+</SlideCard>
+
+## 一个线程怎样等多个连接
+
+<SlideCard title="A 没有动静，B 已经回答了">
+
+## 顺序读取会卡在哪里？
+
+现在笔记本分别连接文件服务 A 和 B，已经向两边发出了独立的查询。先用两个连接把问题看清楚；现实中多个 RPC 也可能共用同一条连接。
+
+| 连接          | 此刻的接收缓冲区 | 远端状态       |
+| ------------- | ---------------- | -------------- |
+| A，记作 `fdA` | 空               | 还没有送来响应 |
+| B，记作 `fdB` | 已有响应字节     | 已经开始回答   |
+
+如果 socket 使用默认的阻塞模式，下面这个示意片段会发生什么？
+
+```cpp
+recv(fdA, bufferA, sizeof bufferA, 0);
+recv(fdB, bufferB, sizeof bufferB, 0);
+```
+
+在 A 没数据、没有关闭或错误、也没有其他因素结束等待时，第一行会让**当前线程睡眠，等在 A 上**。B 的数据可以继续进入内核缓冲区，但这个线程还执行不到第二行。
+
+睡眠不是不断执行指令检查 A。操作系统可以把 CPU 交给别的可运行线程。问题在于：当前线程不能继续照看 B。
+
+为 A、B 各建一个线程当然能解决顺序等待。连接很多时，还要承担线程栈、调度和共享状态协调的成本；“一个连接一个线程”是一种模型，并非网络通信必须这样安排。
+
+</SlideCard>
+
+<SlideCard title="先让读取立即给出结果">
+
+## 非阻塞解决了哪一半？
+
+给 socket 设置 `O_NONBLOCK` 后，如果当前没有字节可取、也没有 EOF 或错误，`recv` 会立即返回 `-1`，并把 `errno` 设为 `EAGAIN` 或 `EWOULDBLOCK`。
+
+含义是：“这次暂时读不到，稍后再试。”它不表示连接已经断开。
+
+设置时应保留已有的状态标志。下面仍是片段，实际程序需要检查两次 `fcntl` 是否失败：
+
+```cpp
+int flags = fcntl(fd, F_GETFL, 0);
+fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+```
+
+这些标志的含义见 [F_GETFL / F_SETFL](https://man7.org/linux/man-pages/man2/F_GETFL.2const.html)。
+
+现在可以轮流尝试 A、B，不会因为 A 没数据而停住。不过，如果写成一个不停尝试所有连接的循环，大部分调用都只得到“没有”，CPU 仍然很忙。加入固定的 `sleep` 又会引入额外响应延迟。
+
+缺少的能力是：**等到这些连接中有值得处理的情况，再回来继续执行。**
+
+</SlideCard>
+
+<SlideCard title="把等待的对象，从一个换成一组">
+
+## I/O 多路复用
+
+程序把 A、B 一起交给内核，声明自己关心“可读”。没有事件时，可以在这一组对象上等待；B 可读时，等待返回，程序直接处理 B。
+
+**就绪，readiness**，描述的是对应 I/O 操作当前不必继续等待，例如已有字节可读，或者读取可以立即得到 EOF。它并不承诺一次操作就能取得完整消息。
+
+这就是这里的 **I/O 多路复用，I/O multiplexing**：“多路”是多个 I/O 对象，“复用”是同一个线程可以交替推进它们，不必分别阻塞在每个连接上。
+
+`select`、`poll`、`epoll` 都能承担这种等待。它们并不自动执行后续的 `recv`，也不会替程序调用业务回调。一次等待之后做什么，由应用代码决定。
+
+一种常见组合是：
+
+- 没有可处理的工作时，在多路复用接口里等待，减少空转。
+- 有就绪事件时，用非阻塞 socket 处理当前能推进的部分。
+- 暂时无法继续，就保存进度，转去照看别的连接。
+
+所以，**socket 非阻塞，与等待事件的函数可以阻塞，并不矛盾**。前者防止卡在某一条连接的读写上，后者集中等待整组连接。
+
+</SlideCard>
+
+## select 与 poll 怎样表达等待
+
+<SlideCard title="select：传入集合，取回就绪子集">
+
+## `fd_set` 会被改写
+
+下面关注 A、B 的可读状态，最多等待一秒。代码省略头文件和错误分支；`HandleReadable` 是应用自己的处理函数，不是系统接口。
+
+```cpp
+fd_set reads;
+FD_ZERO(&reads);
+FD_SET(fdA, &reads);
+FD_SET(fdB, &reads);
+
+timeval timeout{1, 0};
+int count = select(std::max(fdA, fdB) + 1,
+                   &reads, nullptr, nullptr, &timeout);
+
+if (count > 0) {
+    if (FD_ISSET(fdA, &reads)) HandleReadable(fdA);
+    if (FD_ISSET(fdB, &reads)) HandleReadable(fdB);
+}
+```
+
+`FD_ZERO` 清空集合，`FD_SET` 加入 fd，`FD_ISSET` 检查返回后哪些 fd 仍在集合里。两个 `nullptr` 表示不关注可写集合和异常条件集合。
+
+有两个细节很容易读错：
+
+- 第一个参数是**最大 fd 加一**，不是连接数量。假设只关注 `7` 和 `900`，这里也要传 `901`。
+- `reads` 是输入，也是输出。返回后它只保留就绪项；循环下一轮要重新准备关注集合。超时对象也应重新初始化。
+
+Linux 常见的 glibc `fd_set` 受 `FD_SETSIZE = 1024` 限制，要求放入的 **fd 数值小于 1024**。即使只监视两个 socket，其中一个 fd 是 1200，也不能直接塞进去。这不能简化成“整个 Linux 最多支持 1024 个连接”。详见 [select(2)](https://man7.org/linux/man-pages/man2/select.2.html)。
+
+</SlideCard>
+
+<SlideCard title="poll：每个 fd 带上自己的事件字段">
+
+## `events` 与 `revents`
+
+`poll` 使用数组描述等待对象。每项中的 `events` 是程序关心什么，`revents` 是内核这次报告了什么。
+
+```cpp
+pollfd fds[] = {
+    {fdA, POLLIN, 0},
+    {fdB, POLLIN, 0},
+};
+
+int count = poll(fds, 2, 1000);
+
+if (count > 0) {
+    for (const auto& item : fds) {
+        if (item.revents != 0) {
+            HandleEvents(item.fd, item.revents);
+        }
+    }
+}
+```
+
+这是分发事件的片段，`HandleEvents` 需要检查事件位并执行读写或错误处理。`POLLIN` 表示可读事件，`POLLOUT` 表示可写事件；关闭和错误稍后单独讨论。
+
+这里的 `2` 才是数组元素数量。`1000` 的单位是毫秒；传 `0` 表示立即检查，传 `-1` 表示不设置等待时限。`poll` 返回正数表示有事件的数组项数量，`0` 表示超时，`-1` 表示失败，需要查看 `errno`。
+
+事件字段是位掩码，一个 fd 可以同时出现多个事件，所以检查某一位要写 `revents & POLLIN`，不能假设整个值恰好等于 `POLLIN`。
+
+相较于 `select`，数组避免了固定 `fd_set` 的数值范围问题，也把输入、输出事件分开了。不过，每次调用仍然传入整个数组，返回后程序仍要检查各项。接口约定见 [poll(2)](https://man7.org/linux/man-pages/man2/poll.2.html)。
+
+</SlideCard>
+
+到这里，先别急着背性能表。两者都让线程一次等一组 fd；它们传递和返回这组信息的方式不同。
+
+## epoll 怎样保存关注列表
+
+<SlideCard title="把登记和等待拆开">
+
+## 三个接口，各做一件事
+
+如果长期维护很多连接，每次等待都重新提交完整的关注列表，会重复处理大量不变的信息。`epoll` 把“关注谁”保存在内核中的一个实例里，连接或关注事件变化时再更新。
+
+| 接口            | 程序告诉内核什么                              |
+| --------------- | --------------------------------------------- |
+| `epoll_create1` | 创建一个 epoll 实例，返回代表它的 fd          |
+| `epoll_ctl`     | 用 `ADD`、`MOD`、`DEL` 增加、修改或移除关注项 |
+| `epoll_wait`    | 等待事件，把这一批就绪项写入应用提供的数组    |
+
+因此，`epoll` 是一组 API 的名字。平时说“阻塞在 epoll 上”，通常指线程正在调用 `epoll_wait`。
+
+从使用者的角度，可以把实例理解为保存了两组信息：**关注集合**回答“要照看谁”，**就绪集合**回答“谁有值得处理的事件”。这个模型来自 [epoll(7)](https://man7.org/linux/man-pages/man7/epoll.7.html)。
+
+</SlideCard>
+
+<SlideCard title="登记一次，再等待多轮">
+
+## 返回的是事件，正文还要自己读
+
+下面是接口关系片段：假定 `fdA`、`fdB` 已设为非阻塞；为突出流程，省略失败检查和退出清理。`Dispatch` 是应用自己的事件分发函数。
+
+```cpp
+int epfd = epoll_create1(EPOLL_CLOEXEC);
+
+for (int fd : {fdA, fdB}) {
+    epoll_event item{};
+    item.events = EPOLLIN;
+    item.data.fd = fd;
+    epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &item);
+}
+
+epoll_event events[16];
+while (running) {
+    int count = epoll_wait(epfd, events, 16, -1);
+    if (count < 0) {
+        if (errno == EINTR) continue;
+        break;  // 实际程序在这里报告并处理错误
+    }
+    for (int i = 0; i < count; ++i) {
+        Dispatch(events[i].data.fd, events[i].events);
+    }
+}
+```
+
+`EPOLL_CLOEXEC` 用于让这个 epoll fd 在成功执行 `exec` 时自动关闭；它不决定 LT 或 ET。`16` 是一次最多取回多少项，也不是系统最多支持多少连接。[epoll_wait(2)](https://man7.org/linux/man-pages/man2/epoll_wait.2.html) 说明了批量返回与超时语义。
+
+`item.data.fd` 是我们登记的关联信息，事件返回时方便找回连接。它所在的 `data` 联合体也能保存指针或整数标识，但一次应选择一种解释。内核不理解这个指针指向什么业务对象，更不会替你调用它。[epoll_ctl(2)](https://man7.org/linux/man-pages/man2/epoll_ctl.2.html) 定义了登记结构。
+
+注意这里没有 `recv`：**拿到了 B 的可读事件，B 的响应字节仍然需要程序读取。**
+
+</SlideCard>
+
+<ArticleImage
+	src={ReadinessFlow}
+	alt="内核中 socket B 的接收缓冲区出现部分响应字节，epoll 返回可读通知；应用线程随后调用 recv，把字节放入应用缓冲区，再继续组装消息。"
+	width={688}
+	caption="蓝色表示通知与控制，绿色表示字节流动。SIZE 40 是教学用文本响应的片段，并非 gRPC 的线格式。"
+/>
+
+### 内核也在不停扫描所有连接吗？
+
+以 Linux v6.12 的实现为例，登记时会把 epoll 的内核等待机制接到目标对象上。相关 I/O 活动发生后，内核中的通知路径可以把关注项加入就绪链表，并唤醒等待线程；获取事件时还会检查就绪状态。注册时已经就绪的对象也能被发现，不需要等下一次网络数据到达。
+
+想继续对照实现，可以看 [`fs/eventpoll.c`](https://github.com/torvalds/linux/blob/v6.12/fs/eventpoll.c) 中的 `ep_insert`、`ep_poll_callback` 和 `ep_send_events`。这里的 callback 是**内核内部的通知函数**，和 RPC 客户端保存的业务回调不是同一个东西。内核也不会因为登记了一个 fd，就为它创建一个等待线程。
+
+### 为什么不把差异背成 O(n) 和 O(1)？
+
+设关注的连接数为 N，这一轮返回的事件数为 K。`poll` 每次提交并检查 N 项；`epoll` 复用关注集合，让应用主要处理返回的 K 项。**连接很多、每轮活跃连接较少**时，这个差别尤其有意义。
+
+但登记和修改关注项、维护就绪状态、锁竞争、返回事件以及实际读写仍然有成本。K 很大时，应用也得逐项处理；连接很少或频繁变动时，接口选择的收益需要测量。不能由此推出“epoll 的全部工作恒定耗时”或者“换成 epoll 就一定更快”。
+
+`epoll` 也不等于零拷贝。它交付就绪信息，不会自动消除普通 `recv` 路径中的数据复制。
+
+## LT 与 ET 为什么要求不同的读法
+
+<SlideCard title="读了一半，剩下的还会提醒吗？">
+
+## 同样剩下五个字节，不同的通知约定
+
+LT 是 **Level-triggered，水平触发**，也是 epoll 的默认模式。只要被关注的就绪条件仍然成立，后续等待就可以继续报告它。
+
+ET 是 **Edge-triggered，边缘触发**，登记时加上 `EPOLLET`。处理过一次通知后，不能仅仅因为缓冲区还有数据，就指望下一轮一定再收到提醒。
+
+用一个受控过程理解：对端写入 `abcdefgh`，共 8 字节；程序取得第一次可读通知，只读出 `abc`，随后对端没有再发送，也没有其他线程读取。
+
+| 程序走到哪里             | 接收缓冲区 | LT 下再次等待 | ET 下再次等待    |
+| ------------------------ | ---------- | ------------- | ---------------- |
+| 还没收到数据             | 空         | 等待          | 等待             |
+| 8 字节到达，取得首次通知 | `abcdefgh` | 本次报告可读  | 本次报告可读     |
+| 只读 3 字节后再等        | `defgh`    | 仍可报告可读  | 不能依赖再次通知 |
+| 一直读到暂时无数据       | 空         | 等待后续变化  | 等待后续变化     |
+
+ET 程序如果此时直接回到无限期等待，就可能把剩下的 `defgh` 留在那里。若对端又在等你处理完这条消息并回复，双方就都不再前进。
+
+这正是 [epoll(7) 的 LT/ET 说明](https://man7.org/linux/man-pages/man7/epoll.7.html) 用部分读取展示的问题。
+
+</SlideCard>
+
+<SlideCard title="先处理当前能做的，再回去等待">
+
+## 非阻塞读取为什么要循环到 `EAGAIN`？
+
+下面是典型读循环的结构片段。`OnBytes`、`OnReadEof`、`OnReadError` 代表应用处理，不是系统接口；假定这个函数执行期间连接有效，只有当前线程读取它。
+
+```cpp
+void HandleReadable(int fd) {
+    char buffer[4096];
+    for (;;) {
+        ssize_t n = recv(fd, buffer, sizeof buffer, 0);
+        if (n > 0) {
+            OnBytes(buffer, n);
+            continue;
+        }
+        if (n == 0) {
+            OnReadEof();
+            return;
+        }
+        if (errno == EINTR) continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return;
+        OnReadError(errno);
+        return;
+    }
+}
+```
+
+`EINTR` 表示这次调用被信号中断；在这里重新尝试。`EAGAIN` 表示当前没有更多字节，可以保存解析进度，把执行机会交还给事件循环。
+
+如果 fd 仍是阻塞的，最后一次 `recv` 就可能在“已经读空”后睡着，把整个事件循环卡住。这解释了 ET 通常要配合非阻塞 socket 使用的原因。
+
+LT 也常使用非阻塞读取。就绪只是一个时刻的状态，不是把数据预留给某个线程的承诺；到真正读取时，数据可能已被别的执行路径取走。读取结果始终要重新检查。
+
+</SlideCard>
+
+### ET 有两个容易误背的说法
+
+“ET 每来一个网络包通知一次”不成立。TCP 字节、网络包、系统调用和应用消息没有这样的一一对应，通知也可能合并。
+
+“只在不可读变为可读时通知，此后任何新数据都不会再通知”也过于绝对。新 I/O 活动仍可能触发通知。写程序时应依赖的规则是：**不要把尚未处理完的数据，寄托在一次并不保证到来的下一次通知上。**
+
+<details>
+<summary>持续有数据时，一直读到 EAGAIN 会不会饿死其他连接？</summary>
+
+可能。一个很活跃的连接，或者一次读取后执行了大量解析和业务计算，都可能占用事件循环太久。
+
+框架可以给单次处理设置字节数、消息数或时间预算。LT 下，尚未消失的就绪条件可以继续被报告；ET 下，如果预算用完时还没读到 `EAGAIN`，应用需要自己保留“这个连接还有工作”的状态，并安排继续处理，不能直接把它忘掉后进入无限期等待。
+
+因此，“读到 `EAGAIN`”说明的是怎样确认当前读取暂时无法推进。它不要求某个连接无限期独占线程。[epoll(7) 的 starvation 讨论](https://man7.org/linux/man-pages/man7/epoll.7.html#NOTES) 提到了应用就绪队列与轮流处理的做法。
+
+</details>
+
+<details>
+<summary>EPOLLONESHOT 和 ET 是一回事吗？</summary>
+
+不是。`EPOLLONESHOT` 让关注项在交付一次事件后被禁用，需要用 `EPOLL_CTL_MOD` 重新启用，也叫 rearm。
+
+它常用于协调事件交给哪个执行者处理，但不能替代对象生命周期管理，也不自动解决全部线程安全问题。ET 决定通知方式，ONESHOT 决定是否在一次交付后暂停这个关注项，两者可以组合。见 [epoll_ctl(2)](https://man7.org/linux/man-pages/man2/epoll_ctl.2.html)。
+
+</details>
+
+## 从可读字节到完整消息
+
+<SlideCard title="通知粒度与业务粒度不同">
+
+## 一次 `recv` 不等于一条响应
+
+为了只观察消息边界，暂时设计一个教学用文本协议：文件大小响应写成 `SIZE 4096\n`，以换行结束。它不是 gRPC 的编码格式。
+
+TCP 提供有序的字节流，不保留应用每次发送的记录边界。即使对端调用一次 `send` 发出整行，本端也不能假定一次 `recv` 恰好取到整行。[tcp(7)](https://man7.org/linux/man-pages/man7/tcp.7.html) 对字节流语义有明确说明。
+
+例如，应用可能观察到以下读取序列。这是允许出现的分段示意，不是在规定网络怎样分包：
+
+| 这次取得的字节    | 应用目前能做什么                 |
+| ----------------- | -------------------------------- |
+| `SIZE 40`         | 还没有换行，保留片段             |
+| `96\nSIZE 8192\n` | 拼出第一条响应，还能再取出第二条 |
+
+程序因此需要一个**跨多次回调保留的应用接收缓冲区**：有字节就追加，够一条就解析一条，不够就保留。一次读到多条消息时，也要继续解析，不能只处理第一条。
+
+下面是协议处理伪代码，`TryTakeLine` 成功时会从缓冲区移除一行：
+
+```cpp
+input.append(newBytes);
+while (TryTakeLine(input, line)) {
+    HandleResponse(line);
+}
+```
+
+真实协议还需要限制消息长度和缓冲区大小，并处理格式错误。采用“长度字段 + 正文”的二进制协议时，道理相同：先有足够字节读出长度，再积累足够的正文。
+
+</SlideCard>
+
+### 两个缓冲区，不能混成一个
+
+socket 的**内核接收缓冲区**里没有数据时，`recv` 可以返回 `EAGAIN`。与此同时，**应用接收缓冲区**里完全可能保留着半条消息。
+
+反过来，一次 `recv` 已经把多条完整消息读到应用缓冲区，即使内核缓冲区随后读空，应用也还有解析工作。`epoll` 关注的是内核 I/O 对象，不负责提醒你处理已经放进自己内存的完整消息。
+
+回到 RPC：可读事件之后，还需要读取字节、解析协议、识别属于哪次请求、检查完成状态，才能通知调用方。**“socket 可读”和“RPC 完成”之间隔着框架必须完成的一段工作。**
+
+## 发送、连接与关闭也要保留进度
+
+<SlideCard title="能写，不表示整个响应都写出去了">
+
+## 输出缓冲区与背压
+
+接收方可能很慢，网络也可能暂时发不动。非阻塞 `send` 可能只接受部分数据，或者返回 `EAGAIN`。正数返回值描述本次接受了多少字节，并不证明远端业务已经收到了它们，更不证明已经执行了请求。见 [send(2)](https://man7.org/linux/man-pages/man2/send.2.html)。
+
+例如，应用要发送 10 KB，这次只接受了前 3 KB。剩余 7 KB 需要留在**应用输出缓冲区**，下次从正确偏移继续，而不是从头再发。
+
+在 LT 模式下，一种常见安排是：
+
+- 先尝试非阻塞发送，记录实际发送进度。
+- 有待发数据、但当前无法继续时，关注 `EPOLLOUT`。
+- 收到可写通知后继续发送；应用输出缓冲区清空，就取消可写关注。
+
+很多正常连接长期可写。如果没有待发数据，却始终关注 LT 可写事件，等待就可能一直立即返回，造成空转。
+
+ET 下同样需要保存输出进度，而且新数据进入应用输出缓冲区时通常应主动尝试发送；不能假定一个始终可写的 socket 会专门为这次应用层入队再产生边缘通知。
+
+如果业务生产数据的速度长期大于网络发送速度，输出队列会持续增长。**背压，backpressure**，就是把“下游处理不过来”传回上游：到达容量阈值后暂停生产、减少接收新任务，或按业务约定拒绝请求。仅仅把队列做大，不能消除速率差。
+
+</SlideCard>
+
+<SlideCard title="连接结束也是一种需要处理的情况">
+
+## EOF、关闭和错误怎样区分？
+
+“可读”不只意味着能获得正常业务字节。对端结束发送后，读取可以立即返回 EOF，这也属于无需继续等待的数据接收状态。
+
+| 情况                       | 应用要判断什么                                     |
+| -------------------------- | -------------------------------------------------- |
+| `recv == -1`，`EAGAIN`     | 暂时没有数据，保留连接和解析状态                   |
+| `recv == 0`                | 接收方向结束，检查是否残留不完整消息，再按协议收尾 |
+| `POLLHUP` / `EPOLLHUP`     | 发生挂断；仍可能有尚未读出的数据                   |
+| `POLLRDHUP` / `EPOLLRDHUP` | 对端关闭了发送方向，需要处理半关闭                 |
+| `POLLERR` / `EPOLLERR`     | 检查 socket 错误，并结束或清理相应状态             |
+
+关闭标志可以和可读标志一起出现，不能见到 HUP 就断言“数据已经没有了”。先处理仍可读取的数据，再依据读取结果与协议状态收尾。`poll` 的 [POLLHUP 说明](https://man7.org/linux/man-pages/man2/poll.2.html) 特别强调了这一点。
+
+对端停止发送也不必然表示它不能接收。TCP 是双向的；是否立即关闭本地连接，要由协议和程序状态决定。
+
+</SlideCard>
+
+<details>
+<summary>新连接的建立，也能放进事件循环吗？</summary>
+
+可以，但同一种事件在不同 socket 状态下代表的工作不同。
+
+- 服务端监听 socket 可读，通常意味着可以尝试 `accept`，取出一个新连接。新连接得到自己的 fd，之后再登记读写事件。ET 下通常循环接受到暂时没有连接为止。Linux 的 `accept` 不自动把监听 socket 的 `O_NONBLOCK` 继承给新 socket，应显式设置，或用 `accept4` 指定。见 [accept(2)](https://man7.org/linux/man-pages/man2/accept.2.html)。
+- 客户端的非阻塞 TCP `connect` 可以返回 `EINPROGRESS`。等待可写或错误通知之后，要用 `getsockopt(SOL_SOCKET, SO_ERROR, ...)` 检查结果；可写本身不能证明连接成功。见 [connect(2)](https://man7.org/linux/man-pages/man2/connect.2.html)。
+
+因此，框架需要知道连接处于“正在建立”“已连接”“正在关闭”中的哪个阶段，才能正确解释事件。
+
+</details>
+
+<details>
+<summary>还有哪些边界会影响真实程序？</summary>
+
+- **对象生命周期。** 如果处理一个事件时关闭了另一个连接，本轮事件数组中可能仍有那个连接的记录。fd 数字又可能很快被复用。框架需要安排移除关注项、标记关闭、延迟销毁或校验代次，不能让旧事件指向新连接。`data.ptr` 也不会延长 C++ 对象的寿命。
+- **描述符副本。** 存在 `dup` 等共享同一打开对象的 fd 时，关闭其中一个并不一定立即移除对应的全部 epoll 关系。需要管理注销与副本生命周期，不能只靠一个 `close` 推断全部状态。见 [epoll(7) 的 Questions and answers](https://man7.org/linux/man-pages/man7/epoll.7.html#NOTES)。
+- **中断与等待预算。** 等待接口因 `EINTR` 返回后，如果有总截止时间，应重新计算剩余时长。每次都从完整超时时长开始，可能把总等待不断拉长。
+- **发送错误。** 向已经关闭的连接写入还可能涉及 `SIGPIPE`。Linux 可以对发送使用 `MSG_NOSIGNAL`，并正常处理 `EPIPE`；不要让错误处理只剩一个没有检查返回值的 `send`。见 [send(2)](https://man7.org/linux/man-pages/man2/send.2.html)。
+
+这些边界也解释了网络库的价值：它需要把通知、缓冲区、状态转换和对象销毁组织在一起。
+
+</details>
+
+## 事件循环怎样支撑异步 RPC
+
+<SlideCard title="把等待与处理反复接起来">
+
+## Event loop 是程序写出来的循环
+
+事件循环通常把几类工作放在一起：等待就绪事件、推进连接的读写、执行待办任务、检查定时器。下面是结构伪代码，并不是某个框架的原样实现。
+
+```cpp
+while (!stopping) {
+    int timeout = TimeUntilNextTimer();
+    if (HasRunnableTasks()) timeout = 0;
+
+    auto events = WaitForIo(timeout);
+    for (const auto& event : events) {
+        AdvanceConnection(event);
+    }
+    RunPendingTasks();
+    RunExpiredTimers();
+}
+```
+
+socket 没有事件，不代表程序可以永远睡眠：已有待办任务要及时执行，RPC deadline 也需要按时处理。等待时长必须和这些工作配合。
+
+如果其他线程向队列投递了新任务，而事件线程已经睡在 `epoll_wait` 里，仅仅修改内存队列并不会自动把它叫醒。Linux 框架可以把一个 `eventfd` 也交给 epoll；投递方写这个 fd，让它变为可读，事件循环便能醒来处理任务。`eventfd` 是这里的唤醒工具，任务本身仍在应用队列中。[eventfd(2)](https://man7.org/linux/man-pages/man2/eventfd.2.html) 说明了这种通知能力。
+
+</SlideCard>
+
+<SlideCard title="回到那一百次文件查询">
+
+## 等待中的调用，主要保存为状态
+
+一种常见的异步 RPC 实现会为每次调用保存请求标识、响应对象、截止时间和完成处理逻辑；多个调用共享若干网络连接和负责通信的线程。
+
+当文件大小的响应到达时，框架沿着这条路径推进：
+
+- socket 产生可读事件，负责它的事件线程继续执行。
+- 读取并积累字节，解析协议和响应内容。
+- 根据协议标识找到对应的调用状态，更新响应或错误。
+- 调用达到完成条件后，安排完成通知或业务回调。
+
+例如，gRPC 的 HTTP/2 传输使用连接内的 stream ID 关联调用。一个连接可以承载多个 stream，所以**一个 fd 不等于一次 RPC**。消息边界与最终状态由上层协议决定，不能见到任意可读数据就触发“调用成功”。见 [gRPC over HTTP/2](https://github.com/grpc/grpc/blob/v1.76.0/doc/PROTOCOL-HTTP2.md)。
+
+这里可以同时保存一百个等待中的调用状态，而不要求一百个专门等待它们的线程。线程仍然存在，只是可以共享；具体多少个、回调在哪里执行，由框架及配置决定。
+
+完成通知也可能由超时、取消或连接错误触发，不一定等来正常响应。对本文这种单次请求、单次应答的调用，框架需要协调这些结束路径，避免同一次调用重复交付最终结果。调用状态和响应对象也要保留到相应异步处理结束，不能在发起函数返回时就销毁。
+
+业务回调依然是客户端进程中的代码。服务端收到请求后执行自己的处理函数，返回响应；它不会跨机器执行客户端保存的 lambda。
+
+</SlideCard>
+
+### “异步”与“非阻塞”，要说清观察哪一层
+
+| 说法                    | 正在描述什么                                       |
+| ----------------------- | -------------------------------------------------- |
+| socket 设置为非阻塞     | 单次 `recv` / `send` 暂时无法推进时及时返回        |
+| 线程阻塞在 `epoll_wait` | 这个线程正在集中等待一组事件                       |
+| RPC 使用异步接口        | 调用方不必在发起点等本次远端操作结束，结果稍后交付 |
+| 某项 I/O 操作完成       | 已提交的具体操作得到了结果，仍需解释结果含义       |
+
+这些状态可以同时成立：业务线程使用异步 RPC，I/O 线程睡在 `epoll_wait`，被唤醒后用非阻塞 socket 读取响应。
+
+反过来，同步 RPC 的内部也可以使用事件循环：发起调用的业务线程等待一个完成条件，底层 I/O 线程照常管理连接。仅看接口是否同步，推不出整个框架的线程模型。
+
+### 谁执行回调，会影响什么？
+
+如果业务回调直接运行在某个事件循环线程上，在回调里做长时间计算、等待锁或发起阻塞操作，会拖延这个线程照看的其他连接。框架可以把耗时工作交给工作线程池，再把结果投递回来，但线程切换、排队和状态同步也有成本。
+
+不要把所有框架都画成同一张线程图。gRPC C++ 的 Callback API 与 CompletionQueue API 就有不同的结果交付方式；CQ 接口中，应用可以用线程调用 `Next` 取完成事件，而 callback 接口由框架安排通知。**CQ 中的完成事件与 epoll 的就绪事件属于不同层次。** 可对照 [gRPC C++ Async API](https://grpc.io/docs/languages/cpp/async/) 和 [Callback API 的实践建议](https://grpc.io/docs/languages/cpp/best_practices/#callback-api-specific)。
+
+即使使用协程，`co_await` 后面的代码也需要某个执行者恢复它。协程把暂停位置保存为状态，并没有让等待、调度和 I/O 通知消失。
+
+## 沿着 Muduo 读一次真实的通知
+
+前面的伪代码已经能解释机制。接下来选择一个真实的 C++ 网络库，看看这些职责怎样分开。这里使用 Muduo 的固定版本 [`f1fc77e`](https://github.com/chenshuo/muduo/tree/f1fc77e0c13b80e5086ff457362c8a86d1b609d4)，沿一次读取查代码即可，不需要先读完整个项目。
+
+<SlideCard title="从 epoll_wait 找到应用回调">
+
+## 只追踪这五个位置
+
+| 位置                                                                                                                                           | 沿读取路径观察什么                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [`EventLoop::loop`](https://github.com/chenshuo/muduo/blob/f1fc77e0c13b80e5086ff457362c8a86d1b609d4/muduo/net/EventLoop.cc#L103)               | 取得活跃 Channel，逐个处理，再执行待办任务            |
+| [`EPollPoller::poll`](https://github.com/chenshuo/muduo/blob/f1fc77e0c13b80e5086ff457362c8a86d1b609d4/muduo/net/poller/EPollPoller.cc#L55)     | 调用 `epoll_wait`，把返回项转换为活跃 Channel         |
+| [`Channel::handleEventWithGuard`](https://github.com/chenshuo/muduo/blob/f1fc77e0c13b80e5086ff457362c8a86d1b609d4/muduo/net/Channel.cc#L83)    | 检查事件位，调用已登记的读取、写入或错误回调          |
+| [`TcpConnection::handleRead`](https://github.com/chenshuo/muduo/blob/f1fc77e0c13b80e5086ff457362c8a86d1b609d4/muduo/net/TcpConnection.cc#L347) | 将字节读入输入缓冲区，有数据时调用 `messageCallback_` |
+| [`Buffer::readFd`](https://github.com/chenshuo/muduo/blob/f1fc77e0c13b80e5086ff457362c8a86d1b609d4/muduo/net/Buffer.cc#L25)                    | 实际通过 `readv` 读取 fd，并维护缓冲区位置            |
+
+`Channel` 可以先理解为“某个 fd 的关注事件和处理函数的集合”。它把底层事件与上层连接对象联系起来。
+
+这里有一个命名陷阱：`EPollPoller::poll` 是 C++ 成员函数名，它内部调用的是 **`epoll_wait`，并非系统调用 `::poll`**。必须跟进函数体，不能只看名字。
+
+另一个陷阱是 `messageCallback_`：名字里虽然有 message，但 `handleRead` 在读到字节后就会调用它。是否已经得到完整的应用协议消息，还要由回调中的协议解析判断。
+
+</SlideCard>
+
+### 把刚学的规则与代码对上
+
+这份 Muduo 代码的普通读写关注没有设置 `EPOLLET`，使用 LT。因此，看到 `handleRead` 做一次缓冲区读取就返回，不能直接套用“ET 必须正确排空或安排续读”来判它有错。先确认通知模式，再分析读取策略。
+
+发送方向也能对上：[`TcpConnection::handleWrite`](https://github.com/chenshuo/muduo/blob/f1fc77e0c13b80e5086ff457362c8a86d1b609d4/muduo/net/TcpConnection.cc#L368) 推进输出缓冲区，写空后取消可写关注，避免无事可做时反复收到可写事件。
+
+线程协作则看 [`EventLoop::queueInLoop`](https://github.com/chenshuo/muduo/blob/f1fc77e0c13b80e5086ff457362c8a86d1b609d4/muduo/net/EventLoop.cc#L160)：先把函数放入队列，必要时调用 `wakeup`；循环之后执行待办函数。这把“其他线程交来任务”和“事件线程正在等待 I/O”接到了一起。
+
+先把这条路径画出来：哪个调用在等待，哪个函数读取字节，哪个对象保存半条消息，哪个回调开始解释业务协议。能对应到实际函数，就已经跨过了只记名词的阶段。
+
+## 其它 I/O 机制在什么位置
+
+<SlideCard title="这几类名字，不在同一个层次">
+
+## 等待就绪，与取得操作结果
+
+`select`、`poll`、`epoll` 经常一起讲，因为它们都能用于 **I/O 就绪通知**。但这个领域还包含不同平台的接口、等待函数的变体，以及操作完成通知。
+
+| 名字                              | 可以先这样定位                                                    |
+| --------------------------------- | ----------------------------------------------------------------- |
+| `select`、`poll`                  | 常见于 POSIX 系统，等待一组 fd 就绪                               |
+| `epoll`                           | Linux 的持续登记与就绪通知机制                                    |
+| `pselect`、`ppoll`、`epoll_pwait` | 在等待时配合信号掩码，处理信号与进入等待之间的竞态                |
+| `kqueue` / `kevent`               | BSD、macOS 的内核事件机制，可关注 I/O，也能关注定时器、进程等事件 |
+| `io_uring`                        | Linux 的操作提交与完成队列接口，也支持等待就绪等操作              |
+| IOCP                              | Windows 的完成端口机制，可把重叠 I/O 的完成通知交给工作线程       |
+
+平台接口可分别查 [Apple kqueue 手册](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/kqueue.2.html)、[io_uring(7)](https://man7.org/linux/man-pages/man7/io_uring.7.html) 与 [Windows I/O Completion Ports](https://learn.microsoft.com/en-us/windows/win32/fileio/i-o-completion-ports)。它们并不是必须依次替换的“版本升级路线”。
+
+比较时先问一句：**通知我现在可以尝试读取，还是告诉我之前提交的读取已经有了结果？**
+
+- 就绪模型中，等待返回之后，程序再执行 `recv` 等操作并检查结果。
+- 提交读取操作的完成模型中，程序随后取得该操作的完成结果，例如读取字节数或错误。
+
+即使采用完成通知，也可能只读到部分消息，或者操作失败。I/O 完成仍然不等于 RPC 成功；上层协议和业务状态还需要判断。
+
+</SlideCard>
+
+### 为什么不把普通磁盘读取直接交给 epoll？
+
+这套“暂时没数据，等它变为可读”的模型主要适用于支持就绪通知的对象。普通磁盘文件通常会被 `poll` 立即报告为可读、可写；常规文件也不是 epoll 能正常登记等待的对象，登记可能返回 `EPERM`。这不代表文件数据已经在内存中，也不保证随后读磁盘没有等待。
+
+所以，不能仅给文件 fd 配上 epoll，就把磁盘读取变成网络式的非阻塞处理。磁盘操作通常需要另外考虑线程池或适用的异步 I/O 接口。相关边界见 [poll(2)](https://man7.org/linux/man-pages/man2/poll.2.html) 和 [epoll_ctl(2) 的 EPERM](https://man7.org/linux/man-pages/man2/epoll_ctl.2.html)。
+
+对当前学习目标，先掌握 socket、就绪通知和事件循环就能读懂大量网络代码。其它机制先分清所在层次，遇到相应平台或项目后再展开。
+
+## 用一个小实验检查理解
+
+<SlideCard title="控制输入，再观察系统调用的结果">
+
+## 两个 socket，八个字节
+
+完整程序：[io-readiness-demo.cpp](/examples/io-readiness-demo.cpp)。它支持 `select`、`poll`、`lt`、`et` 四种模式，后两种需要 Linux。
+
+实验使用 `socketpair(AF_UNIX, SOCK_STREAM, ...)` 创建两对相连的本地流式 socket，分别代表 A、B。每一对的一端用于写入，另一端交给等待接口观察。它们都在同一进程中，不使用 TCP，也不需要端口或后台服务。这样可以直接控制“先写什么，再读多少”，集中观察就绪语义。[socketpair(2)](https://man7.org/linux/man-pages/man2/socketpair.2.html) 介绍了这种接口。
+
+程序按固定顺序做这些事：
+
+- 两边都没有数据，检查一次就绪状态。
+- 只向 B 写入 `abcdefgh`，检查一次；A 始终没有发送。
+- 从 B 只读 3 字节，再检查一次。
+- 主动读取剩余字节，并继续读到 `EAGAIN`。
+- 让 B 的对端结束发送，再检查一次并读取 EOF。
+
+程序中的等待超时故意设为 `0`，用于在每一步拍一张状态快照。它没有写一个反复空转的生产事件循环，也不测量网络性能。
+
+</SlideCard>
+
+### 怎样运行
+
+下载源码后，在文件所在目录使用支持 C++17 的编译器：
+
+```sh
+c++ -std=c++17 -O2 -Wall -Wextra -pedantic \
+    io-readiness-demo.cpp -o io-readiness-demo
+
+./io-readiness-demo select
+./io-readiness-demo poll
+```
+
+这两种模式可以在 macOS 或 Linux 使用。在 Linux 上再运行：
+
+```sh
+./io-readiness-demo lt
+./io-readiness-demo et
+```
+
+如果你使用 macOS，LT/ET 部分应放在 Linux 虚拟机、容器或开发机运行；本机没有 `sys/epoll.h`，不是少装了某个普通 C++ 依赖。
+
+### 先读输出，再解释它
+
+下面是 `poll` 模式在 macOS 26.5.2、Apple Clang 21 环境下的一组实际输出；`select` 在同一实验中得到相同的就绪与读取结果：
+
+```text
+mode: poll
+initial: none
+after send 8: B
+recv B: 3 bytes [abc]
+after read 3: B
+recv B: 5 bytes [defgh]
+recv B: EAGAIN/EWOULDBLOCK
+after drain: none
+after peer shutdown write: B
+recv B: EOF
+```
+
+这里最值得停下来的地方有三个。
+
+A 一直没有数据，但等待能指出 B 值得处理，不需要先等 A。读掉 `abc` 后，`poll` 仍然报告 B，因为 `defgh` 还在。读空时是 `EAGAIN`；只有对端结束发送且数据读完后，才是 EOF。
+
+对 Linux LT/ET 两种模式，重点比较同一个位置：
+
+| 观察位置       | LT 预期结果  | ET 预期结果      |
+| -------------- | ------------ | ---------------- |
+| `after send 8` | `B`          | `B`              |
+| `after read 3` | `B`          | `none`           |
+| 紧接着主动读取 | 取得 `defgh` | 仍能取得 `defgh` |
+| `after drain`  | `none`       | `none`           |
+
+这个对照限定在程序控制的条件下：只有本线程读写，期间没有新发送，也没有修改关注项。ET 下即使输出 `none`，主动读取仍然可以取得剩下的五个字节。它展示的是“没有新的就绪通知”和“没有可读数据”的区别。
+
+试着把源码中第一次读取的上限从 `3` 改为 `8`，先预测 `after read 3` 那个观察位置会发生什么，再运行检查。还可以删去第一次读取，观察 LT 是否继续报告 B。改动的目的，是确认自己知道**改变了缓冲区状态，还是只消费了一次通知**。
+
+### 几个值得自己回答的问题
+
+<details>
+<summary>fd 已设为非阻塞，为什么线程仍会睡在 epoll_wait 里？</summary>
+
+`O_NONBLOCK` 控制这个 socket 的读写在暂时无法推进时怎样返回；`epoll_wait` 使用自己的超时约定，等待整个关注集合。为了避免空转，让事件线程在没有工作时睡眠是正常安排。
+
+</details>
+
+<details>
+<summary>LT 模式下没有请求，CPU 却一直很高，先看哪里？</summary>
+
+先看等待是否立即反复返回：有没有长期关注可写、却没有待发数据的连接；有没有把超时设为 `0` 持续轮询；有没有收到 EOF 或错误后，仍把同一 fd 留在可立即返回的状态里。再看是否有不断生成的待办任务。仅凭 CPU 高，不能推断是 epoll 内核实现有问题。
+
+</details>
+
+<details>
+<summary>收到 EPOLLIN，读到了七个字节，为什么还不能执行 RPC 成功回调？</summary>
+
+七个字节可能只是部分协议头或部分正文，也可能属于共享连接上的另一次调用。需要完成协议解析、请求关联，并满足本次调用的完成条件。字节数为正只说明这次读取有进展。
+
+</details>
+
+<details>
+<summary>ET 下业务卡住了，但内核缓冲区里还有数据，先检查什么？</summary>
+
+检查上一轮是否只读了一部分就回去等待；是否在处理预算用完后忘记安排继续读取；是否用了 ONESHOT 却忘记 rearm。还要区分残留数据是在内核缓冲区，还是已经读到应用缓冲区却没有继续解析。
+
+</details>
+
+<details>
+<summary>一百次异步 RPC，只用了几个 I/O 线程，是否证明处理速度能提升一百倍？</summary>
+
+不能。它首先说明等待可以重叠，多个调用共享执行资源。实际速度仍受远端处理、网络、带宽、排队、CPU 和请求依赖关系限制。若一个回调长期占用共享线程，其他调用还可能一起被拖慢。
+
+</details>
+
+### 再读框架时，沿着状态走
+
+下次在工作代码里遇到 `poller`、`Channel`、`onRead`、完成队列或 callback，可以用同一组问题定位：
+
+- 正在等待的是 socket 就绪、一次 I/O 操作完成，还是一次 RPC 完成？
+- 哪个线程负责等待和处理？其他线程怎样把任务交给它？
+- 尚未处理完的字节、待发数据和调用信息，分别保存在什么对象里？
+- 哪种条件允许继续，哪种条件要求等待，哪种条件会结束并销毁状态？
+
+能沿一条连接回答这些问题，再读 [RPC 的超时、重试与幂等](/blog/distributed-foundation-rpc-remote-call/)，就可以把“消息怎样被推进”与“调用失败后该怎样处理”放在同一条执行路径上理解。
+
+</div>

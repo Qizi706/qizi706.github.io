@@ -1,10 +1,17 @@
 ---
 import { SITE_TITLE } from '../consts';
+import HeaderLink from './HeaderLink.astro';
 ---
 
 <header>
+	<a class="skip-link" href="#main-content">跳到正文</a>
 	<div class="header-inner">
 		<a class="site-title" href="/">{SITE_TITLE}</a>
+		<nav aria-label="主导航">
+			<HeaderLink href="/blog/">文章</HeaderLink>
+			<HeaderLink href="/learning/">实验</HeaderLink>
+			<HeaderLink href="/about/">关于</HeaderLink>
+		</nav>
 	</div>
 </header>
 
@@ -33,11 +40,41 @@ import { SITE_TITLE } from '../consts';
 
 	.header-inner {
 		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1.5rem;
 		width: 100%;
 		margin: 0;
 		padding: 1rem 2rem;
 		align-items: center;
 		justify-content: flex-start;
+	}
+
+	nav {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1rem;
+		margin-left: auto;
+		font-family: sans-serif;
+		font-size: 0.875rem;
+	}
+
+	.skip-link {
+		position: absolute;
+		top: 0.5rem;
+		left: 1rem;
+		z-index: 1;
+		padding: 0.5rem 0.75rem;
+		transform: translateY(calc(-100% - 1rem));
+		border-radius: 2px;
+		background: #fff;
+		color: var(--accent, #3730a3);
+		font-family: sans-serif;
+	}
+
+	.skip-link:focus {
+		transform: none;
+		outline: 2px solid var(--accent, #3730a3);
+		outline-offset: 2px;
 	}
 
 	.site-title {

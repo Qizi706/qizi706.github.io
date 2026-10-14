@@ -53,6 +53,7 @@ mathjax: false
 
 - [操作系统、网络、并发与存储](/blog/distributed-foundation-os-network-concurrency-storage/)
 - [RPC 入门：一次远程调用是怎样完成的](/blog/rpc-introduction/)
+- [select、poll 与 epoll：一个线程怎样照看多个连接](/blog/io-multiplexing/)
 - [RPC 和远程调用](/blog/distributed-foundation-rpc-remote-call/)
 - [状态机、分片、路由与元数据](/blog/distributed-foundation-state-machine-sharding-metadata/)
 - [副本和一致性](/blog/distributed-foundation-replication-consistency/)

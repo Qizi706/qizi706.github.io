@@ -3,7 +3,7 @@ title: '分布式基础：故障处理'
 description: '从超时、慢节点和网络分区出发，分析 KV Cache 迁移中断、旧 owner 恢复与请求取消，说明故障检测、fencing 和修复任务的边界。'
 pubDate: '2026-07-14T15:30:00+08:00'
 updatedDate: '2026-09-07T00:33:57+08:00'
-readingOrder: 7
+readingOrder: 8
 readingNote: '恢复：处理部分失败和旧 owner'
 categories:
   - '分布式'

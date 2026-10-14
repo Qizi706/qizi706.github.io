@@ -28,7 +28,6 @@ const isUnlistedPathname = (pathname) => {
 	);
 };
 
-// https://astro.build/config
 export default defineConfig({
 	site: 'https://zqwiki.cn',
 	trailingSlash: 'ignore',

@@ -6,17 +6,17 @@
 src/content/blog/
 ```
 
-文件名会成为文章 slug，Frontmatter 中的第一个分类会成为 URL 的第一段。例如：
+文件名（不含扩展名）会成为文章 slug，正式文章统一使用 `/blog/<slug>/`。例如：
 
 ```text
 src/content/blog/linux-process.md
 categories: ['OS']
                     ↓
-/os/linux-process/
+/blog/linux-process/
 ```
 
-分类会自动转换为小写、适合 URL 的形式；没有分类的文章会放在
-`/uncategorized/<slug>/` 下。调整第一个分类会同时改变文章地址，发布后应避免随意修改。
+分类只决定归档入口：例如 `OS` 对应 `/category/os/`。调整分类或不填写分类，
+都不会改变文章地址；发布后修改文件名会改变地址，需要同时维护旧链接的重定向。
 
 ## 快速开始
 
@@ -79,7 +79,7 @@ tags:
 头图示例（路径相对于当前文章）：
 
 ```yaml
-heroImage: '../../assets/blog-placeholder-1.jpg'
+heroImage: '../../assets/q-social-card.png'
 ```
 
 ## Markdown 正文
@@ -89,18 +89,16 @@ heroImage: '../../assets/blog-placeholder-1.jpg'
 ```md
 ## 二级标题
 
-普通段落包含 **粗体**、_斜体_、`inline code` 和 [链接](https://example.com)。
+普通段落包含 **粗体**、_斜体_、`inline code` 和 [站内链接](/blog/)。
 
 - 无序列表
 - 第二项
-
-1. 有序列表
-2. 第二项
 
 > 普通引用内容
 ```
 
 文章总标题已经由 Frontmatter 中的 `title` 生成，所以正文建议从 `##` 开始，不要重复写 `# 文章标题`。
+列表统一使用 `-`；历史文章中的有序列表在渲染时也会转换为圆点列表。
 
 ### 代码块
 
@@ -239,9 +237,9 @@ worker.join();
 
 ```mdx
 <CoreCard
-  title="Crazy OS"
-  href="https://example.com/crazy-os"
-  path="virtualization/crazy-os"
+  title="RPC 幂等实验"
+  href="/examples/rpc-idempotency.py"
+  path="public/examples/rpc-idempotency.py"
 >
 
 这是项目或代码示例的简介。标题和第一段会保持在同一行。
@@ -300,47 +298,40 @@ export const reasoningStages = [
 npm install
 ```
 
-按项目约定，以后台模式启动开发服务器：
+先检查 4321 端口是否已有开发服务：
 
 ```sh
-astro dev --background
+lsof -nP -iTCP:4321 -sTCP:LISTEN
 ```
 
-默认访问地址为 `http://localhost:4321`。管理后台服务器：
+如果已有服务，直接访问 `http://localhost:4321` 检查，不重复启动或构建。
+没有服务时，在项目根目录以前台模式启动：
 
 ```sh
-astro dev status
-astro dev logs
-astro dev stop
+npm run dev
 ```
 
-如果系统没有全局 `astro` 命令，可以通过项目依赖执行同样的命令：
-
-```sh
-npm run astro -- dev --background
-npm run astro -- dev status
-npm run astro -- dev logs
-npm run astro -- dev stop
-```
+保持该终端运行；需要停止时，在同一个终端按 `Ctrl-C`。
 
 ## 发布前检查
 
 完成文章后：
 
-1. 将 `draft` 改为 `false`。
-2. 检查标题、摘要、分类、标签和图片替代文本。
-3. 如果用了公式，确认 `mathjax` 开关为 `true`。
-4. 运行类型与内容检查：
+- 将 `draft` 改为 `false`。
+- 检查标题、摘要、分类、标签和图片替代文本。
+- 如果用了公式，确认 `mathjax` 开关为 `true`。
+- 运行类型与内容检查：
 
-   ```sh
-   npm exec astro check
-   ```
+  ```sh
+  npm run check
+  ```
 
-5. 执行生产构建：
+- 复用 4321 端口的开发服务检查页面、站内链接和移动端布局。没有运行中的开发服务时，
+  再执行生产构建：
 
-   ```sh
-   npm run build
-   ```
+  ```sh
+  npm run build
+  ```
 
 构建后的静态网站位于 `dist/`。
 
@@ -355,9 +346,9 @@ labs/<lab-name>/
 新增、修改或删除其中的文件后，不需要手工维护网页文件清单。`npm run build` 会先执行
 `labs:sync`，使用同一次目录扫描：
 
-1. 重建 `public/labs/<lab-name>.tar.gz`；
-2. 生成与 Nginx autoindex 一致的逐级目录页；
-3. 使用压缩包内容 Hash 更新下载链接，避免浏览器或 CDN 继续缓存旧包。
+- 重建 `public/labs/<lab-name>.tar.gz`；
+- 生成与 Nginx autoindex 一致的逐级目录页；
+- 使用压缩包内容 Hash 更新下载链接，避免浏览器或 CDN 继续缓存旧包。
 
 如果只想刷新下载包而不构建整个网站，运行：
 
@@ -382,10 +373,10 @@ wget https://zqwiki.cn/labs/<lab-name>/<relative-path>
 
 首次启用前需要完成两项控制台配置：
 
-1. 在 GitHub 仓库的 `Settings → Secrets and variables → Actions` 中添加
-   `EDGEONE_CHINA_API_TOKEN`；Token 从 EdgeOne Makers 中国站控制台生成，不要写入仓库文件。
-2. 在 EdgeOne Makers 项目中绑定 `zqwiki.cn`，确认 EdgeOne 部署可访问后，再按控制台给出的
-   CNAME 值切换 DNS。
+- 在 GitHub 仓库的 `Settings → Secrets and variables → Actions` 中添加
+  `EDGEONE_CHINA_API_TOKEN`；Token 从 EdgeOne Makers 中国站控制台生成，不要写入仓库文件。
+- 在 EdgeOne Makers 项目中绑定 `zqwiki.cn`，确认 EdgeOne 部署可访问后，再按控制台给出的
+  CNAME 值切换 DNS。
 
 完成配置后，提交并推送 `astro` 分支即可自动发布：
 
@@ -417,14 +408,14 @@ git push origin astro
 
 如果 push 后没有产生新的 workflow run：
 
-1. 使用 `git status --short --branch` 确认当前是 `astro`，并且已经同步到 `origin/astro`。
-2. 查看 [GitHub Status](https://www.githubstatus.com/)，确认 Actions 和 Pages 均为 `Operational`。
-3. 服务正常时，可以创建一个不修改文件的提交重新触发：
+- 使用 `git status --short --branch` 确认当前是 `astro`，并且已经同步到 `origin/astro`。
+- 查看 [GitHub Status](https://www.githubstatus.com/)，确认 Actions 和 Pages 均为 `Operational`。
+- 服务正常时，可以创建一个不修改文件的提交重新触发：
 
-   ```sh
-   git commit --allow-empty -m "chore: retrigger deploy"
-   git push origin astro
-   ```
+  ```sh
+  git commit --allow-empty -m "chore: retrigger deploy"
+  git push origin astro
+  ```
 
 工作流包含 `workflow_dispatch`，但 GitHub 只有在 workflow 文件存在于仓库默认分支时才显示
 `Run workflow`。若按钮不可见，可以继续使用 `astro` 分支的 push 自动触发，或将该

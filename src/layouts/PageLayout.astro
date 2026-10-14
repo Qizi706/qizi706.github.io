@@ -14,14 +14,14 @@ const { title, description, mainClass, noindex = false } = Astro.props;
 ---
 
 <!doctype html>
-<html lang="zh-CN" class="jyy-typography">
+<html lang="zh-CN">
 	<head>
 		<BaseHead title={title} description={description} {noindex} />
 	</head>
 	<body>
 		<Header />
 		<div class="page-shell">
-			<main class:list={['page-frame', mainClass]}>
+			<main id="main-content" tabindex="-1" class:list={['page-frame', mainClass]}>
 				<slot />
 			</main>
 		</div>

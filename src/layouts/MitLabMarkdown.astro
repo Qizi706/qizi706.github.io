@@ -22,7 +22,7 @@ const { title, description, math = false } = Astro.props;
 	</head>
 	<body class="mit-lab-document">
 		<Header />
-		<main class="mit-lab-main">
+		<main id="main-content" tabindex="-1" class="mit-lab-main">
 			<article class="mit-lab-content">
 				<slot />
 			</article>
@@ -57,6 +57,11 @@ const { title, description, math = false } = Astro.props;
 
 	.mit-lab-content {
 		min-width: 0;
+	}
+
+	.mit-lab-main,
+	.mit-lab-content [id] {
+		scroll-margin-top: 5rem;
 	}
 
 	.mit-lab-content ul,

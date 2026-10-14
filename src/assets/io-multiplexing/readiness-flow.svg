@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="620" viewBox="0 0 720 620" role="img" aria-labelledby="title desc">
+  <title id="title">就绪通知与读取数据是两条不同的路径</title>
+  <desc id="desc">内核中的 socket B 收到部分响应字节，并产生可读通知。epoll_wait 返回后，应用线程调用 recv，把字节读入应用缓冲区，再按协议积累和解析完整响应。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#426a94"/>
+    </marker>
+    <marker id="data-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#287962"/>
+    </marker>
+  </defs>
+  <rect width="720" height="620" rx="12" fill="#fff"/>
+  <g font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" fill="#243549">
+    <text x="360" y="35" text-anchor="middle" font-size="23" font-weight="700">有字节可读，距离 RPC 完成还有几步</text>
+    <rect x="22" y="60" width="676" height="186" rx="12" fill="#f0f5fa" stroke="#a9bfd5"/>
+    <text x="44" y="91" font-size="19" font-weight="700">内核</text>
+    <rect x="48" y="110" width="266" height="105" rx="8" fill="#fff" stroke="#6fa38f" stroke-width="2"/>
+    <text x="181" y="144" text-anchor="middle" font-size="20" font-weight="600">socket B 接收缓冲区</text>
+    <text x="181" y="177" text-anchor="middle" font-size="20" fill="#287962">SIZE 40…</text>
+    <text x="181" y="201" text-anchor="middle" font-size="16">已到达的部分响应字节</text>
+    <rect x="406" y="110" width="266" height="105" rx="8" fill="#fff" stroke="#6e95bb" stroke-width="2"/>
+    <text x="539" y="144" text-anchor="middle" font-size="20" font-weight="600">epoll 就绪集合</text>
+    <text x="539" y="177" text-anchor="middle" font-size="20" fill="#426a94">B：可读</text>
+    <text x="539" y="201" text-anchor="middle" font-size="16">记录事件，不装响应正文</text>
+    <path d="M 319 155 H 399" fill="none" stroke="#426a94" stroke-width="2.5" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+    <text x="360" y="138" text-anchor="middle" font-size="16">通知</text>
+    <rect x="22" y="324" width="676" height="270" rx="12" fill="#faf8f3" stroke="#c9bc9e"/>
+    <text x="44" y="356" font-size="19" font-weight="700">应用进程</text>
+    <path d="M 539 218 V 378" fill="none" stroke="#426a94" stroke-width="3" marker-end="url(#arrow)"/>
+    <rect x="445" y="261" width="188" height="40" rx="6" fill="#fff"/>
+    <text x="539" y="287" text-anchor="middle" font-size="18" fill="#426a94">epoll_wait 返回 B</text>
+    <path d="M 181 218 V 378" fill="none" stroke="#287962" stroke-width="3" marker-end="url(#data-arrow)"/>
+    <rect x="106" y="261" width="150" height="40" rx="6" fill="#fff"/>
+    <text x="181" y="287" text-anchor="middle" font-size="18" fill="#287962">recv 取出字节</text>
+    <rect x="48" y="385" width="266" height="93" rx="8" fill="#fff" stroke="#6fa38f" stroke-width="2"/>
+    <text x="181" y="419" text-anchor="middle" font-size="20" font-weight="600">应用接收缓冲区</text>
+    <text x="181" y="452" text-anchor="middle" font-size="17">保存 SIZE 40，等待后续字节</text>
+    <rect x="406" y="385" width="266" height="93" rx="8" fill="#fff" stroke="#6e95bb" stroke-width="2"/>
+    <text x="539" y="419" text-anchor="middle" font-size="20" font-weight="600">事件循环线程</text>
+    <text x="539" y="452" text-anchor="middle" font-size="17">找到 B，调用 recv(B, …)</text>
+    <path d="M 400 432 H 320" fill="none" stroke="#426a94" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <text x="360" y="414" text-anchor="middle" font-size="16">读取</text>
+    <path d="M 181 481 V 517" fill="none" stroke="#287962" stroke-width="2.5" marker-end="url(#data-arrow)"/>
+    <rect x="48" y="523" width="624" height="48" rx="8" fill="#eaf4ef"/>
+    <text x="360" y="553" text-anchor="middle" font-size="19">积累字节 → 按协议组装消息 → 判断调用是否完成</text>
+  </g>
+</svg>

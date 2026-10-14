@@ -5,6 +5,7 @@ import BaseHead from '../components/BaseHead.astro';
 import Footer from '../components/Footer.astro';
 import FormattedDate from '../components/FormattedDate.astro';
 import Header from '../components/Header.astro';
+import { getCategoryUrl } from '../utils/posts';
 
 type BlogData = CollectionEntry<'blog'>['data'];
 type Props = Pick<BlogData, 'title' | 'description' | 'pubDate' | 'updatedDate' | 'heroImage'> & {
@@ -31,7 +32,8 @@ const {
 } = Astro.props;
 ---
 
-<html lang="zh-CN" class="jyy-typography">
+<!doctype html>
+<html lang="zh-CN">
 	<head>
 		<BaseHead
 			{title}
@@ -48,9 +50,8 @@ const {
 		<style>
 			main {
 				display: block;
-				flex: none;
+				flex: 1;
 				width: min(calc(100% - 2rem), var(--content-width));
-				min-height: 100vh;
 				margin: 0 auto;
 				padding: 0;
 			}
@@ -102,7 +103,7 @@ const {
 				gap: 0.35rem;
 				margin: 0.6rem 0 0;
 			}
-			.taxonomy span {
+			.taxonomy :is(a, span) {
 				padding: 0.05rem 0.4rem;
 				border: 1px solid rgb(var(--gray-light));
 				border-radius: var(--card-radius);
@@ -170,11 +171,15 @@ const {
 
 	<body>
 		<Header />
-		<main>
+		<main id="main-content" tabindex="-1">
 			<article>
-				<div class="hero-image">
-					{heroImage && <Image width={1020} height={510} src={heroImage} alt="" />}
-				</div>
+				{
+					heroImage && (
+						<div class="hero-image">
+							<Image width={1020} height={510} src={heroImage} alt="" />
+						</div>
+					)
+				}
 				<div class="prose">
 					{
 						draft && (
@@ -199,9 +204,15 @@ const {
 						{
 							(categories.length > 0 || tags.length > 0) && (
 								<div class="taxonomy">
-									{categories.map((category) => (
-										<span class="category">~/ {category}</span>
-									))}
+									{categories.map((category) =>
+										draft ? (
+											<span class="category">~/ {category}</span>
+										) : (
+											<a class="category" href={getCategoryUrl(category)}>
+												~/ {category}
+											</a>
+										),
+									)}
 									{tags.map((tag) => (
 										<span class="tag">#{tag}</span>
 									))}
