@@ -3,7 +3,6 @@ import { getCollection } from 'astro:content';
 import { Image } from 'astro:assets';
 import FormattedDate from '../components/FormattedDate.astro';
 import { SITE_DESCRIPTION, SITE_TITLE } from '../consts';
-import { phase2Progress } from '../data/lab-roadmap';
 import RollSafeImage from '../assets/home/roll-safe.png';
 import PageLayout from '../layouts/PageLayout.astro';
 import { getCategoryUrl, getDraftPostUrl, getPostUrl } from '../utils/posts';
@@ -58,7 +57,6 @@ const categories = [...categorySummaries.values()].sort(
 );
 const featuredPost = posts.find((post) => post.id === 'conjecture-verification-practice');
 const systemBuildingPost = posts.find((post) => post.id === 'build-a-complete-system-from-scratch');
-const currentStage = phase2Progress.current;
 ---
 
 <PageLayout title={SITE_TITLE} description={SITE_DESCRIPTION} mainClass="home-page">
@@ -180,16 +178,6 @@ const currentStage = phase2Progress.current;
 			</section>
 		)
 	}
-
-	<section class="home-index-section" aria-labelledby="tomorrow-heading">
-		<h2 id="tomorrow-heading">当前实验</h2>
-		<ul class="home-index-links">
-			<li>
-				<a href="/learning/phase-2/#current">{currentStage.id} · {currentStage.title}</a>
-				<small>（{currentStage.period} · 进行中）</small>
-			</li>
-		</ul>
-	</section>
 
 	{
 		categories.length > 0 && (

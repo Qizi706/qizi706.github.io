@@ -16,7 +16,9 @@ import { pygmentsDefaultTheme } from './src/themes/pygments-default.mjs';
 
 /** @param {string} pathname */
 const normalizePathname = (pathname) => pathname.replace(/\/$/, '');
-const unlistedPathnames = new Set(['/learning/phase-2/'].map(normalizePathname));
+const unlistedPathnames = new Set(
+	['/learning/', '/learning/phase-1/', '/learning/phase-2/'].map(normalizePathname),
+);
 
 /** @param {string} pathname */
 const isUnlistedPathname = (pathname) => {
@@ -24,6 +26,7 @@ const isUnlistedPathname = (pathname) => {
 	return (
 		normalizedPathname === '/draft' ||
 		normalizedPathname.startsWith('/draft/') ||
+		normalizedPathname.startsWith('/labs/') ||
 		unlistedPathnames.has(normalizedPathname)
 	);
 };

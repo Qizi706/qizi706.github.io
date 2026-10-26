@@ -1,14 +1,12 @@
 ---
-import { phase1, phase2, phase2Progress } from '../data/lab-roadmap';
 import Layout from '../layouts/BlogPost.astro';
 import '../styles/global.css';
 
-const currentGate = phase2Progress.current;
 ---
 
 <Layout
-	title="Systems & AI Infrastructure"
-	description="系统软件项目、可复现实验、AI Infrastructure 学习路线与 AI 协作原则"
+	title="Systems & C++"
+	description="系统软件项目、可复现实验与 AI 协作原则"
 	pubDate={new Date('2026-08-06')}
 	updatedDate={new Date('2026-09-07')}
 	hideTitleDivider
@@ -19,10 +17,10 @@ const currentGate = phase2Progress.current;
 		<p class="profile-summary">
 			以系统软件与数据基础设施为主线：已在 xv6 与 BusTub
 			中完成虚拟内存、文件系统、缓冲池、并发索引、查询执行与 MVCC
-			等核心模块；当前将这些系统能力迁移到单机 LLM Serving，聚焦请求链路、KV Cache、调度与性能工程。
+			等核心模块；当前在分布式存储方向实习，聚焦 C++ 性能工程、并发与分布式系统。
 		</p>
 		<dl class="profile-ledger">
-			<dt>focus</dt><dd>AI Infrastructure / Systems</dd>
+			<dt>focus</dt><dd>Systems / C++ / Distributed Storage</dd>
 			<dt>foundation</dt><dd>OS · Storage Engine · Concurrency</dd>
 			<dt>working set</dt><dd>C · C++ · Python · RISC-V · Linux</dd>
 			<dt>method</dt><dd>implement → benchmark → source trace → write</dd>
@@ -77,36 +75,6 @@ const currentGate = phase2Progress.current;
 				</ul>
 			</div>
 		</section>
-	</section>
-
-	<section class="about-section" aria-labelledby="learning-title">
-		<h2 id="learning-title">AI Infra 学习路线</h2>
-		<p class="section-intro">
-			完整实验路线已经从 About 独立出来，统一按“Prerequisite → Question → Work → Artifact → Checkoff
-			→ Unlocks”组织。这里仅保留状态摘要，避免出现第二份路线图。
-		</p>
-
-		<ul class="roadmap-summary" aria-label="AI Infra 阶段摘要">
-			<li>
-				<h3>阶段 1：{phase1.title}</h3>
-				<p><strong>状态：</strong>已通过 · <strong>学习周期：</strong>{phase1.period}</p>
-				<p>{phase1.goal}</p>
-				<p class="roadmap-route">P1-L0 → P1-L1 → P1-L2 → P1-L3 → P1-L4 → P1-F</p>
-				<a href={phase1.path}>查看阶段 1 路线与证据 →</a>
-			</li>
-			<li class="is-active">
-				<h3>阶段 2：{phase2.title}</h3>
-				<p><strong>状态：</strong>进行中 · <strong>学习周期：</strong>{phase2.period}</p>
-				<p>{phase2.goal}</p>
-				<p class="roadmap-route">P0 → M0 → M1 → M2 → S0 → S1 → S2 → S3 → S4 → F0</p>
-				<p class="current-line">
-					<strong>当前：</strong>{currentGate.id} · {currentGate.title}
-				</p>
-				<a href={`${phase2.path}#current`}>继续当前 Lab →</a>
-			</li>
-		</ul>
-
-		<a class="roadmap-link" href="/learning/">打开完整 AI Infra 实验路线 →</a>
 	</section>
 
 	<section class="about-section principles-section" aria-labelledby="principles-title">
