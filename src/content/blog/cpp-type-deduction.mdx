@@ -210,13 +210,13 @@ const auto r = &value;    // int* const：const 修饰推导出的指针类型
 ## 更深一层的 const 也不会凭空消失
 
 ```cpp
-int value = 7;
-int* pointer = &value;
-int* const* source = &pointer;
-auto result = source;    // int* const*
+const char* const levels[] = {"debug", "info", "warn"};
+auto p = levels;    // const char* const*
 ```
 
-此处 `const` 限制的是经 `source` 访问到的那个内部指针，不是最外层指针对象。只背“按值去 const”会把它错误地推导成 `int**`；正确做法是先找清层次。
+`levels` 是一张只读的字符串表：每个元素都是 `const char* const`，既不能改指向，也不能通过它修改字符。按值推导时，数组退化成指向首元素的指针（第 3 节会展开），于是 `p` 指向的是这些 `const char* const` 元素。
+
+`p` 自己可以移动去指向下一个元素，但元素身上的两层 `const` 都保留了下来。它们都不在 `p` 的最外层，所以按值推导不会去掉。判断时先找清每个 `const` 修饰的是哪一层，再看它是不是最外层。
 
 </SlideCard>
 
