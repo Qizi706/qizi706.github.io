@@ -1,0 +1,18 @@
+.socket-lecture {
+	counter-reset: socket-chapter;
+}
+
+.socket-lecture > h2 {
+	counter-increment: socket-chapter;
+	margin: 0;
+	padding: 1rem 0 0.25rem;
+	color: inherit;
+	font-family: var(--font-heading);
+	font-size: 1.25rem;
+	font-weight: 700;
+	line-height: 1.75rem;
+}
+
+.socket-lecture > h2::before {
+	content: counter(socket-chapter) '. ';
+}

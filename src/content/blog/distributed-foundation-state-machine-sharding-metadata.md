@@ -3,7 +3,7 @@ title: '分布式基础：状态机、分片、路由与元数据'
 description: '跟踪一个 BlockGroup 从创建到迁移、淘汰的生命周期，解释状态机、引用计数、分片、路由缓存与 epoch 怎样共同保护所有权。'
 pubDate: '2026-07-07T16:30:00+08:00'
 updatedDate: '2026-09-07T00:33:57+08:00'
-readingOrder: 6
+readingOrder: 7
 readingNote: '状态：明确对象归属和请求路由'
 categories:
   - '分布式'

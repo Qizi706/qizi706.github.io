@@ -3,7 +3,7 @@ title: '分布式基础：副本和一致性'
 description: '比较同步与异步复制、线性一致性、会话保证和 Quorum，区分 KV 数据与元数据的正确性要求，并分析旧副本和主副本切换风险。'
 pubDate: '2026-07-14T10:30:00+08:00'
 updatedDate: '2026-09-07T00:33:57+08:00'
-readingOrder: 7
+readingOrder: 8
 readingNote: '副本：确定读写正确性要求'
 categories:
   - '分布式'

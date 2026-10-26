@@ -3,7 +3,7 @@ title: '分布式基础：缓存策略、迁移与淘汰'
 description: '在 HBM、内存、SSD 和远端之间比较缓存命中、迁移与重算成本，结合 pin、epoch 和水位控制分析预取及安全淘汰。'
 pubDate: '2026-07-14T16:30:00+08:00'
 updatedDate: '2026-09-07T00:33:57+08:00'
-readingOrder: 9
+readingOrder: 10
 readingNote: '资源：决定缓存放置与安全回收'
 categories:
   - '分布式'

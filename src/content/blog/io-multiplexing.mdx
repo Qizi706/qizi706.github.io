@@ -3,7 +3,7 @@ title: 'select、poll 与 epoll：一个线程怎样照看多个连接'
 description: '从一个等错连接的程序出发，逐步理解 select、poll、epoll 的等待与返回，推导 LT/ET 的读取规则，再把缓冲区、事件循环与异步 RPC 接起来。'
 pubDate: '2026-10-10'
 updatedDate: '2026-10-15'
-readingOrder: 4
+readingOrder: 5
 readingNote: '通信机制：从 socket 就绪走到事件循环与异步 RPC'
 categories:
   - '分布式'
@@ -23,9 +23,9 @@ import '../../assets/io-multiplexing/lecture.css';
 
 <div className="io-lecture">
 
-> 系列入口：[分布式阅读路径](/category/分布式/)。前置：[RPC 入门](/blog/rpc-introduction/)。下一篇：[RPC 和远程调用](/blog/distributed-foundation-rpc-remote-call/)。
+> 系列入口：[分布式阅读路径](/category/分布式/)。前置：[Socket 入门](/blog/socket-programming-introduction/)。下一篇：[RPC 和远程调用](/blog/distributed-foundation-rpc-remote-call/)。
 
-在上一篇文章里，笔记本向文件服务查询 `report.txt` 的大小。异步 RPC 允许程序发出请求后继续工作，响应到了，再处理结果。
+在 [RPC 入门](/blog/rpc-introduction/)里，笔记本向文件服务查询 `report.txt` 的大小。异步 RPC 允许程序发出请求后继续工作，响应到了，再处理结果。
 
 但“响应到了，再处理”是谁做的？如果同时有一百个调用，难道要有一百个线程，分别守着一个响应？
 

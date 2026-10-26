@@ -1,0 +1,707 @@
+---
+title: 'Socket 入门：一条 TCP 连接是怎样建立和使用的'
+description: '从查询文件大小出发，走通 socket、bind、listen、connect、accept、send 与 recv，弄清 fd、连接、缓冲区和消息的关系，再进入 I/O 多路复用。'
+pubDate: '2026-10-21'
+readingOrder: 4
+readingNote: '通信基础：建立连接、收发字节与保存半条消息'
+categories:
+  - '分布式'
+tags:
+  - 'Linux'
+  - '网络'
+  - 'Socket'
+  - 'TCP'
+draft: false
+mathjax: false
+---
+
+import ArticleImage from '../../components/ArticleImage.astro';
+import ConnectionFlow from '../../assets/socket-programming-introduction/connection.svg';
+import '../../assets/socket-programming-introduction/lecture.css';
+
+<div className="socket-lecture">
+
+> 系列入口：[分布式阅读路径](/category/分布式/)。前置：[RPC 入门](/blog/rpc-introduction/)。下一篇：[select、poll 与 epoll](/blog/io-multiplexing/)。
+
+笔记本想知道文件服务上的 `report.txt` 有多大。在 RPC 的视角里，这是一次函数调用；往下看，客户端需要把请求送过去，服务端需要把结果送回来。
+
+可是，程序怎样找到服务？`epoll` 示例里随手出现的 `fdA`、`fdB` 是从哪里来的？连接建立以后，究竟是谁把数据放进 `buffer`？如果这些地方还没有连起来，直接读 `epoll` 很容易变成记接口。
+
+这一讲先只接待一个客户端。我们沿着一条 TCP 连接走完建立、收发和关闭，再看一个线程照看多个连接时，多出来的问题是什么。
+
+<Note title="范围与代码约定">
+
+这是 Linux / Unix 网络编程的基础，使用 C++17 和 POSIX socket 接口；正文涉及的基本接口也可用于 macOS。`epoll` 留到下一讲。
+
+正文代码是分组教学片段，不是可直接拼接编译的完整程序；能编译运行的完整版本放在“把一次成功的查询连起来”一节末尾。片段用到的头文件是 `<sys/socket.h>`、`<netinet/in.h>`、`<arpa/inet.h>`、`<unistd.h>`、`<fcntl.h>` 和 `<cerrno>`。先跟踪正常路径，再解释返回值；实际程序必须检查系统调用失败。读者只需认识变量、函数、循环和字符串，不要求先掌握 TCP 报文、路由或网络框架。
+
+</Note>
+
+## 两个进程怎样交换一次查询
+
+客户端进程中的函数，不能直接读取服务端进程的局部变量。即使两个进程都在本机，它们也有各自的地址空间；在客户端声明一个 `buffer`，不会自动让服务端获得它。
+
+因此，我们需要把查询表示为字节，让操作系统把字节送到另一端，再由另一端的程序解释。这里采用 TCP：它向应用提供有序、可靠的字节流。所谓可靠，是指协议处理丢包重传、按序交付等传输问题；网络故障仍可能让连接失败，它不保证一次业务请求必然成功。
+
+**TCP 是通信协议，socket 是应用使用操作系统通信能力的接口和端点。** socket 也可以使用 UDP 等其他协议，本文只讨论 TCP socket。后面每次说“连接”，都是指 TCP 连接。
+
+在这个例子里，职责可以先分清：
+
+| 谁 | 负责什么 |
+| --- | --- |
+| 客户端应用 | 表达“查询文件大小”，解释结果 |
+| 两端操作系统的 TCP 实现 | 建立连接，传递有序的字节流 |
+| 服务端应用 | 解释查询，访问本地文件，产生结果 |
+
+接下来先解决一个问题：客户端该把连接请求发到哪里？
+
+## 先让两个程序有一个见面的地址
+
+继续使用文件大小查询。为了排除部署问题，先把客户端和文件服务作为两个进程运行在同一台机器上。文件由服务端进程访问；客户端通过网络接口问它，不自己打开文件。
+
+约定文件服务在 `127.0.0.1:9090` 等待连接。`127.0.0.1` 是回环地址，指向本机；`9090` 是我们为服务选择的端口。以后换成另一台机器，客户端改用那台机器的地址即可；服务端也要改绑定的地址（见下文“为什么先用回环地址？”），并且网络要可达。
+
+<SlideCard title="地址和 fd 各自解决什么问题？">
+
+## 找到服务，和操作自己的 socket
+
+| 名称 | 在这个例子中表示什么 |
+| --- | --- |
+| IP 地址 `127.0.0.1` | 连接本机 |
+| 服务端口 `9090` | 找到本机约定的 TCP 服务端点 |
+| 客户端 fd `7` | 客户端进程操作自己 socket 的编号 |
+
+**端口不是 fd，fd 也不是全局连接编号。**
+
+</SlideCard>
+
+socket 是操作系统提供的通信端点。内核维护它的状态、收发缓冲区等信息，应用通过接口操作它。
+
+fd（file descriptor，文件描述符）则是进程使用的一个整数编号。可以把它理解为进程交给内核的“索引”：`recv(7, ...)` 的意思是操作当前进程描述符表中编号为 `7` 的对象。它属于“句柄”这一类间接引用资源的方式。
+
+因此，客户端的 `7` 和服务端的 `7` 可以表示不同对象。把变量赋值为 `7` 也不会创建 socket；要先让系统创建资源并返回 fd。后文的 `3`、`4`、`7` 都是便于追踪的假定值，真实值由系统分配。
+
+## 服务先准备好接待入口
+
+服务端要先获得一个 socket，再指定地址，最后开始监听。这三个操作改变的是同一个 socket 的状态。
+
+这些函数是应用调用操作系统能力的入口，通常称为系统调用接口。调用返回以后，应用继续执行下一行；有些调用需要等待条件满足才能返回，这叫阻塞。阻塞的是执行调用的线程，不是整台机器：其他线程、其他进程以及内核处理网络的工作仍然可以推进。
+
+先准备地址。`AF_INET` 表示使用 IPv4，地址需要按系统接口要求写进一个结构体：
+
+```cpp
+sockaddr_in address{};
+address.sin_family = AF_INET;
+address.sin_port = htons(9090);
+inet_pton(AF_INET, "127.0.0.1", &address.sin_addr);
+```
+
+`sockaddr_in` 表示 IPv4 地址，`{}` 先把结构体初始化为零。`htons` 把端口转换成网络使用的字节顺序；`inet_pton` 把人能读的 IP 文本转换成地址字段，成功返回 `1`。它们都没有发起连接。
+
+`bind` 接口接受通用的 `sockaddr*`，所以调用处将具体的 IPv4 地址指针转换成这个类型，同时传入结构体大小。
+
+<SlideCard title="先创建，再绑定，再监听">
+
+## 服务端的三个准备动作
+
+```cpp
+int listenFd = socket(AF_INET, SOCK_STREAM, 0);
+// 成功时，假定 listenFd == 3。
+
+bind(listenFd, reinterpret_cast<sockaddr*>(&address),
+     sizeof address);
+listen(listenFd, 16);
+```
+
+三个调用都成功以后，`listenFd` 才成为接待连接的入口。
+
+</SlideCard>
+
+`socket(AF_INET, SOCK_STREAM, 0)` 创建 IPv4 流式 socket，在这里使用 TCP。成功返回一个非负 fd，失败返回 `-1`。**刚创建的 socket 还没有连接到任何客户端。**
+
+`bind` 为它指定本地地址；`listen` 把它变成监听 socket，用来接待连接。两者成功返回 `0`，失败返回 `-1`。只有前一步成功，才能沿这条正常路径继续。例如，端口已被占用时，`bind` 可能失败，后面的等待就没有意义。
+
+<Note title="刚停掉服务，重启时 bind 失败？">
+
+后文的安排是服务端回复后先 `close(connFd)`。主动关闭的一方，连接会在 TIME_WAIT 状态停留一段时间（Linux 上约 60 秒），期间仍占着 `9090` 这个本地端口。这时重启服务，`bind` 常会失败，`errno` 为 `EADDRINUSE`。
+
+所以服务端通常在 `bind` 之前打开 `SO_REUSEADDR`：
+
+```cpp
+int on = 1;
+setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
+```
+
+它允许在旧连接仍处于 TIME_WAIT 时重新绑定监听地址；如果另一个进程正在监听同一端口，`bind` 仍会失败。细节见 [socket(7)](https://man7.org/linux/man-pages/man7/socket.7.html)。
+
+</Note>
+
+<Note title="监听队列不是客户端总数">
+
+`listen(..., 16)` 中的 `16` 是等待应用接收的连接队列长度参数，实际还受系统限制；它不是“整个服务最多只能有 16 个客户端”，也不会创建 16 个线程。Linux 对该队列的具体定义见 [listen(2)](https://man7.org/linux/man-pages/man2/listen.2.html)。
+
+</Note>
+
+<Note title="为什么先用回环地址？">
+
+绑定 `127.0.0.1` 的服务只接受本机通过回环地址访问。若要接待其他机器，需要绑定合适的本机地址；`0.0.0.0` 可表示监听所有本地 IPv4 接口，但客户端连接时应填写服务器的实际地址。这里先不引入防火墙、路由和部署配置。
+
+</Note>
+
+## 客户端连接，服务端接收连接
+
+客户端同样先创建自己的 socket。它要连接的目标地址，恰好就是上面约定的服务地址。
+
+<SlideCard title="客户端：我要连接这个服务">
+
+## `connect` 指定对端
+
+```cpp
+int clientFd = socket(AF_INET, SOCK_STREAM, 0);
+// 成功时，假定 clientFd == 7。
+
+int result = connect(
+    clientFd, reinterpret_cast<sockaddr*>(&address),
+    sizeof address);
+```
+
+这里的 `address` 是客户端准备的目标地址 `127.0.0.1:9090`。
+
+</SlideCard>
+
+在默认的阻塞模式下，`connect` 等待连接建立成功或失败。返回 `0` 才能沿成功路径收发数据；返回 `-1` 表示失败，不能当成已经连接。
+
+失败的具体原因要看 `errno`：它是系统调用报告失败原因的错误码，只在返回值表明失败时才有意义，不能在调用成功后读一个旧值来推断失败。后文所有系统调用都按这个规则使用它。
+
+服务端 `bind` 使用地址来说明“我在这里接待”；客户端 `connect` 使用地址来说明“我要去这里”。参数看起来相似，含义取决于调用的接口。
+
+客户端通常不需要自己 `bind`。内核会选择本地地址和一个临时端口。假定这次选择的是 `127.0.0.1:53000`，那么连接的两端就是 `127.0.0.1:53000` 和 `127.0.0.1:9090`。下次连接的临时端口可能不同。
+
+服务端准备好监听后，调用另一个接口取出已建立的连接：
+
+<SlideCard title="服务端：给这位客户端一个通信端点">
+
+## `accept` 返回另一个 fd
+
+```cpp
+int connFd = accept(listenFd, nullptr, nullptr);
+// 成功时，假定 connFd == 4。
+```
+
+- `listenFd`：继续负责接待新连接。
+- `connFd`：负责与这一次连接的客户端收发数据。
+
+**监听 socket 没有变成通信 socket；这里多了一个 socket。**
+
+</SlideCard>
+
+两个 `nullptr` 表示暂时不取回客户端的地址信息。没有可接收的连接时，阻塞的 `accept` 会等待；成功时返回新 fd，失败时返回 `-1`。
+
+客户端执行 `connect` 后，两端内核交换建立连接所需的信息，这个过程称为握手。握手由内核完成，不需要服务端应用参与：连接建立后先放进监听 socket 的队列，等应用调用 `accept` 取走。
+
+所以两端的调用顺序并不固定。服务端可以先执行到 `accept` 等着；也可以晚一些才调用，此时客户端的 `connect` 可能早已成功返回。`connect` 成功只说明连接建好了，不说明服务端应用已经取走它，更不意味着文件查询已经执行。
+
+<ArticleImage src={ConnectionFlow} alt="客户端 fd 7 通过 connect 向服务端监听 fd 3 发起握手；服务端通过 accept 从 fd 3 得到通信 fd 4，fd 3 随后仍可接待新连接。业务数据只在客户端 socket 与已连接 socket 之间流动。" caption="图中的 fd 和临时端口是示意值。客户端和服务端各有自己的描述符表。" />
+
+为什么多个客户端都连 `9090`，服务还能分清？因为一条 TCP 连接由两端地址和端口共同区分。两个客户端即使目标相同，源地址和源端口也至少有一项不同。`accept` 得到的 socket 仍使用服务端口 `9090`，不需要给每个客户端另开一个服务端口。参见 [accept(2)](https://man7.org/linux/man-pages/man2/accept.2.html) 与 [tcp(7)](https://man7.org/linux/man-pages/man7/tcp.7.html)。
+
+## 有了连接，还要约定字节是什么意思
+
+TCP 让两个程序有序地传递字节，但它不知道文件名、请求或响应是什么。我们自己定一个足够小的文本协议：
+
+<SlideCard title="给文件大小查询定一个规则">
+
+## 一行是一条消息
+
+```text
+客户端发送：SIZE report.txt\n
+服务端回复：SIZE 4096\n
+```
+
+这里 `\n` 表示一个换行字节。`4096` 是假定的文件大小，单位是字节。
+
+</SlideCard>
+
+这个协议规定：以换行作为消息结束标记；服务端认出请求后，在自己的文件系统中查询 `report.txt`，再把大小转成十进制文本。查询失败时，可以回复 `ERR file-unavailable\n`。本例只接受固定文件名，暂不设计通用文件路径语法。
+
+TCP 并不会执行查询。执行查询的是服务端应用代码。`accept` 只交付连接，`recv` 只交付字节，应用解析字节后才知道该做什么。
+
+这就是网络编程和 RPC 的衔接处：这里我们手工定义消息和处理逻辑；RPC 框架则进一步提供编码、调用分发、结果匹配等机制，让上层用调用接口表达这些操作。
+
+## 字节从一端到另一端，要经过哪里？
+
+建立连接后，双方都能调用 `send` 和 `recv`。客户端并不只能发送，服务端也不只能接收；请求和响应走的是相反的方向。
+
+先只跟踪客户端发出的请求。在本文使用的普通收发方式下，可以把路径看成：
+
+```text
+客户端应用中的 request
+    ↓ send
+客户端内核的发送缓冲区
+    ↓ TCP 传输
+服务端内核的接收缓冲区
+    ↓ recv
+服务端应用中的 buffer
+    ↓ 应用积累、解析
+一条完整查询 → 执行文件查询
+```
+
+发送缓冲区暂存交给本地发送机制的字节；接收缓冲区暂存已经到达、等待应用取走的字节。图中省略了协议栈和设备内部的细节，只保留应用理解收发所需要的边界。
+
+注意：**数据到达接收缓冲区，不要求对方应用恰好正在执行 `recv`。** 即使服务端线程在做别的事，内核也可以先接收和保存数据；应用以后再取。但缓冲区容量有限，如果应用长期不读取，会通过 TCP 流量控制影响发送端，不能把它当成无限仓库。
+
+响应沿相反方向经过同样的过程：服务端 `send`，客户端 `recv`。下面先看每一步完成时，应用究竟能确认什么。
+
+## `send` 返回，字节走到哪里了？
+
+先从客户端发送请求看起：
+
+```cpp
+std::string request = "SIZE report.txt\n";
+ssize_t n = send(clientFd, request.data(), request.size(), 0);
+```
+
+`request.data()` 指向请求字节，`request.size()` 是希望发送的长度，最后的 `0` 表示不启用额外标志。`ssize_t` 是可以表示负数的长度类型，因此既能容纳字节数，也能表示失败时的 `-1`。
+
+`send` 从应用提供的内存取字节，交给本地 socket 的发送机制。成功返回本次交给发送缓冲区的字节数。**这个结果不证明对方应用已经读取，更不证明文件查询已完成。**
+
+一次 `send` 不保证交出全部字节。阻塞 socket 上这种情况较少见，通常发生在发送中途被信号打断或设置了发送超时时；到了下一讲的非阻塞 socket，发送缓冲区一满就会出现，非常常见。假如请求共 16 字节，本次只交出了前 6 字节，下次应从第 7 个字节开始发送，不能重发开头。
+
+<SlideCard title="部分发送以后，从哪里继续？">
+
+## 保存已经交出的长度
+
+```cpp
+size_t offset = 0;
+while (offset < request.size()) {
+    ssize_t n = send(clientFd, request.data() + offset,
+                     request.size() - offset, 0);
+    if (n > 0) offset += static_cast<size_t>(n);
+    else break; // 此处退出正常路径，实际程序要处理错误。
+}
+```
+
+只有 `offset == request.size()`，才表示整条请求已交给本地发送机制。
+
+</SlideCard>
+
+<Note title="发送循环的错误路径">
+
+片段只强调偏移量，不能把循环退出直接当作成功。实际代码还要处理 `EINTR`（调用被信号中断，可按情况重试）、连接错误等。向已断开的连接发送还可能触发 `SIGPIPE`；Linux 可用 `MSG_NOSIGNAL` 抑制该信号并通过返回值处理错误。接口细节见 [send(2)](https://man7.org/linux/man-pages/man2/send.2.html)。
+
+</Note>
+
+TCP 接下来负责传输和必要的重传，但无法替你判断服务端业务是否成功。客户端仍要收到并解析应用协议中的响应。
+
+## `recv` 拿到的是一批字节，不一定是一条消息
+
+现在服务端读取请求，注意它使用 `connFd`，不是监听用的 `listenFd`：
+
+<SlideCard title="服务端从这条连接取数据">
+
+## `buffer` 是接收目的地
+
+```cpp
+char buffer[1024];
+ssize_t n = recv(connFd, buffer, sizeof buffer, 0);
+```
+
+`1024` 是这次最多接收的字节数，不是要求凑够 1024 字节才返回。
+
+</SlideCard>
+
+`connFd` 指定读哪个 socket，`buffer` 指定把字节放在哪里，`sizeof buffer` 指定最多取多少，最后的 `0` 表示普通读取。内核完成这次读取，函数返回后，应用才根据返回的长度处理内容。
+
+在默认的阻塞模式、标志为 `0` 的情形下，当前没数据、连接也没有结束或出错，线程就会等待。有数据可取时，调用可以返回现有的一部分字节。
+
+| 返回结果 | 应用怎样理解 |
+| --- | --- |
+| `n > 0` | 读到了 `n` 字节，只有 `buffer[0]` 到 `buffer[n - 1]` 有效 |
+| `n == 0` | 对于这里非零长度的读取，表示对端正常结束发送，且待读数据已读完 |
+| `n == -1` | 调用失败，检查 `errno`；不同原因需要不同处理 |
+
+`recv` 不自动在末尾追加字符串结束符 `\0`。处理文本时可用 `std::string(buffer, n)`，但前提是已经确认 `n > 0`；不能直接假定 `buffer` 是以零结尾的 C 字符串。
+
+还有一个更影响程序结构的事实：**TCP 保留字节顺序，不保留应用每次 `send` 的边界。** 对方一次发送 `SIZE 4096\n`，这边可能一次读完，也可能先读到 `SIZE 40`，稍后才读到 `96\n`。对方连续发送两行，这边也可能一次读到两行。这些是允许发生的情况，不是每次运行必然出现的拆分。
+
+因此，`recv` 成功与“收到了完整响应”是两件事。消息边界必须由应用协议判定。我们选择的规则是寻找换行字节。参见 [recv(2)](https://man7.org/linux/man-pages/man2/recv.2.html)。
+
+## 半条响应读出来以后，放在哪里？
+
+服务端对请求也要做相同的积累。为了把结果追踪到底，现在切到客户端读取响应：假定服务端已完成查询并发送 `SIZE 4096\n`。
+
+假定客户端第一次读到了 `SIZE 40`，还没有换行。此时这 7 个字节已经被普通 `recv` 从内核接收缓冲区取走，放到了应用的 `buffer` 中。
+
+它们不会留在内核里等后半条来拼接。第二次 `recv` 读到的是后续字节；把前后两段接起来，是应用自己的责任。
+
+<SlideCard title="临时接收区和消息积累区">
+
+## 两块内存，各有用途
+
+```cpp
+// 保留尚未处理的字节。
+std::string input;
+// 本次读取的临时接收区。
+char buffer[1024];
+
+// 每次 recv 返回 n > 0 后：
+input.append(buffer, n);
+```
+
+`buffer` 可以重复使用；未完成的消息必须保存在 `input` 中。
+
+</SlideCard>
+
+沿着同一个响应追踪四个时刻：
+
+| 时刻 | 内核待读字节 | 应用积累区 |
+| --- | --- | --- |
+| 第一段到达，还没读取 | `SIZE 40` | 空 |
+| 第一次读取并追加完成 | 空 | `SIZE 40` |
+| 后半段到达，还没再次读取 | `96\n` | `SIZE 40` |
+| 再次读取并追加完成 | 空 | `SIZE 4096\n` |
+
+现在可以按换行取出完整消息，同时保留其余字节：
+
+```cpp
+size_t end = input.find('\n');
+if (end != std::string::npos) {
+    std::string message = input.substr(0, end);
+    input.erase(0, end + 1);
+    // message 是 "SIZE 4096"，接下来解释它的业务含义。
+}
+```
+
+如果一次读取包含多行，就重复寻找并取出完整行；最后留下没有结束标记的尾部。真实服务还应限制消息和积累区大小，不能让没有换行的输入无限占用内存。
+
+### 没有换行，就继续读；有了换行，就交付消息
+
+把刚才的操作连成一个循环，关键是先检查已经积累的字节，只有还缺数据时才调用 `recv`。否则明明已有完整消息，也可能多读一次而阻塞。
+
+下面是客户端读取一条响应的教学片段；假定使用阻塞 socket、消息长度受控。`input` 在整个循环期间存在。错误分支用注释说明，尚不是通用网络库函数。
+
+```cpp
+std::string input;
+for (;;) {
+    size_t end = input.find('\n');
+    if (end != std::string::npos) {
+        std::string message = input.substr(0, end);
+        input.erase(0, end + 1);
+        // 解释 message，然后结束本次等待。
+        break;
+    }
+
+    char buffer[1024];
+    ssize_t n = recv(clientFd, buffer, sizeof buffer, 0);
+    if (n > 0) {
+        input.append(buffer, n);
+        continue;
+    }
+    if (n < 0 && errno == EINTR) continue;
+    // n == 0：还没等到完整行，对端就结束了发送。
+    // 其他失败：停止本次读取，并处理错误。
+    break;
+}
+```
+
+假定第一次 `recv` 返回 `SIZE 40`，追加后回到循环开头，找不到换行，于是再次读取。第二次可能等待；等 `96\n` 到达后，追加得到完整一行，下一轮直接取出消息并退出，不再调用 `recv`。
+
+如果对端在只发送 `SIZE 40` 后正常结束发送，下一次读取可能返回 `0`。连接层面的正常结束，并不能让这半条响应变成合法消息；对我们约定的协议来说，它仍是一次不完整的响应。
+
+这个片段只消费一行。如果要持续处理同一连接，剩余的 `input` 还必须交给下一次消息处理，不能随着本次函数返回而丢弃。后面进入事件循环时，这会成为连接状态的一部分。
+
+## 暂时没数据、消息结束、连接结束
+
+这三个状态必须分别判断。以前面的响应为例，收到 `SIZE 4096\n` 后，消息已经完整，但连接完全可以继续存在，供下一次查询使用。
+
+如果双方都不关闭连接，客户端又无条件调用阻塞的 `recv`，就可能一直等下去。这不是上一次响应没传完，而是程序已经读完一条消息，却还在等待更多字节。
+
+默认阻塞模式下，没有数据时通常是等待，不会因为“现在空了”就返回 `0`。要区分“暂时没数据”，需要把 socket 设为非阻塞。做法是用 `fcntl` 修改 fd 的状态标志，在原标志上加上 `O_NONBLOCK`：
+
+```cpp
+int flags = fcntl(connFd, F_GETFL, 0);
+fcntl(connFd, F_SETFL, flags | O_NONBLOCK);
+// 两步失败时都返回 -1。
+```
+
+本文没有设置接收超时；在这个前提下，设置为非阻塞后，读取会在暂时无数据时以 `EAGAIN` / `EWOULDBLOCK` 返回。这表示“现在推进不了，可以稍后再试”，不表示连接失效。
+
+所以，非阻塞并不意味着自动开一个后台线程，也不意味着系统以后会直接把完整消息交给你。当前调用返回以后，由应用决定去做什么、何时再次读取。它改变的是没有数据时调用如何返回，不改变消息的边界。下一讲再把它放进事件循环。
+
+<SlideCard title="别拿一种结束代替另一种结束">
+
+## 三个判断，三个依据
+
+| 状态 | 在这个例子中怎样判断 |
+| --- | --- |
+| 一条消息完整 | 积累区里找到了换行 |
+| 当前暂时没有更多数据 | 非阻塞 `recv` 返回 `-1`，`errno` 是 `EAGAIN` 或 `EWOULDBLOCK` |
+| 对端正常结束发送 | 非零长度的 `recv` 返回 `0` |
+
+</SlideCard>
+
+## 一次查询结束，应该关闭什么？
+
+最简单的安排是：客户端发一条查询，服务端回复一条结果，然后关闭这条连接。客户端按换行得到结果，再释放自己的 fd。双方的监听和通信资源要分别看待。
+
+<SlideCard title="服务端完成这位客户端的请求后">
+
+## 关闭连接，保留接待入口
+
+```cpp
+close(connFd);   // 结束应用对这条连接的使用。
+// listenFd 仍然存在，可以再次 accept。
+```
+
+`close(listenFd)` 则关闭监听入口，不会顺带关闭已经接受的其他 socket。
+
+</SlideCard>
+
+这里假定没有通过 `dup` 等方式保留同一 socket 的其他描述符引用。`close` 释放当前 fd；以后内核可能把这个整数重新分配给另一个资源，所以不能继续用旧 fd 猜测它仍代表原来的连接。
+
+还可以只结束一个方向。例如，客户端发送完全部请求后调用：
+
+```cpp
+shutdown(clientFd, SHUT_WR);
+```
+
+这表示自己不再发送，但还可以接收服务端响应。对端读完已经发送的数据后，可以观察到接收返回 `0`。它不等于 `close`：fd 仍然需要在使用结束时释放。
+
+TCP 是双向通信。一端正常结束发送，不意味着另一方向也已经结束。我们的一行协议本来就能判断请求结束，所以这里不必依赖 `shutdown` 来分隔请求；它只是帮助辨认“消息边界”和“发送方向结束”的区别。接口细节见 [shutdown(2)](https://man7.org/linux/man-pages/man2/shutdown.2.html) 和 [close(2)](https://man7.org/linux/man-pages/man2/close.2.html)。
+
+## 把一次成功的查询连起来
+
+现在可以在脑中走完全部过程。下面是一次可能的执行顺序；真实的两端并发运行，不保证应用日志严格按这些行交替出现。
+
+| 阶段 | 客户端进程 | 服务端进程 |
+| --- | --- | --- |
+| 准备服务 | 尚未连接 | `socket` → `bind` → `listen` |
+| 建立连接 | `socket` → `connect` | `accept` 得到 `connFd` |
+| 发送查询 | 循环 `send`，交出整条请求 | 从 `connFd` 调用 `recv` |
+| 处理查询 | 等待响应 | 积累到换行，解析请求，查询本地文件 |
+| 返回结果 | `recv`，积累到换行，解析大小 | 循环 `send`，交出整条响应 |
+| 释放资源 | `close(clientFd)` | `close(connFd)`，可继续接受下一条连接 |
+
+表中“循环 `send`”包含处理部分发送；“积累到换行”包含处理部分接收。表中只画成功路径，任何系统调用失败都应进入对应的错误处理，不能机械地继续下一格。
+
+到这里，一条连接已经能承载一次文件查询。仍然没有使用 `select`、`poll` 或 `epoll`，因为一个线程只等待这一个客户端，阻塞模式就足以表达顺序。
+
+<details>
+<summary>展开：可以编译运行的完整服务端与客户端</summary>
+
+把前面的片段收拢成两个文件。`readLine` 就是“积累到换行”的循环，`sendAll` 就是“部分发送后从偏移量继续”的循环；错误路径简化为打印并退出。
+
+```cpp
+// size_server.cpp：只接待一个客户端，回答一次 SIZE report.txt 查询。
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <cerrno>
+#include <cstdio>
+#include <filesystem>
+#include <string>
+#include <system_error>
+
+// 读到一条以换行结尾的消息；失败或对端提前结束时返回 false。
+bool readLine(int fd, std::string& input, std::string& line) {
+    for (;;) {
+        size_t end = input.find('\n');
+        if (end != std::string::npos) {
+            line = input.substr(0, end);
+            input.erase(0, end + 1);
+            return true;
+        }
+        char buffer[1024];
+        ssize_t n = recv(fd, buffer, sizeof buffer, 0);
+        if (n > 0) {
+            input.append(buffer, static_cast<size_t>(n));
+            continue;
+        }
+        if (n < 0 && errno == EINTR) continue;
+        return false;
+    }
+}
+
+// 把整条消息交给发送缓冲区；处理部分发送。
+bool sendAll(int fd, const std::string& data) {
+    size_t offset = 0;
+    while (offset < data.size()) {
+        ssize_t n = send(fd, data.data() + offset, data.size() - offset, 0);
+        if (n > 0) offset += static_cast<size_t>(n);
+        else if (n < 0 && errno == EINTR) continue;
+        else return false;
+    }
+    return true;
+}
+
+int main() {
+    int listenFd = socket(AF_INET, SOCK_STREAM, 0);
+    if (listenFd < 0) { perror("socket"); return 1; }
+
+    int on = 1;
+    setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof on);
+
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(9090);
+    inet_pton(AF_INET, "127.0.0.1", &address.sin_addr);
+
+    if (bind(listenFd, reinterpret_cast<sockaddr*>(&address), sizeof address) < 0) {
+        perror("bind");
+        return 1;
+    }
+    if (listen(listenFd, 16) < 0) { perror("listen"); return 1; }
+
+    int connFd = accept(listenFd, nullptr, nullptr);
+    if (connFd < 0) { perror("accept"); return 1; }
+
+    std::string input, request;
+    if (readLine(connFd, input, request)) {
+        std::string response = "ERR file-unavailable\n";
+        if (request == "SIZE report.txt") {
+            std::error_code ec;
+            auto size = std::filesystem::file_size("report.txt", ec);
+            if (!ec) response = "SIZE " + std::to_string(size) + "\n";
+        }
+        if (!sendAll(connFd, response)) perror("send");
+    }
+
+    close(connFd);
+    close(listenFd);
+}
+```
+
+客户端复用同样的 `readLine` 和 `sendAll`（复制到文件开头即可），`main` 如下：
+
+```cpp
+// size_client.cpp：连接文件服务，查询 report.txt 的大小。
+// 头文件与服务端相同（不需要 <filesystem> 和 <system_error>），
+// 并在这里放上 readLine 与 sendAll 的定义。
+
+int main() {
+    int clientFd = socket(AF_INET, SOCK_STREAM, 0);
+    if (clientFd < 0) { perror("socket"); return 1; }
+
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(9090);
+    inet_pton(AF_INET, "127.0.0.1", &address.sin_addr);
+
+    if (connect(clientFd, reinterpret_cast<sockaddr*>(&address), sizeof address) < 0) {
+        perror("connect");
+        return 1;
+    }
+
+    std::string input, response;
+    if (!sendAll(clientFd, "SIZE report.txt\n")) { perror("send"); return 1; }
+    if (readLine(clientFd, input, response)) {
+        std::printf("response: %s\n", response.c_str());
+    } else {
+        std::printf("connection ended before a complete response\n");
+    }
+    close(clientFd);
+}
+```
+
+在同一目录下编译，先准备一个 4096 字节的 `report.txt`，再分两个终端运行：
+
+```bash
+clang++ -std=c++17 -Wall -Wextra size_server.cpp -o size_server
+clang++ -std=c++17 -Wall -Wextra size_client.cpp -o size_client
+head -c 4096 /dev/zero > report.txt
+
+./size_server   # 终端 1：阻塞在 accept
+./size_client   # 终端 2
+```
+
+我在 macOS（Apple clang 21）上运行，三种情形的结果与正文的推理一致：
+
+- 有 `report.txt` 时，客户端打印 `response: SIZE 4096`。
+- 删掉 `report.txt` 再运行，客户端打印 `response: ERR file-unavailable`：连接和收发都成功了，失败的是业务。
+- 不启动服务端直接运行客户端，`connect` 失败并打印 `Connection refused`。
+
+服务端每次回复后先关闭连接，因此每次都会在 `9090` 上留下 TIME_WAIT；由于设置了 `SO_REUSEADDR`，紧接着重启服务端也能成功 `bind`。可以试着删掉 `setsockopt` 那一行，再快速连续运行两轮，观察 `bind: Address already in use`。
+
+</details>
+
+## 动手看一眼：连接真的长这样吗？
+
+前面的 fd 和端口都是假定值。不写完整程序，也可以用 `nc`（netcat）扮演两端，检验几个结论。打开三个终端：
+
+```bash
+# 终端 1：扮演服务端，在 127.0.0.1:9090 监听
+nc -l 127.0.0.1 9090
+
+# 终端 2：扮演客户端，连接服务
+nc 127.0.0.1 9090
+
+# 终端 3：查看与 9090 有关的 TCP socket（Linux）
+ss -tan '( sport = :9090 or dport = :9090 )'
+# macOS 可改用：lsof -nP -iTCP:9090
+```
+
+不同版本的 `nc` 参数略有差异，传统 netcat 需要写成 `nc -l -p 9090`。
+
+先按正文预测，再对照终端里看到的结果：
+
+- 只启动终端 1 时，应当只有一条 `LISTEN` 记录，本地地址是 `127.0.0.1:9090`，这就是监听 socket。
+- 终端 2 连上以后，会多出一对 `ESTAB` 记录：一条本地端口是 `9090`，另一条本地端口是内核挑的临时端口，对应正文假定的 `53000`。服务端没有为这位客户端另开端口。
+- 在终端 2 输入 `SIZE report.txt` 并回车，终端 1 会显示这一行；在终端 1 输入 `SIZE 4096` 并回车，终端 2 会显示它。`nc` 并不理解这些文字，只是搬运字节，解释它们是应用协议的事。
+- 在终端 2 按 Ctrl-C 结束客户端，终端 1 的 `nc` 通常会随之退出：它的读取返回了 `0`。再看终端 3，先关闭的那一端会留下 `TIME-WAIT`。这里先关闭的是客户端；如果像本文的安排那样由服务端先关闭，`TIME-WAIT` 就会占着 `9090`，也就是前面重启时 `bind` 失败的原因。
+
+## 问题怎样走到 I/O 多路复用？
+
+假设服务端已经接受了 A、B 两条连接。线程先调用 `recv(fdA, ...)`，A 暂时不发请求，线程就停在 A 上。此时 B 的完整请求已经到达，B 的接收缓冲区里有数据，但应用还没有执行读取 B 的代码。
+
+单个线程怎样避免等错地方？这才轮到 `select`、`poll`、`epoll` 出场：先等待一组 fd 的就绪事件，再操作现在能够推进的对象。
+
+<SlideCard title="事件到了，接下来调用哪个接口？">
+
+## 先辨认 fd 的职责
+
+| 哪种 socket 出现可读事件 | 通常要做的下一步 |
+| --- | --- |
+| 监听 socket | `accept`，取出待接收的连接 |
+| 已连接 socket | `recv`，取得数据或观察 EOF、错误 |
+
+就绪通知不会替应用接受连接，也不会替应用解析消息。
+
+</SlideCard>
+
+线程离开 A 去处理 B 时，A 的半条消息不能丢失。前面阻塞循环里的 `input`，现在需要保存得更久：处理函数这次返回，下次仍能找到同一份积累区。
+
+<SlideCard title="切换连接时，保留各自读到的位置">
+
+## fd 和未完成的输入一起保存
+
+```cpp
+struct Connection {
+    int fd;
+    std::string input;
+};
+```
+
+每条连接有自己的状态，A 的字节不能追加到 B 的消息里。
+
+</SlideCard>
+
+仅仅定义结构体还不够：这些 `Connection` 对象必须由事件循环或连接管理对象持有，活过多次处理函数调用。每次进入处理函数，再找到这个 fd 对应的状态继续读取、追加和解析。
+
+实际事件循环通常配合非阻塞 socket：就绪状态可能变化，一次事件处理也可能想连续读取多批数据；非阻塞模式让线程在暂时无法继续时返回，而不是重新卡住。
+
+<details>
+<summary>检查理解：完整响应已经到达，但线程还卡在另一个连接上，会发生什么？</summary>
+
+假定线程正阻塞在 `recv(fdA, ...)`，此时 B 的 `SIZE 4096\n` 已经全部到达。A、B 都保持连接。
+
+B 的字节可以先保存在 B 的内核接收缓冲区，但这不会替线程执行 `recv(fdB, ...)`，也不会让等待 A 的调用因为 B 到达数据而完成。应用的 B 积累区仍要等它实际读取后才更新。
+
+如果使用多路复用，应用可以先等待一组 fd 的就绪状态，再读取 B。读出字节后，仍然要追加、寻找换行并解析响应。因此要依次问：字节到了吗？应用取走了吗？消息拼完整了吗？业务处理完成了吗？这四个时刻可能不同。
+
+</details>
+
+带着这几个状态，继续读 [select、poll 与 epoll：一个线程怎样照看多个连接](/blog/io-multiplexing/)。接下来不再假设“连接凭空出现”：你已经知道这些 fd 从哪里来、该调用哪个接口，以及一次读取以后哪些状态必须留下。
+
+</div>
