@@ -6,25 +6,19 @@ import '../styles/global.css';
 
 <Layout
 	title="Systems & C++"
-	description="系统软件项目、可复现实验与 AI 协作原则"
+	description="系统软件项目与当前学习路线"
 	pubDate={new Date('2026-08-06')}
-	updatedDate={new Date('2026-09-07')}
+	updatedDate={new Date('2026-10-26')}
 	hideTitleDivider
 	pageType="profile"
 >
-	<section class="profile-brief" aria-label="技术方向与工作方法">
+	<section class="profile-brief" aria-label="技术方向">
 		<h2>技术方向</h2>
 		<p class="profile-summary">
 			以系统软件与数据基础设施为主线：已在 xv6 与 BusTub
 			中完成虚拟内存、文件系统、缓冲池、并发索引、查询执行与 MVCC
 			等核心模块；当前在分布式存储方向实习，聚焦 C++ 性能工程、并发与分布式系统。
 		</p>
-		<dl class="profile-ledger">
-			<dt>focus</dt><dd>Systems / C++ / Distributed Storage</dd>
-			<dt>foundation</dt><dd>OS · Storage Engine · Concurrency</dd>
-			<dt>working set</dt><dd>C · C++ · Python · RISC-V · Linux</dd>
-			<dt>method</dt><dd>implement → benchmark → source trace → write</dd>
-		</dl>
 	</section>
 
 	<section class="about-section" aria-labelledby="projects-title">
@@ -32,11 +26,9 @@ import '../styles/global.css';
 
 		<section class="project">
 			<h3>MIT 6.S081</h3>
-			<p class="project-stack">RISC-V · xv6 · C · Linux</p>
 			<div class="project-body">
-				<p class="project-meta">2026.02 — 2026.04 · 独立完成</p>
 				<p>
-					基于 RISC-V / xv6 扩展内存、进程、Trap
+					2026 年 2 月到 4 月独立完成。在 RISC-V 版 xv6 上扩展内存、进程、Trap
 					与文件系统路径，重点验证虚拟内存、异常处理和持久化语义。
 				</p>
 				<ul>
@@ -54,11 +46,10 @@ import '../styles/global.css';
 
 		<section class="project">
 			<h3>CMU 15-445</h3>
-			<p class="project-stack">BusTub · C++ · Linux</p>
 			<div class="project-body">
-				<p class="project-meta">2025.11 — 2025.12 · 独立完成</p>
 				<p>
-					围绕单机数据库内核完成存储、索引、执行、优化与事务链路，实现可并发访问的 BusTub 核心模块。
+					2025 年 11 月到 12 月独立完成。用 C++ 在 BusTub
+					上实现单机数据库内核的存储、索引、执行、优化与事务链路，各模块支持并发访问。
 				</p>
 				<ul>
 					<li>
@@ -77,80 +68,38 @@ import '../styles/global.css';
 		</section>
 	</section>
 
-	<section class="about-section principles-section" aria-labelledby="principles-title">
-		<h2 id="principles-title">学习与 AI 协作原则</h2>
+	<section class="about-section" aria-labelledby="roadmap-title">
+		<h2 id="roadmap-title">神秘学习路线</h2>
 
-		<p class="principles-lead">
-			<strong>不回避 AI，不外包判断。</strong>独立编程用于维护建模、实现、调试与解释能力；AI
-			用于扩大代码库探索、验证和工程交付效率。最终结论只由代码、测试、测量与可复现证据确认。
-		</p>
-
-		<ul class="mode-list" aria-label="三种 AI 协作模式">
-			<li>
-				<h3>M0 · 独立模式</h3>
-				<p>用于核心机制、第一轮调试与最终解释；AI 不介入问题求解。</p>
-				<p class="mode-own">负责：系统模型、约束与实现</p>
-			</li>
-			<li>
-				<h3>M1 · 教练模式</h3>
-				<p>用于源码导航、概念澄清与反例生成；AI 提问和 Review，不直接接管结论。</p>
-				<p class="mode-own">负责：源码追踪、假设与权衡</p>
-			</li>
-			<li>
-				<h3>M2 · Agent 模式</h3>
-				<p>用于脚手架、测试、数据处理与重构；AI 在明确契约和验收标准内执行。</p>
-				<p class="mode-own">负责：范围、验收与最终修改</p>
-			</li>
-		</ul>
-
-		<div class="protocol-grid">
-			<div>
-				<h3>before delegation</h3>
+		<section class="project">
+			<h3>C++ 性能工程</h3>
+			<div class="project-body">
+				<p>
+					2026 年 10 月开始，按周推进，现在在第 2 周。每一步都用代码、测试或 benchmark 数据验收。
+				</p>
 				<ul>
-					<li>定义 Question、Prediction 与 Invariant。</li>
-					<li>限定 Action 与 Allowed AI Help。</li>
-					<li>指定 Artifact 与 Acceptance。</li>
+					<li>
+						<strong>阶段 1 · 语言与体系结构</strong>（W1 — W10，进行中）：对象模型、移动语义、模板、内存模型、无锁队列、CPU
+						缓存与 perf。
+					</li>
+					<li>
+						<strong>阶段 2 · 性能项目</strong>（W11 — W17）：热路径零分配、SPSC 队列、绑核，测量 p50 / p99 / p999
+						延迟。
+					</li>
+					<li><strong>阶段 3 · 系统与网络</strong>（W18 — W27）：系统调用、TCP / UDP、编译与链接、PGO。</li>
+					<li><strong>阶段 4 · 专项</strong>（W28 — W36）：SIMD、kernel bypass、存储系统与系统设计。</li>
 				</ul>
+				<p>
+					当前在看对象模型：类型推导、对象内存布局、虚函数表与多继承下的 this 调整。笔记：<a
+						href="/blog/cpp-type-deduction/">C++ 类型推导</a
+					>。
+				</p>
 			</div>
-			<div>
-				<h3>after delivery</h3>
-				<ul>
-					<li>审阅完整 Diff，运行测试并复现实验。</li>
-					<li>脱离对话解释关键路径，独立修改一个约束。</li>
-					<li>记录 Feedback、Reflection 与下一项决策。</li>
-				</ul>
-			</div>
-		</div>
-
-		<pre
-			class="pipeline"
-			aria-label="Evidence-driven learning loop"><code>question -&gt; prediction -&gt; minimum reading
-  -&gt; implementation -&gt; test / benchmark
-  -&gt; explanation -&gt; review -&gt; correction</code></pre>
-
-		<p class="principle-gate">
-			<strong>验收标准：</strong>能够在不查看 AI
-			对话的情况下解释机制、复现实验并修改约束；否则只视为完成交付，不视为掌握。
-		</p>
+		</section>
 	</section>
-
-	<footer class="about-footer">
-		<span>EOF</span>
-		<span>keep building from the bottom</span>
-	</footer>
 </Layout>
 
 <style>
-	.project-meta,
-	.profile-ledger,
-	.roadmap-summary,
-	.mode-list,
-	.protocol-grid,
-	.pipeline,
-	.about-footer {
-		font-family: var(--font-mono);
-	}
-
 	.profile-brief {
 		margin: 0.5rem 0 2.5rem;
 	}
@@ -166,22 +115,6 @@ import '../styles/global.css';
 		line-height: 1.85;
 	}
 
-	.profile-ledger {
-		display: grid;
-		grid-template-columns: 7rem minmax(0, 1fr);
-		gap: 0.25rem 0.75rem;
-		margin: 0;
-		font-size: 0.86rem;
-	}
-
-	.profile-ledger dt {
-		color: rgb(var(--gray));
-	}
-
-	.profile-ledger dd {
-		margin: 0;
-	}
-
 	.about-section {
 		margin: 2.25rem 0;
 	}
@@ -191,39 +124,21 @@ import '../styles/global.css';
 		margin-bottom: 1rem;
 	}
 
-	.section-intro {
-		max-width: 68ch;
-		color: rgb(var(--gray));
-		line-height: 1.7;
-	}
-
 	.project {
 		padding: 0.9rem 0;
 		border-top: 1px solid rgb(var(--gray-light));
 	}
 
-	.project > h3,
-	.project-stack {
+	.project > h3 {
 		margin: 0;
-	}
-
-	.project-stack {
-		color: rgb(var(--gray));
-		font-family: var(--font-mono);
-		font-size: 0.86rem;
 	}
 
 	.project-body {
 		padding: 0;
 	}
 
-	.project-meta {
-		margin: 0.75rem 0;
-		color: rgb(var(--gray));
-		font-size: 0.86rem;
-	}
-
-	.project-body > p:not(.project-meta) {
+	.project-body > p {
+		margin: 0.6rem 0;
 		font-size: 0.92rem;
 	}
 
@@ -233,155 +148,5 @@ import '../styles/global.css';
 
 	.project-body li {
 		margin: 0.35rem 0;
-	}
-
-	.roadmap-summary {
-		margin-top: 1rem;
-		padding-left: 1.4rem;
-		border-top: 1px solid #cbd5e1;
-	}
-
-	.roadmap-summary > li {
-		padding: 0.85rem 0;
-		border-bottom: 1px solid #e2e8f0;
-	}
-
-	.roadmap-summary h3 {
-		margin: 0.35rem 0;
-		font-size: 1.125rem;
-		line-height: 1.75rem;
-	}
-
-	.roadmap-summary p {
-		margin: 0.35rem 0;
-		font-family: var(--font-body);
-		font-size: 0.84rem;
-		line-height: 1.6;
-	}
-
-	.roadmap-summary .roadmap-route {
-		margin: 0.65rem 0;
-		color: #64748b;
-		font-family: var(--font-mono);
-		font-size: 0.86rem;
-		line-height: 1.6;
-	}
-
-	.roadmap-summary .current-line {
-		padding-top: 0.5rem;
-		border-top: 1px dashed #cbd5e1;
-	}
-
-	.roadmap-summary a,
-	.roadmap-link {
-		font-size: 0.86rem;
-	}
-
-	.roadmap-link {
-		display: inline-block;
-		margin-top: 0.85rem;
-		font-family: var(--font-mono);
-		font-weight: 700;
-	}
-
-	.principles-lead {
-		margin: 0 0 1rem;
-		padding-left: 0.75rem;
-		border-left: 3px solid var(--accent);
-		font-size: 0.94rem;
-		line-height: 1.8;
-	}
-
-	.mode-list {
-		margin: 0;
-		padding-left: 1.4rem;
-		border-top: 1px solid rgb(var(--gray-light));
-	}
-
-	.mode-list li {
-		padding: 0.65rem 0;
-		border-bottom: 1px solid rgb(var(--gray-light));
-	}
-
-	.mode-list h3 {
-		margin: 0;
-		font-size: 1.125rem;
-		line-height: 1.75rem;
-	}
-
-	.mode-list p {
-		margin: 0.45rem 0 0.65rem;
-		font-family: var(--font-body);
-		font-size: 0.82rem;
-	}
-
-	.mode-list .mode-own {
-		margin-bottom: 0;
-		color: rgb(var(--gray));
-		font-family: var(--font-body);
-		font-size: 0.86rem;
-	}
-
-	.protocol-grid {
-		margin-top: 1.1rem;
-		border-top: 1px solid rgb(var(--gray-light));
-	}
-
-	.protocol-grid > div {
-		padding: 0.7rem 0;
-		border-bottom: 1px solid rgb(var(--gray-light));
-	}
-
-	.protocol-grid h3 {
-		margin: 0 0 0.45rem;
-		color: var(--accent);
-		font-size: 1.125rem;
-		line-height: 1.75rem;
-	}
-
-	.protocol-grid ul {
-		margin: 0;
-		padding-left: 1.2rem;
-		font-family: var(--font-body);
-		font-size: 0.84rem;
-	}
-
-	.pipeline {
-		overflow-x: auto;
-		margin: 1.25rem 0 0;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		color: rgb(var(--black));
-		font-size: 0.86rem;
-		line-height: 1.7;
-	}
-
-	.principle-gate {
-		margin: 0.85rem 0 0;
-		padding-left: 0.75rem;
-		border-left: 3px solid var(--accent);
-		font-size: 0.88rem;
-	}
-
-	.about-footer {
-		display: flex;
-		justify-content: space-between;
-		margin-top: 2.75rem;
-		padding-top: 0.75rem;
-		border-top: 1px solid rgb(var(--gray-light));
-		color: rgb(var(--gray));
-		font-size: 0.82rem;
-	}
-
-	@media (max-width: 620px) {
-		.profile-ledger {
-			grid-template-columns: 1fr;
-			gap: 0.1rem;
-		}
-
-		.profile-ledger dd + dt {
-			margin-top: 0.35rem;
-		}
 	}
 </style>
