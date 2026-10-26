@@ -460,7 +460,7 @@ auto d = {1, 2};   // std::initializer_list<int>
 
 <SlideCard title="先记住分支顺序，而不是记答案">
 
-## 第一条：特定形式直接查询声明
+## 第一条：括号里只有一个名字，就照抄它的声明
 
 ```cpp
 int value = 7;
@@ -472,9 +472,13 @@ using B = decltype(fixed); // const int
 using C = decltype(ref);   // int&
 ```
 
-对于这里**不加括号的名字表达式**，`decltype` 得到被命名实体的类型。它不会采用 `auto` 的按值推导规则，因此 `const` 和引用都可以保留下来。
+`decltype(value)` 的括号里只写了一个变量名。这时编译器什么也不分析，直接翻回 `value` 的声明：那里写的是 `int`，结果就是 `int`。同理，`fixed` 声明时写的是 `const int`，`ref` 声明时写的是 `int&`，结果都**原样照抄**。
 
-`using A = ...` 只是给类型起别名，不会创建对象，也不会复制 `value`。
+成员访问也一样：`decltype(entry.hits)` 照抄 `hits` 在类里声明时写的类型。
+
+这和 `auto` 不同：`auto a = fixed;` 会去掉 `const`，得到 `int`；`decltype(fixed)` 则保留 `const int`。
+
+`using A = ...` 只是给类型起个名字，不会创建对象，也不会读取 `value`。
 
 ## 第二条：其他情形根据表达式性质判断
 
