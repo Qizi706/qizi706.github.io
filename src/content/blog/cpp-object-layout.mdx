@@ -1,0 +1,723 @@
+---
+title: 'C++ 对象内存布局：从 sizeof 到虚函数表'
+description: '从两个成员相同、大小却不同的结构体出发，用编译器输出逐步验证对齐与填充、空基类优化、vptr 与虚函数表、多继承下的 this 调整，以及虚调用在汇编里的样子。'
+pubDate: '2026-10-27T21:00:00+08:00'
+readingOrder: 8
+readingNote: '对象模型：成员布局、对齐、虚函数表与 this 调整'
+categories:
+  - 'C/C++'
+tags:
+  - 'C++特性'
+  - '对象模型'
+  - '内存布局'
+draft: false
+mathjax: false
+---
+
+## 1. 从一个 sizeof 问题开始
+
+<SlideCard title="成员一样，大小却不一样">
+
+## 先猜，再看答案
+
+```cpp
+struct A { char c; int i; char d; };
+struct B { int i; char c; char d; };
+```
+
+`A` 和 `B` 都是一个 `int` 加两个 `char`，成员大小加起来是 6 字节。它们的 `sizeof` 是多少？两者会相等吗？
+
+先在纸上写下你的答案，再往下读。
+
+<details>
+<summary>展开答案</summary>
+
+`sizeof(A)` 是 12，`sizeof(B)` 是 8。成员完全一样，只是顺序不同，大小就差了一半。
+
+如果你猜的是 6，或者猜两者相等，说明还缺一个模型：编译器摆放成员时，除了成员本身的大小，还要满足**对齐**要求。这正是本文第 2 节要讲的。
+
+</details>
+
+## 本文的位置与阅读方式
+
+这是[现代 C++ 长期学习计划](/blog/modern-cpp-mastery-roadmap/)中“对象模型”的第一篇。前面的[《C++ 类型推导》](/blog/cpp-type-deduction/)和[《C++ 对象初始化》](/blog/cpp-initialization/)讨论的是“一个对象是什么类型、怎样被创建”，这一篇往下走一层：对象在内存里长什么样。
+
+阅读路线是：**普通成员的对齐与填充 → 空类 → 加入虚函数 → 单继承 → 多继承与 this 调整 → 虚调用的汇编**。每一步都先猜，再用编译器输出核对。
+
+</SlideCard>
+
+<SlideCard title="布局由谁决定？先交代实验环境">
+
+## 标准只规定一部分，剩下的是 ABI
+
+C++ 标准规定了一些约束，比如同一访问级别的非静态成员按声明顺序排列、地址递增。但成员之间留多少空隙、虚函数表放在哪里，标准都没有规定，这些由 **ABI**（Application Binary Interface，二进制接口约定）决定。
+
+Linux 和 macOS 上的 GCC、Clang 都遵循 [Itanium C++ ABI](https://itanium-cxx-abi.github.io/cxx-abi/abi.html)，名字来自最早的 Itanium 平台，但如今 x86-64 和 ARM64 上的主流编译器都在用它。Windows 上的 MSVC 用的是另一套 ABI，本文的结论不能直接照搬过去。
+
+## 本文的实验环境
+
+- 编译器：Apple clang 21，`-std=c++20`。
+- 机器：Apple M5 Pro（arm64），macOS。
+- 汇编：用 `-target x86_64-linux-gnu` 生成 x86-64 汇编，因为面试和多数资料讨论的是 x86-64。
+
+本文所有布局输出都在 arm64 macOS 和 `-target x86_64-linux-gnu` 两个目标上各跑了一遍，结果完全一致。
+
+## 让编译器把布局打印出来
+
+```bash
+clang++ -std=c++20 -fsyntax-only -Xclang -fdump-record-layouts layout.cpp
+```
+
+`-fdump-record-layouts` 是 Clang 前端的选项，所以要用 `-Xclang` 传进去。它只会打印**被实际用到**的类型，所以实验文件里要为每个类型定义一个变量，比如 `A a; B b;`。
+
+输出的每一行左边是偏移量（字节），末尾是 `sizeof` 和 `align`：
+
+```text
+         0 | struct A
+         0 |   char c
+         4 |   int i
+         8 |   char d
+           | [sizeof=12, dsize=12, align=4,
+           |  nvsize=12, nvalign=4]
+```
+
+`dsize` 和 `nvsize` 暂时可以忽略，第 5 节会用到 `dsize`。GCC 没有完全相同的选项，可以用 `-fdump-lang-class` 得到类似信息。
+
+</SlideCard>
+
+## 2. 对齐与填充
+
+<SlideCard title="每个成员都有自己的对齐要求">
+
+## 从输出里读出规则
+
+把 `A` 和 `B` 的输出并排摘录（省略了 `dsize` 等字段）：
+
+```text
+         0 | struct A                    0 | struct B
+         0 |   char c                    0 |   int i
+         4 |   int i                     4 |   char c
+         8 |   char d                    5 |   char d
+           | [sizeof=12, align=4]          | [sizeof=8, align=4]
+```
+
+`A` 里，`c` 只占 1 字节，`i` 却从偏移 4 开始，中间空出了 3 字节。原因是 `int` 的对齐要求是 4：它的地址必须是 4 的倍数。编译器在 `c` 后面插入的这 3 个字节，叫**填充**（padding）。
+
+可以用 `alignof` 查对齐要求。在这个环境里，`alignof(char)` 是 1，`alignof(int)` 是 4，`alignof(double)` 是 8。
+
+## 末尾为什么也要补
+
+`A` 的最后一个成员 `d` 放在偏移 8，占 1 字节，到 9 就结束了，可 `sizeof(A)` 是 12。末尾这 3 个字节同样是填充。
+
+原因要从数组里看：`A arr[2]` 中，`arr[1]` 紧挨着 `arr[0]` 放，起始地址等于 `&arr[0]` 加上 `sizeof(A)`。`arr[1].i` 也必须 4 字节对齐，所以 `sizeof(A)` 必须是 `alignof(A)` 的整数倍。而结构体的对齐要求，取的是所有成员里最大的那个，这里是 4。
+
+## 两条规则就能算出布局
+
+- 每个成员放在“不小于当前位置、且是它对齐值整数倍”的第一个偏移上。
+- 结构体的对齐值是成员对齐值的最大值，`sizeof` 向上补齐到它的整数倍。
+
+用这两条规则算 `B`：`i` 在 0，`c` 在 4，`d` 在 5，数据到 6 结束，再补齐到 4 的倍数，得到 8。和编译器的输出一致。规则的标准依据见 [C++20 草案 [basic.align]](https://timsong-cpp.github.io/cppwp/n4861/basic.align)。
+
+</SlideCard>
+
+<SlideCard title="调整成员顺序，能省多少？">
+
+## 一个更明显的例子
+
+```cpp
+struct C  { char c; double x; int i; };
+struct C2 { double x; int i; char c; };
+```
+
+```text
+         0 | struct C                    0 | struct C2
+         0 |   char c                    0 |   double x
+         8 |   double x                  8 |   int i
+        16 |   int i                    12 |   char c
+           | [sizeof=24, align=8]          | [sizeof=16, align=8]
+```
+
+`C` 在 `c` 后面填了 7 字节，末尾又填了 4 字节，24 字节里有 11 字节是空的。按对齐值从大到小重新排列后，`C2` 只要 16 字节。
+
+这个差别在单个对象上不明显，但一个装了一百万个元素的数组，就是 24 MB 和 16 MB 的区别。同样一条 cache line 能装下的对象数也会变多。
+
+## 编译器为什么不自动重排？
+
+既然重排能省空间，编译器为什么不替你做？
+
+因为标准要求：同一访问级别的非静态成员，后声明的地址更高（见 [C++20 草案 [class.mem]](https://timsong-cpp.github.io/cppwp/n4861/class.mem)）。很多代码依赖这个顺序，比如按字段顺序直接读写二进制文件、和 C 代码共享结构体定义。编译器擅自重排，这些代码就会坏掉。
+
+所以成员顺序是你的决定。一个简单的经验是：**按对齐值从大到小声明成员**，填充通常最少。不过要先确认这个类型没有被用在依赖字段顺序的地方。
+
+</SlideCard>
+
+## 3. 空类：一个字节也不是白给的
+
+<SlideCard title="sizeof(Empty) 为什么不是 0？">
+
+## 空类至少占 1 字节
+
+```cpp
+struct Empty {};
+```
+
+```text
+         0 | struct Empty (empty)
+           | [sizeof=1, dsize=1, align=1,
+```
+
+`Empty` 没有任何成员，`sizeof` 却是 1。原因是 C++ 要求不同的对象有不同的地址。如果空类大小为 0，`Empty arr[2]` 里两个元素的地址就会相同，没法区分。
+
+## 作为成员和作为基类，结果不同
+
+```cpp
+struct D { Empty e; int i; };   // 空类作为成员
+struct E : Empty { int i; };    // 空类作为基类
+```
+
+```text
+         0 | struct D                          0 | struct E
+         0 |   struct Empty e (empty)          0 |   struct Empty (base) (empty)
+         4 |   int i                           0 |   int i
+           | [sizeof=8, align=4]                 | [sizeof=4, align=4]
+```
+
+作为成员时，`e` 占了 1 字节，再加 3 字节填充，`D` 变成 8 字节。作为基类时，`Empty` 子对象和 `i` 共用偏移 0，`E` 只有 4 字节。这就是**空基类优化**（Empty Base Optimization，EBO）：空的基类子对象可以不占空间。
+
+标准库大量依赖这个优化。比如 `std::unique_ptr` 的默认删除器是一个空类，借助 EBO，`unique_ptr` 可以和裸指针一样大。
+
+## C++20 的 [[no_unique_address]]
+
+如果不想为了省空间而改成继承，C++20 提供了属性 `[[no_unique_address]]`：
+
+```cpp
+struct D2 { [[no_unique_address]] Empty e; int i; };
+```
+
+```text
+         0 | struct D2
+         0 |   struct Empty e (empty)
+         0 |   int i
+           | [sizeof=4, align=4]
+```
+
+`e` 仍然是成员，但允许和 `i` 共用地址，`D2` 和 `E` 一样只有 4 字节。规则见 [C++20 草案 [dcl.attr.nouniqueaddr]](https://timsong-cpp.github.io/cppwp/n4861/dcl.attr.nouniqueaddr)。
+
+</SlideCard>
+
+<SlideCard title="alignas：主动要求更大的对齐">
+
+## 把对象撑到一条 cache line
+
+```cpp
+struct alignas(64) F { int counter; };
+```
+
+```text
+         0 | struct F
+         0 |   int counter
+           | [sizeof=64, dsize=64, align=64,
+```
+
+`F` 只有一个 `int`，但 `alignas(64)` 要求它按 64 字节对齐，`sizeof` 也就补齐到了 64。
+
+这种写法常用来让两个被不同线程频繁修改的变量落在不同的 cache line 上，避免 **false sharing**：两个线程改的明明是不同变量，却因为在同一条 cache line 上而互相拖慢。这个问题会在后面讲并发与缓存时专门做实验。
+
+## 64 不是通用答案
+
+64 字节是常见 x86-64 处理器的 cache line 大小，但不是所有机器都这样。在本文的实验机器上：
+
+```bash
+sysctl -n hw.cachelinesize
+```
+
+输出是 `128`。写死 64 在这台机器上并不足以隔开两个变量。
+
+C++17 提供了 `std::hardware_destructive_interference_size`（在 `<new>` 中），表示编译器认为的“避免 false sharing 所需的最小间隔”。但它是编译期常量，不一定等于运行机器的实际值：在本文环境里打印它，得到的是 `256`，比实际的 128 还大。它能保证隔开，代价是多占空间。对性能敏感的代码，最好在目标机器上确认 cache line 大小后再决定。
+
+</SlideCard>
+
+## 4. 加入虚函数：对象里多了什么？
+
+<SlideCard title="vptr：每个多态对象开头的那个指针">
+
+## 只多了一个 int，却多了 8 字节
+
+```cpp
+struct Shape {
+    virtual ~Shape() = default;
+    virtual double area() const { return 0; }
+    int id = 0;
+};
+```
+
+```text
+         0 | struct Shape
+         0 |   (Shape vtable pointer)
+         8 |   int id
+           | [sizeof=16, dsize=12, align=8,
+```
+
+`Shape` 只声明了一个 `int`，`sizeof` 却是 16。偏移 0 处多了一个 `(Shape vtable pointer)`，通常叫 **vptr**，在 64 位平台上占 8 字节。`id` 只能排在它后面，最后再补齐到 8 的倍数。
+
+只要一个类有虚函数（自己声明的或继承来的），它的每个对象就会带一个 vptr。注意是**每个对象**一个，而不是每个类一个。
+
+## vptr 指向哪里？
+
+vptr 指向这个类的**虚函数表**（vtable）。vtable 每个类只有一份，存放在程序的只读数据区，所有 `Shape` 对象的 vptr 都指向它。
+
+Clang 还可以打印 vtable 的内容：
+
+```bash
+clang++ -std=c++20 -c -o /dev/null -Xclang -fdump-vtable-layouts virt.cpp
+```
+
+```text
+Vtable for 'Shape' (5 entries).
+   0 | offset_to_top (0)
+   1 | Shape RTTI
+       -- (Shape, 0) vtable address --
+   2 | Shape::~Shape() [complete]
+   3 | Shape::~Shape() [deleting]
+   4 | double Shape::area() const
+```
+
+逐项看：
+
+- `offset_to_top`：从当前子对象回到完整对象开头要走多远。单继承时是 0，第 7 节多继承时才派上用场。
+- `RTTI`：指向类型信息，`typeid` 和 `dynamic_cast` 靠它工作。
+- `-- vtable address --` 这一行标出了 vptr **真正指向的位置**：不是表的开头，而是第 2 项。前两项放在 vptr 指向位置的“前面”。
+- 两个析构函数：`[complete]` 只析构对象，`[deleting]` 析构后再释放内存，供 `delete` 使用。虚析构函数在表里占两个槽位。
+- 最后才是 `area`。
+
+</SlideCard>
+
+## 5. 单继承：共用一个 vptr
+
+<SlideCard title="派生类的新虚函数加在哪里？">
+
+## 布局：基类在前，派生类成员在后
+
+```cpp
+struct Circle : Shape {
+    double area() const override { return 3.14 * r * r; }
+    virtual void scale(double k) { r *= k; }
+    double r = 1;
+};
+```
+
+```text
+         0 | struct Circle
+         0 |   struct Shape (primary base)
+         0 |     (Shape vtable pointer)
+         8 |     int id
+        16 |   double r
+           | [sizeof=24, dsize=24, align=8,
+```
+
+`Circle` 开头就是一个完整的 `Shape` 子对象，被标为 **primary base**（主基类）。`Circle` 没有自己的 vptr，而是和 `Shape` 共用偏移 0 的那一个。`r` 是 `double`，要 8 字节对齐，所以从 16 开始。
+
+因为 `Shape` 子对象就在偏移 0，把 `Circle*` 转成 `Shape*` 时地址不变。这一点到多继承时就不成立了。
+
+## vtable：覆盖的替换，新增的追加
+
+```text
+Vtable for 'Circle' (6 entries).
+   0 | offset_to_top (0)
+   1 | Circle RTTI
+       -- (Circle, 0) vtable address --
+       -- (Shape, 0) vtable address --
+   2 | Circle::~Circle() [complete]
+   3 | Circle::~Circle() [deleting]
+   4 | double Circle::area() const
+   5 | void Circle::scale(double)
+```
+
+和 `Shape` 的表对照：
+
+- 第 2–4 项的槽位顺序没变，内容换成了 `Circle` 的版本。这就是**覆盖**：同一个槽位，换了函数。
+- 新增的虚函数 `scale` 追加在末尾第 5 项。
+
+槽位顺序不变非常关键。拿着一个 `Shape&` 调用 `area()` 时，编译器只知道“去第 4 项取函数地址”，并不需要知道对象到底是 `Shape` 还是 `Circle`。
+
+</SlideCard>
+
+<SlideCard title="一个反直觉的细节：派生类成员可以塞进基类的填充里">
+
+## 先猜 Tagged 的大小
+
+```cpp
+struct Tagged : Shape { int tag = 0; };
+```
+
+`Shape` 的 `sizeof` 是 16，`Tagged` 再加一个 `int`，直觉上是 16 + 4 = 20，再补齐到 24。实际输出是：
+
+```text
+         0 | struct Tagged
+         0 |   struct Shape (primary base)
+         0 |     (Shape vtable pointer)
+         8 |     int id
+        12 |   int tag
+           | [sizeof=16, dsize=16, align=8,
+```
+
+`tag` 放在了偏移 12，正好是 `Shape` 末尾那 4 字节填充的位置，`Tagged` 依然只有 16 字节。
+
+## dsize 就是为这件事准备的
+
+还记得 `Shape` 输出里的 `dsize=12` 吗？`dsize` 是“数据大小”，即去掉末尾填充后的大小。Itanium ABI 规定，派生类的成员可以从基类的 `dsize` 处开始放，而不是从 `sizeof` 处开始。
+
+## 但不是所有基类都允许
+
+这个复用有前提。下面两组只差一个用户提供的构造函数：
+
+```cpp
+struct P  { int x; char c; };
+struct Q  : P  { char d; };
+
+struct P2 { int x; char c; P2() {} };
+struct Q2 : P2 { char d; };
+```
+
+```text
+         0 | struct Q                     0 | struct Q2
+         8 |   char d                     5 |   char d
+           | [sizeof=12, dsize=9]           | [sizeof=8, dsize=6]
+```
+
+`P` 是一个简单的 C 风格结构体，`Q` 不能占用它的尾部填充，`d` 只能放在 8。`P2` 有用户提供的构造函数，`Q2` 就可以把 `d` 塞进偏移 5。
+
+这样设计是为了兼容：C 风格结构体可能被 `memcpy` 整个复制，如果派生类的成员住在它的填充里，复制基类部分时就会把派生类的数据覆盖掉。具体条件见 Itanium ABI 中 [POD for the purpose of layout](https://itanium-cxx-abi.github.io/cxx-abi/abi.html#POD) 的定义。
+
+</SlideCard>
+
+## 6. 多继承：两个 vptr，两个起点
+
+<SlideCard title="一个对象，两个基类子对象">
+
+## 布局
+
+```cpp
+struct Reader {
+    virtual ~Reader() = default;
+    virtual int read() { return 0; }
+    int rfd = 0;
+};
+
+struct Writer {
+    virtual ~Writer() = default;
+    virtual int write() { return 0; }
+    int wfd = 0;
+};
+
+struct Stream : Reader, Writer {
+    int read() override { return 1; }
+    int write() override { return 2; }
+    int buffered = 0;
+};
+```
+
+```text
+         0 | struct Stream
+         0 |   struct Reader (primary base)
+         0 |     (Reader vtable pointer)
+         8 |     int rfd
+        16 |   struct Writer (base)
+        16 |     (Writer vtable pointer)
+        24 |     int wfd
+        28 |   int buffered
+           | [sizeof=32, dsize=32, align=8,
+```
+
+几件事一起发生了：
+
+- 第一个基类 `Reader` 是主基类，放在偏移 0，`Stream` 和它共用 vptr。
+- 第二个基类 `Writer` 放在偏移 16，**带着自己的 vptr**。所以 `Stream` 对象里有两个 vptr。
+- `buffered` 放在 28，又是第 5 节讲的尾部填充复用：它住进了 `Writer` 子对象末尾的填充里。
+
+## 同一个对象，两个不同的地址
+
+既然 `Writer` 子对象在偏移 16，把 `Stream*` 转成 `Writer*` 时，地址就必须变。用一个小程序验证：
+
+```cpp
+#include <cstdio>
+
+// Reader、Writer、Stream 的定义同上
+
+int main() {
+    Stream s;
+    Reader* r = &s;
+    Writer* w = &s;
+
+    std::printf("&s = %p\n", static_cast<void*>(&s));
+    std::printf("r  = %p\n", static_cast<void*>(r));
+    std::printf("w  = %p\n", static_cast<void*>(w));
+    std::printf("w - &s = %td bytes\n",
+                reinterpret_cast<char*>(w) - reinterpret_cast<char*>(&s));
+    std::printf("w == &s ? %d\n", w == &s);
+    std::printf("w->write() = %d\n", w->write());
+}
+```
+
+用 `clang++ -std=c++20 -O2` 编译运行，一次的输出如下（具体地址每次运行都可能不同）：
+
+```text
+&s = 0x16f615e80
+r  = 0x16f615e80
+w  = 0x16f615e90
+w - &s = 16 bytes
+w == &s ? 1
+w->write() = 2
+```
+
+`r` 和 `&s` 相同，`w` 比 `&s` 大 16。但 `w == &s` 的结果是 1：比较时，编译器先把 `&s` 也转换成 `Writer*`（同样加 16），再比较，所以相等。
+
+最后一行说明，通过 `w` 调用 `write()`，执行的确实是 `Stream::write`。问题来了：`Stream::write` 里访问 `buffered`，用的是相对 `Stream` 开头的偏移 28，可传进来的 `this` 是 `w`，指向偏移 16。它是怎么找到正确位置的？
+
+</SlideCard>
+
+## 7. this 调整：thunk 在中间做了什么
+
+<SlideCard title="第二个 vtable 里的秘密">
+
+## Stream 的 vtable 其实是两张表拼起来的
+
+```text
+Vtable for 'Stream' (11 entries).
+   0 | offset_to_top (0)
+   1 | Stream RTTI
+       -- (Reader, 0) vtable address --
+       -- (Stream, 0) vtable address --
+   2 | Stream::~Stream() [complete]
+   3 | Stream::~Stream() [deleting]
+   4 | int Stream::read()
+   5 | int Stream::write()
+   6 | offset_to_top (-16)
+   7 | Stream RTTI
+       -- (Writer, 16) vtable address --
+   8 | Stream::~Stream() [complete]
+       [this adjustment: -16 non-virtual] method: Writer::~Writer()
+   9 | Stream::~Stream() [deleting]
+       [this adjustment: -16 non-virtual] method: Writer::~Writer()
+  10 | int Stream::write()
+       [this adjustment: -16 non-virtual] method: int Writer::write()
+```
+
+第 0–5 项给 `Reader` 子对象（也是 `Stream` 自己）用，偏移 0 处的 vptr 指向第 2 项。第 6–10 项给 `Writer` 子对象用，偏移 16 处的 vptr 指向第 8 项。
+
+注意第二部分：
+
+- `offset_to_top (-16)`：从 `Writer` 子对象回到完整对象，要往回走 16 字节。`dynamic_cast<void*>` 就是靠它找到对象开头的。
+- 每个条目都标着 `this adjustment: -16`：调用前，要先把 `this` 减去 16。
+
+## thunk：一小段负责改 this 的跳板
+
+这个“先减 16”由一段叫 **thunk** 的小函数完成，它放在 vtable 第 10 项里，而不是直接放 `Stream::write`。为了让 thunk 显眼一点，把 `Stream::write` 改成调用一个外部函数，避免被优化掉：
+
+```cpp
+int flush(Stream&);
+int Stream::write() { return flush(*this); }
+```
+
+用 `clang++ -std=c++20 -O2 -target x86_64-linux-gnu -masm=intel -S` 生成汇编，再用 `c++filt` 还原函数名。本文的汇编片段都省略了 `.cfi_*` 等汇编指示，只保留指令：
+
+```text
+Stream::write():
+	jmp	flush(Stream&)@PLT
+
+non-virtual thunk to Stream::write():
+	add	rdi, -16
+	jmp	flush(Stream&)@PLT
+```
+
+在 x86-64 Linux 的调用约定里，`this` 通过 `rdi` 寄存器传递。thunk 先把 `rdi` 减去 16，让它指回 `Stream` 的开头，然后执行和 `Stream::write` 一样的代码。
+
+所以完整的调用链是：通过 `Writer&` 调用 `write()` → 取出偏移 16 处的 vptr → 找到第 10 项，也就是 thunk → thunk 调整 `this` → 执行真正的函数体。
+
+</SlideCard>
+
+<SlideCard title="指针转换本身也有成本">
+
+## 指针转换要判空，引用转换不用
+
+```cpp
+Writer* to_writer_ptr(Stream* s) { return s; }
+Writer& to_writer_ref(Stream& s) { return s; }
+```
+
+```text
+to_writer_ptr(Stream*):
+	lea	rax, [rdi + 16]
+	test	rdi, rdi
+	cmove	rax, rdi
+	ret
+
+to_writer_ref(Stream&):
+	lea	rax, [rdi + 16]
+	ret
+```
+
+两个函数都把地址加 16，但指针版本多了两条指令：`test` 检查 `s` 是否为空，`cmove` 在为空时把结果改回原值。空指针转换后必须仍然是空指针，不能变成 `0x10`；而引用不可能为空，所以不需要这个检查。
+
+单继承时，主基类在偏移 0，这些转换都不需要指令。多继承让非主基类的转换多了一次加法，指针还要多一次判断。
+
+</SlideCard>
+
+## 8. 虚调用在汇编里长什么样
+
+<SlideCard title="两次读内存，一次间接跳转">
+
+## 虚调用
+
+```cpp
+struct Shape {
+    virtual ~Shape() = default;
+    virtual double area() const;
+    int id = 0;
+};
+
+double call_virtual(const Shape& s) { return s.area(); }
+```
+
+```text
+call_virtual(Shape const&):
+	mov	rax, qword ptr [rdi]
+	jmp	qword ptr [rax + 16]
+```
+
+只有两条指令，正好对应前面的模型：
+
+- `mov rax, [rdi]`：`rdi` 是 `s` 的地址，读出偏移 0 处的 vptr。
+- `jmp [rax + 16]`：从 vptr 指向的位置往后 16 字节取出函数地址，然后跳过去。16 字节就是两个析构函数槽位之后的第三个槽位，也就是 vtable 打印输出里的第 4 项 `area`。
+
+这里用的是 `jmp` 而不是 `call`，因为 `area()` 的返回值直接作为 `call_virtual` 的返回值，编译器做了尾调用优化。
+
+## final：让编译器确定调用目标
+
+```cpp
+struct Square final : Shape {
+    double area() const override;
+    double side = 1;
+};
+
+double call_final(const Square& s) { return s.area(); }
+```
+
+```text
+call_final(Square const&):
+	jmp	Square::area() const@PLT
+```
+
+`final` 告诉编译器，`Square` 不会再有派生类。既然 `s` 一定就是 `Square`，`s.area()` 一定是 `Square::area`，编译器就不再查表，直接跳到确定的函数。这叫**去虚化**（devirtualization）。
+
+## 虚调用的成本到底在哪？
+
+对比两段汇编，虚调用多出来的东西有：
+
+- **两次依赖的内存读取**：先读 vptr，再读函数地址，第二次读取要等第一次完成。vtable 不在缓存里时，代价会明显变大。
+- **间接跳转**：跳转目标要运行时才知道，依赖 CPU 的间接分支预测。同一个调用点上对象类型来回变化时，预测更容易失败。
+- **挡住内联**：这一点往往影响最大。编译器不知道调用哪个函数，就没法把函数体内联进来，后续的常量传播、向量化等优化也随之失效。
+
+这里只是从汇编推断成本的来源，没有测量具体慢多少。虚调用和 CRTP 静态多态的 benchmark 对比，会在模板专题里单独做。
+
+</SlideCard>
+
+## 9. 检验：合上文章画一遍
+
+<SlideCard title="不看前文，画出布局">
+
+## 每题先在纸上画，再展开对照
+
+下面的答案都来自本文实验环境中的 `-fdump-record-layouts` 输出。画的时候标出每个成员和 vptr 的偏移，以及 `sizeof`。
+
+<details>
+<summary>Quiz 1：`struct Record { bool valid; double score; int count; bool dirty; };` 的布局和 `sizeof`？怎样重排能变小？</summary>
+
+`valid` @ 0，`score` @ 8，`count` @ 16，`dirty` @ 20，`sizeof` 为 24。`valid` 后面有 7 字节填充，末尾有 3 字节填充。
+
+按对齐值从大到小重排成 `double score; int count; bool valid; bool dirty;` 后：`score` @ 0，`count` @ 8，`valid` @ 12，`dirty` @ 13，`sizeof` 为 16。
+
+</details>
+
+<details>
+<summary>Quiz 2：`Circle` 有几个 vptr？把 `Circle*` 转成 `Shape*`，地址会变吗？</summary>
+
+一个。`Shape` 是主基类，放在偏移 0，`Circle` 和它共用 vptr。所以转换后地址不变，也不需要任何指令。
+
+</details>
+
+<details>
+<summary>Quiz 3：画出 `Stream` 的布局。`Stream` 对象里有几个 vptr？</summary>
+
+两个。`Reader` 子对象在 0（vptr @ 0，`rfd` @ 8），`Writer` 子对象在 16（vptr @ 16，`wfd` @ 24），`buffered` @ 28，`sizeof` 为 32。
+
+`buffered` 能放在 28，是因为它复用了 `Writer` 子对象末尾的填充。
+
+</details>
+
+<details>
+<summary>Quiz 4：通过 `Writer&` 调用 `write()` 时，`this` 是怎样变回指向 `Stream` 开头的？</summary>
+
+`Writer` 子对象的 vptr 指向 `Stream` vtable 的第二部分，其中 `write` 的槽位放的不是 `Stream::write`，而是一个 thunk。thunk 先把 `this` 减去 16（x86-64 上是 `add rdi, -16`），再执行 `Stream::write` 的函数体。
+
+</details>
+
+<details>
+<summary>Quiz 5（面试题）：`sizeof(Empty)` 为什么是 1？什么情况下空类可以不占空间？</summary>
+
+C++ 要求不同对象有不同的地址，大小为 0 会让数组里的元素地址重合，所以空类至少占 1 字节。
+
+作为基类时，空基类优化允许它不占空间；C++20 起，成员加上 `[[no_unique_address]]` 也可以不占空间。
+
+</details>
+
+<details>
+<summary>Quiz 6（面试题）：虚函数调用比普通调用慢在哪里？怎样让编译器去虚化？</summary>
+
+多了两次依赖的内存读取（vptr 和函数地址）和一次间接跳转，更重要的是编译器无法内联，后续优化也做不了。
+
+给类或函数加 `final`，或者让编译器能确定对象的动态类型（比如直接对一个局部对象调用），编译器就能直接调用确定的函数。
+
+</details>
+
+</SlideCard>
+
+## 10. 一套可以复用的判断方法
+
+<SlideCard title="拿到一个类，按顺序问这几个问题">
+
+## 从成员到调用
+
+| 要回答的问题 | 怎么判断 |
+| --- | --- |
+| 有没有 vptr？ | 有虚函数（包括继承来的）就有，放在对象开头 |
+| 成员放在哪里？ | 当前位置向上取到对齐值的整数倍 |
+| `sizeof` 是多少？ | 补齐到最大对齐值的整数倍 |
+| 有空基类吗？ | 空基类通常不占空间（EBO） |
+| 派生类成员从哪开始？ | 看基类的 `dsize`，非 C 风格基类的尾部填充可以复用 |
+| 有几个 vptr？ | 每个带虚函数的非主基类各带一个 |
+| 转换指针要调整吗？ | 转到非主基类要加上它的偏移，指针还要判空 |
+| 虚调用怎么走？ | 读 vptr → 按槽位取函数地址 → 必要时经过 thunk 调整 this |
+
+## 几个值得留下的判断
+
+- 布局由 ABI 决定，标准只给了顺序等少数约束。讨论布局时先说清楚编译器和平台。
+- 成员顺序会影响大小，按对齐值从大到小排通常最省。
+- 不确定时不要猜，让编译器打印出来：`-fdump-record-layouts` 看布局，`-fdump-vtable-layouts` 看虚表，`-S` 看汇编。
+- 虚函数的代价主要不在那两条指令，而在于挡住了内联。性能敏感的路径上，可以考虑 `final` 或静态多态。
+
+</SlideCard>
+
+## 延伸阅读
+
+<Note title="遇到具体问题时，从这里查">
+
+- [Itanium C++ ABI](https://itanium-cxx-abi.github.io/cxx-abi/abi.html)：本文所有布局和 vtable 结构的权威来源，第 2 章讲数据布局和虚表。
+- [C++20 草案 [basic.align]](https://timsong-cpp.github.io/cppwp/n4861/basic.align)：对齐的语言规则。
+- [C++20 草案 [class.mem]](https://timsong-cpp.github.io/cppwp/n4861/class.mem)：成员的声明顺序与地址顺序。
+- [C++20 草案 [dcl.attr.nouniqueaddr]](https://timsong-cpp.github.io/cppwp/n4861/dcl.attr.nouniqueaddr)：`[[no_unique_address]]` 的规则。
+- [Compiler Explorer](https://godbolt.org/)：不方便本地生成 x86-64 汇编时，可以在线对比不同编译器的输出。
+
+下一步可以沿着两个方向继续：一是虚继承，它解决菱形继承的重复基类问题，布局会再复杂一层；二是用 benchmark 比较虚调用和 CRTP 静态多态，把本文从汇编推断出的成本变成测量数据。
+
+</Note>
