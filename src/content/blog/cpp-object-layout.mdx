@@ -1,7 +1,8 @@
 ---
 title: 'C++ 对象内存布局：从 sizeof 到虚函数表'
-description: '从两个成员相同、大小却不同的结构体出发，用编译器输出逐步验证对齐与填充、空基类优化、vptr 与虚函数表、多继承下的 this 调整，以及虚调用在汇编里的样子。'
+description: '从两个成员相同、大小却不同的结构体出发，用编译器输出逐步验证对齐与填充、空基类优化、vptr 与虚函数表、多继承下的 this 调整、虚析构函数，以及虚调用在汇编里的样子。'
 pubDate: '2026-10-27T21:00:00+08:00'
+updatedDate: '2026-10-28T21:00:00+08:00'
 readingOrder: 8
 readingNote: '对象模型：成员布局、对齐、虚函数表与 this 调整'
 categories:
@@ -391,6 +392,65 @@ struct Q2 : P2 { char d; };
 
 </SlideCard>
 
+<SlideCard title="基类没有 vptr 时，单继承也会改地址">
+
+## 只有派生类有虚函数
+
+前面的 `Shape` 自己就有虚函数，所以 `Circle` 能和它共用偏移 0 的 vptr。换一种写法：基类是普通结构体，虚函数只出现在派生类里。
+
+```cpp
+struct Base { int x = 0; };
+
+struct Derived : Base {
+    virtual void f() {}
+    int y = 0;
+};
+```
+
+```text
+         0 | struct Derived
+         0 |   (Derived vtable pointer)
+         8 |   struct Base (base)
+         8 |     int x
+        12 |   int y
+           | [sizeof=16, dsize=16, align=8,
+```
+
+这次 `Base` 没有被标成 primary base，而是被挤到了偏移 8。偏移 0 是 `Derived` 自己的 vptr。
+
+原因在于 Itanium ABI 只会从**多态类**里挑选主基类。`Shape` 本身就有 vptr，派生类可以直接借用；`Base` 里没有 vptr 可借，`Derived` 只好自己在开头放一个，基类子对象就排到了后面。
+
+## 地址真的差了 8
+
+写个小程序，打印转换前后的地址：
+
+```cpp
+#include <cstdio>
+
+// Base、Derived 的定义同上
+
+int main() {
+    Derived d;
+    Base* b = &d;
+    std::printf("&d = %p\n", static_cast<void*>(&d));
+    std::printf("b  = %p\n", static_cast<void*>(b));
+    std::printf("b - &d = %td bytes\n",
+                reinterpret_cast<char*>(b) - reinterpret_cast<char*>(&d));
+}
+```
+
+```text
+&d = 0x16f246110
+b  = 0x16f246118
+b - &d = 8 bytes
+```
+
+所以前面那句“`Circle*` 转成 `Shape*` 时地址不变”要加一个前提：**基类本身是多态类**。只要基类不在偏移 0，哪怕是单继承，指针转换也要加上偏移，指针版本也要判空，和第 7 节多继承的情况一样。
+
+这个细节平时看不出来，直到有人对这个指针调用 `delete`。第 8 节会看到它的后果。
+
+</SlideCard>
+
 ## 6. 多继承：两个 vptr，两个起点
 
 <SlideCard title="一个对象，两个基类子对象">
@@ -559,11 +619,155 @@ to_writer_ref(Stream&):
 
 两个函数都把地址加 16，但指针版本多了两条指令：`test` 检查 `s` 是否为空，`cmove` 在为空时把结果改回原值。空指针转换后必须仍然是空指针，不能变成 `0x10`；而引用不可能为空，所以不需要这个检查。
 
-单继承时，主基类在偏移 0，这些转换都不需要指令。多继承让非主基类的转换多了一次加法，指针还要多一次判断。
+单继承且基类是多态类时，主基类在偏移 0，这些转换都不需要指令。不在偏移 0 的基类（多继承中的非主基类，或上一节那种没有 vptr 的基类）转换时多一次加法，指针还要多一次判断。
 
 </SlideCard>
 
-## 8. 虚调用在汇编里长什么样
+## 8. 虚析构函数：delete 怎么找到整个对象
+
+<SlideCard title="通过基类指针 delete，只析构了一半">
+
+## 先看现象
+
+前面每个基类都写了 `virtual ~X() = default`。去掉 `virtual` 会怎样？
+
+```cpp
+#include <cstdio>
+
+struct Base {
+    virtual void f() {}
+    ~Base() { std::puts("~Base"); }
+};
+
+struct Derived : Base {
+    ~Derived() { std::puts("~Derived"); }
+};
+
+int main() {
+    Base* p = new Derived;
+    delete p;
+}
+```
+
+用 `clang++ -std=c++20 -O2 -Wall` 编译，编译器会给出警告：
+
+```text
+warning: delete called on non-final 'Base' that has virtual functions but non-virtual destructor [-Wdelete-non-abstract-non-virtual-dtor]
+```
+
+运行结果只有一行：
+
+```text
+~Base
+```
+
+`~Derived` 没有执行。`delete p` 时，编译器只看 `p` 的静态类型 `Base*`，而 `~Base` 不是虚函数，所以直接调用 `~Base`。如果 `Derived` 里有一个 `std::string` 或 `std::vector` 成员，它的内存就泄漏了。
+
+把 `~Base` 改成 `virtual ~Base()`，输出变成：
+
+```text
+~Derived
+~Base
+```
+
+## 编译器不一定会提醒你
+
+把 `Base` 里的 `virtual void f() {}` 也删掉，再用 `-Wall -Wextra` 编译，一个警告都没有，运行结果依然只有 `~Base`。
+
+Clang 的这个警告只在 `Base` 有虚函数时触发：有虚函数说明这个类打算被多态使用，析构函数却不是虚的，很可能是忘了。基类完全没有虚函数时，编译器认为你本来就不打算通过基类指针删除对象，于是不再提醒。
+
+</SlideCard>
+
+<SlideCard title="和第 5 节的布局合起来：直接崩溃">
+
+## 释放了一个错误的地址
+
+第 5 节最后的 `Base` / `Derived` 里，`Base` 在偏移 8。对它做同样的事：
+
+```cpp
+#include <cstdio>
+
+struct Base { int x = 0; };
+
+struct Derived : Base {
+    virtual void f() {}
+    int y = 0;
+};
+
+int main() {
+    Derived* d = new Derived;
+    Base* p = d;
+    std::printf("new  returned %p\n", static_cast<void*>(d));
+    std::printf("delete gets   %p\n", static_cast<void*>(p));
+    std::fflush(stdout);
+    delete p;
+    std::puts("after delete");
+}
+```
+
+`-Wall` 依然没有警告（`Base` 没有虚函数）。运行结果：
+
+```text
+new  returned 0x1032ad8b0
+delete gets   0x1032ad8b8
+```
+
+然后进程直接终止，`after delete` 没有打印出来，shell 里看到的退出码是 133（128 + 5，即进程收到了 `SIGTRAP`）。`-O0` 和 `-O2` 结果相同。
+
+原因看汇编就清楚了。`Base` 不是多态类时，`delete p` 编译成：
+
+```cpp
+void destroy(Base* p) { delete p; }
+```
+
+```text
+destroy(Base*):
+	test	rdi, rdi
+	je	.LBB0_1
+	mov	esi, 4
+	jmp	operator delete(void*, unsigned long)@PLT
+```
+
+编译器把 `p` 原样交给 `operator delete`，大小按 `sizeof(Base)` 传了 4。可是 `new` 返回的是 `d`，`p` 比它大 8，`operator delete` 拿到的根本不是一块分配出来的内存的起始地址。macOS 生成的崩溃报告（`~/Library/Logs/DiagnosticReports/` 下）显示，进程停在 `libsystem_malloc.dylib` 的 `free` 路径里：内存分配器发现这个地址不对，主动触发了 trap。
+
+## deleting destructor 就是为此存在的
+
+给 `Base` 加上虚析构函数，`delete p` 变成：
+
+```cpp
+struct Base {
+    virtual ~Base();
+    int x = 0;
+};
+
+void destroy(Base* p) { delete p; }
+```
+
+```text
+destroy(Base*):
+	test	rdi, rdi
+	je	.LBB0_1
+	mov	rax, qword ptr [rdi]
+	jmp	qword ptr [rax + 8]
+```
+
+这就是一次虚调用：读 vptr，取出第二个析构函数槽位，也就是第 4 节 vtable 里的 `[deleting]` 那一项。它由对象的**实际类型**提供，所以知道三件事：
+
+- 要析构的是完整对象，先调用 `~Derived`，再调用各个基类的析构函数。
+- 完整对象从哪里开始。如果 `p` 指向的是非主基类，vtable 里的 thunk 会先把 `this` 调回对象开头，和第 7 节一样。
+- 完整对象有多大，释放时传给 `operator delete` 的是正确的地址和大小。
+
+`delete` 需要的信息，只有对象的实际类型知道，所以它只能通过虚函数拿到。
+
+## 这是未定义行为，不是“只析构一半”
+
+上面看到的“只打印 `~Base`”和“崩溃”都只是一次运行的表现。标准 [[expr.delete]/3](https://timsong-cpp.github.io/cppwp/n4861/expr.delete#3) 规定：被删除对象的静态类型和动态类型不同时，静态类型必须是动态类型的基类，并且有虚析构函数，否则行为未定义。
+
+所以判断规则很简单：一个类只要可能被通过基类指针 `delete`，它的析构函数就必须是 `virtual`。不打算这样用的基类，可以把析构函数设为 `protected` 且非虚，让 `delete p` 直接编译失败。
+
+</SlideCard>
+
+## 9. 虚调用在汇编里长什么样
 
 <SlideCard title="两次读内存，一次间接跳转">
 
@@ -622,7 +826,7 @@ call_final(Square const&):
 
 </SlideCard>
 
-## 9. 检验：合上文章画一遍
+## 10. 检验：合上文章画一遍
 
 <SlideCard title="不看前文，画出布局">
 
@@ -680,9 +884,20 @@ C++ 要求不同对象有不同的地址，大小为 0 会让数组里的元素�
 
 </details>
 
+<details>
+<summary>Quiz 7：`struct Base { int x; }; struct Derived : Base { virtual void f() {} };` 中，`Base* p = new Derived; delete p;` 会发生什么？`-Wall` 会警告吗？</summary>
+
+不会警告，因为 `Base` 没有虚函数。
+
+- 布局：`Base` 不是多态类，不能当主基类，`Derived` 的 vptr 在偏移 0，`Base` 子对象被放到偏移 8。
+- 转换：`Base* p = new Derived` 时，指针加了 8。
+- 释放：`~Base` 不是虚函数，`delete p` 把 `p` 原样交给 `operator delete`，释放的地址比 `new` 返回的大 8。这是未定义行为，本文的实验环境里进程直接终止。
+
+</details>
+
 </SlideCard>
 
-## 10. 一套可以复用的判断方法
+## 11. 一套可以复用的判断方法
 
 <SlideCard title="拿到一个类，按顺序问这几个问题">
 
@@ -696,7 +911,8 @@ C++ 要求不同对象有不同的地址，大小为 0 会让数组里的元素�
 | 有空基类吗？ | 空基类通常不占空间（EBO） |
 | 派生类成员从哪开始？ | 看基类的 `dsize`，非 C 风格基类的尾部填充可以复用 |
 | 有几个 vptr？ | 每个带虚函数的非主基类各带一个 |
-| 转换指针要调整吗？ | 转到非主基类要加上它的偏移，指针还要判空 |
+| 转换指针要调整吗？ | 基类不在偏移 0（非主基类，或没有 vptr 的基类）就要加偏移，指针还要判空 |
+| 能通过基类指针 `delete` 吗？ | 只有基类析构函数是 `virtual` 时才行 |
 | 虚调用怎么走？ | 读 vptr → 按槽位取函数地址 → 必要时经过 thunk 调整 this |
 
 ## 几个值得留下的判断
@@ -704,6 +920,7 @@ C++ 要求不同对象有不同的地址，大小为 0 会让数组里的元素�
 - 布局由 ABI 决定，标准只给了顺序等少数约束。讨论布局时先说清楚编译器和平台。
 - 成员顺序会影响大小，按对齐值从大到小排通常最省。
 - 不确定时不要猜，让编译器打印出来：`-fdump-record-layouts` 看布局，`-fdump-vtable-layouts` 看虚表，`-S` 看汇编。
+- 会被多态使用的基类，析构函数写成 `virtual`；不打算多态删除的基类，析构函数设为 `protected`。
 - 虚函数的代价主要不在那两条指令，而在于挡住了内联。性能敏感的路径上，可以考虑 `final` 或静态多态。
 
 </SlideCard>
