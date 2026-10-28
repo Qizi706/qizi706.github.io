@@ -3,8 +3,8 @@ title: 'C++ 对象内存布局：从 sizeof 到虚函数表'
 description: '从两个成员相同、大小却不同的结构体出发，用编译器输出逐步验证对齐与填充、空基类优化、vptr 与虚函数表、多继承下的 this 调整、虚析构函数，以及虚调用在汇编里的样子。'
 pubDate: '2026-10-27T21:00:00+08:00'
 updatedDate: '2026-10-28T21:00:00+08:00'
-readingOrder: 8
-readingNote: '对象模型：成员布局、对齐、虚函数表与 this 调整'
+readingOrder: 5
+readingNote: '对象模型：成员布局、对齐、虚函数表、this 调整与虚析构'
 categories:
   - 'C/C++'
 tags:
@@ -43,7 +43,7 @@ struct B { int i; char c; char d; };
 
 这是[现代 C++ 长期学习计划](/blog/modern-cpp-mastery-roadmap/)中“对象模型”的第一篇。前面的[《C++ 类型推导》](/blog/cpp-type-deduction/)和[《C++ 对象初始化》](/blog/cpp-initialization/)讨论的是“一个对象是什么类型、怎样被创建”，这一篇往下走一层：对象在内存里长什么样。
 
-阅读路线是：**普通成员的对齐与填充 → 空类 → 加入虚函数 → 单继承 → 多继承与 this 调整 → 虚调用的汇编**。每一步都先猜，再用编译器输出核对。
+阅读路线是：**普通成员的对齐与填充 → 空类 → 加入虚函数 → 单继承 → 多继承与 this 调整 → 虚析构函数 → 虚调用的汇编**。每一步都先猜，再用编译器输出核对。
 
 </SlideCard>
 
