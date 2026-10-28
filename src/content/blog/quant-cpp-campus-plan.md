@@ -17,6 +17,7 @@ draft: true
   - 算法：每周 6–8 题，周日做 1 次限时 90 分钟模拟。
   - 复盘：周日 30 分钟，在本文件对应周打勾，并把没完成的项挪到下周。
   - 八股卡片：每学完一个知识点，写一张“问题 → 答到底层”的卡片（建议放 `private/cards/`）。
+- **体系结构线**（W3 – W10）：每周固定约 2 小时（建议周末一个下午），内容与当周 C++ 主线对应，标为“体系结构”的条目。目的是让 W7 的 memory order、W8 的无锁队列和 W9 的缓存实验都有硬件层面的解释，而不是只背规则。
 - **检验标准**：每周的“检验”一项是硬指标，做不到就说明这周没学透，不要跳过。
 - **招聘时间都是估计值**：各公司每年节奏不同，W1、W18、W33 安排了核对官网和校招公众号的任务，以实际公告为准。
 
@@ -54,6 +55,7 @@ draft: true
 - [ ] 《Effective Modern C++》条款 23–30（右值引用、移动、完美转发）
 - [ ] 左值/右值/将亡值，RVO 与 NRVO，`std::move` 的本质，`noexcept` 移动构造与 `vector` 扩容的关系
 - [ ] 手写：简化版 `unique_ptr`、带移动语义的 `String`
+- [ ] 体系结构：CS:APP 第 6 章，存储器层次、局部性、cache 的组相联结构；写一个按行 / 按列遍历二维数组的程序，对比耗时
 - [ ] 算法：二叉树遍历、递归
 - [ ] 检验：解释“为什么移动构造不加 `noexcept`，`vector` 扩容会退化成拷贝”
 
@@ -62,6 +64,7 @@ draft: true
 - [ ] 《Effective Modern C++》条款 18–22
 - [ ] `shared_ptr` 控制块、引用计数的原子开销、`make_shared` 的单次分配、`weak_ptr`、`enable_shared_from_this`
 - [ ] 手写：简化版 `shared_ptr`（含控制块与原子引用计数）
+- [ ] 体系结构：CS:APP 第 5 章，流水线、指令级并行、数据依赖链；对比单累加器和多累加器求和的速度，解释 IPC 的差异
 - [ ] 外资早投：若 W1 查到已开放的暑期实习，本周用当前简历先投
 - [ ] 算法：二叉搜索树、堆
 - [ ] 检验：说出 `shared_ptr` 在热路径上的 2 个以上性能问题
@@ -70,6 +73,7 @@ draft: true
 
 - [ ] 模板实例化、特化、SFINAE、`if constexpr`、`constexpr` 函数、C++20 concepts
 - [ ] CRTP 与静态多态；用 Google Benchmark 对比虚函数和 CRTP 调用
+- [ ] 体系结构：分支预测与乱序执行；实验：对有序和随机数组做带条件的求和，再改成无分支写法，比较三者耗时
 - [ ] 算法：回溯
 - [ ] 检验：benchmark 跑出结果，并能解释差异来自哪里（内联、间接跳转、分支预测）
 
@@ -77,6 +81,7 @@ draft: true
 
 - [ ] 《C++ Concurrency in Action》第 2–4 章：线程、互斥、条件变量、`future`
 - [ ] 手写：线程池（任务队列 + 条件变量 + 优雅退出）
+- [ ] 体系结构：缓存一致性与 MESI 协议；《A Primer on Memory Consistency and Cache Coherence》一致性相关章节；画出两个核交替写同一 cache line 时的状态变化
 - [ ] 算法：二分查找
 - [ ] 检验：线程池通过 ThreadSanitizer（`-fsanitize=thread`）且无数据竞争
 
@@ -85,6 +90,7 @@ draft: true
 - [ ] 《C++ Concurrency in Action》第 5 章：happens-before、synchronizes-with、memory order
 - [ ] acquire/release/relaxed/seq_cst 的语义；它们在 x86 和 ARM 上分别生成什么指令（用 Compiler Explorer 看）
 - [ ] 读 Preshing on Programming 的 acquire/release 系列文章
+- [ ] 体系结构（先于本周 C++ 内容学）：store buffer、x86-TSO 为什么只允许“写后读”重排、ARM 的弱序模型、fence 的作用；《A Primer》TSO 一章；用 store buffering 例子（两线程各写一个变量再读另一个）实测重排
 - [ ] 算法：动态规划入门（线性 DP）
 - [ ] 检验：写出一个用 relaxed 会出错、用 acquire/release 就正确的例子，并解释原因
 
@@ -93,14 +99,17 @@ draft: true
 - [ ] 《C++ Concurrency in Action》第 7 章
 - [ ] 手写：SPSC ring buffer（容量为 2 的幂、head/tail 分别对齐到 cache line、缓存对端索引）
 - [ ] 了解 MPSC 队列、seqlock、ABA 问题
+- [ ] 体系结构：cache line 在核间来回传递（ping-pong）的成本；解释 SPSC 队列为什么要把 head/tail 分开对齐、为什么要缓存对端索引
 - [ ] 算法：动态规划（背包）
 - [ ] 检验：SPSC 队列 benchmark，对比 `std::mutex + std::queue`，记录吞吐与单次延迟
 
 ### W9（12/21 – 12/27）CPU 缓存与体系结构
 
 - [ ] CS:APP 第 5、6 章；Drepper《What Every Programmer Should Know About Memory》第 3、6 节
-- [ ] cache line、false sharing、预取、TLB、分支预测
+- [ ] cache line、false sharing、硬件预取；结合 W3–W8 体系结构线的积累，把本周作为汇总与实测周
 - [ ] 实验：写一个 false sharing 程序，用 `perf stat` 和 `perf c2c` 观察差异（需要 Linux 环境）
+- [ ] 实验：按步长访问数组，画出访问延迟随工作集大小变化的曲线，从拐点读出 L1 / L2 / L3 的容量
+- [ ] 补充阅读：Denis Bakhvalov《Performance Analysis and Tuning on Modern CPUs》中 CPU 微架构与内存层次部分
 - [ ] 算法：动态规划（区间 DP、状态压缩）
 - [ ] 检验：给出 false sharing 前后的实测数字，以及 `alignas(64)` 修复的效果
 
@@ -108,9 +117,10 @@ draft: true
 
 - [ ] `perf record/report`、火焰图、`perf stat` 的常用事件（cache-misses、branch-misses、IPC）
 - [ ] 用 `rdtsc`/`rdtscp` 做纳秒级计时，了解 TSC 的注意事项
+- [ ] 体系结构：TLB 与 huge pages、NUMA 与内存就近分配（`numactl`）；结合 6.S081 的页表经验，解释 TLB miss 的代价
 - [ ] 简历 v1：实习经历 + 已完成的线程池/无锁队列；请一位学长或同事看过
 - [ ] 复盘 W1–W9 的八股卡片，补缺口
-- [ ] 检验：模拟面试 1 次（找同学或用录屏自问自答），问题覆盖内存模型、虚函数、智能指针
+- [ ] 检验：模拟面试 1 次（找同学或用录屏自问自答），问题覆盖内存模型、虚函数、智能指针，以及 cache、MESI、store buffer
 
 ## 阶段 2：核心项目——低延迟订单簿与撮合引擎（W11 – W17）
 
