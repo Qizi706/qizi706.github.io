@@ -58,6 +58,8 @@ Buffer a(3); // a.data 包含 0、0、0
 
 读到某一版时，如果记不清它有哪些构造函数，回来查这张表。
 
+第 3、5、6、7 节中有些例子换用独立的小类型（如 `Widget`、`Options`），它们只用来演示一条规则，不修改 `Buffer`。文中 initializer-list 构造函数抢占、空列表、most vexing parse 和 `make_unique` 的运行结果，在 Apple clang 21 与 GCC 16（`-std=c++20`）上一致。
+
 这是[现代 C++ 长期学习计划](/blog/modern-cpp-mastery-roadmap/)中接在类型推导之后的一篇。文中的程序结果会直接解释，不需要先完成练习才能继续阅读。
 
 </Note>
@@ -106,11 +108,30 @@ const Buffer fixed = source; // 可以初始化
 
 </SlideCard>
 
+<SlideCard title="初始化引用，建立的是绑定关系">
+
+## 绑定已有对象或临时对象
+
+先看这是不是对象声明，还有一个例外要排除：引用声明也带等号，但初始化引用不创建新对象。
+
+```cpp
+int source = 7;
+int& alias = source;           // 绑定已有整数
+const int& temporary = 7;      // 绑定临时对象，这里延长它的生命周期
+// int& invalid = 7;           // 编译错误
+```
+
+`alias` 的初始化没有复制 `source`，而是让引用绑定到已有整数。引用初始化按引用绑定规则处理来源表达式；像 `temporary` 这样，它也可能涉及临时对象，而生命周期延长有严格的适用上下文。
+
+这里的局部引用 `temporary` 可以使用，但不能据此推出“返回一个引用也会把临时对象一直保住”。类型正确、绑定合法、使用时仍然存活，仍要分别检查。依据见 [引用初始化 [dcl.init.ref]](https://timsong-cpp.github.io/cppwp/n4861/dcl.init.ref) 与 [临时对象 [class.temporary]](https://timsong-cpp.github.io/cppwp/n4861/class.temporary)。
+
+</SlideCard>
+
 <SlideCard title="先给这些写法起名字">
 
 ## 名称描述规则，不描述复制次数
 
-刚才的四行分别属于下面几种初始化形式：
+回到第一版下的四行，它们分别属于下面几种初始化形式：
 
 | 写法 | 初始化形式 |
 | --- | --- |
@@ -184,7 +205,61 @@ inspect(Buffer{3});  // 明确创建 Buffer，再传给 inspect
 
 所以，到目前为止，区别可以这样记：**`explicit` 改变了哪些上下文允许使用这个构造函数，没有改变它创建三个零的行为。** 规则见 [转换构造函数](https://timsong-cpp.github.io/cppwp/n4861/class.conv.ctor)。
 
-不过，`Buffer{3}` 是否永远代表“三个零”？下一次接口扩展会改变这个答案。
+</SlideCard>
+
+<SlideCard title="explicit 的影响会延伸到接口边界">
+
+## 返回值也需要初始化
+
+```cpp
+struct Limit {
+    explicit Limit(int value) : value(value) {}
+    int value;
+};
+
+void consume(Limit limit);
+
+Limit make_limit() {
+    return Limit{8}; // 明确构造 Limit
+}
+
+// Limit bad_limit() { return 8; }   // 编译错误
+// Limit bad_list() { return {8}; }  // 编译错误
+```
+
+按值参数需要初始化参数对象，按值返回也需要初始化结果对象。这些上下文会使用复制初始化或复制列表初始化规则，所以不能只在带 `=` 的声明里寻找它们。
+
+`return Limit{8}` 先在语义上明确要求一个 `Limit` 类型的 prvalue；而 `return {8}` 把列表交给返回对象的复制列表初始化，最后选中 explicit 构造函数，因此被拒绝。
+
+返回规则见 [C++20 草案 [stmt.return]](https://timsong-cpp.github.io/cppwp/n4861/stmt.return)。
+
+</SlideCard>
+
+<SlideCard title="明确写出对象，不一定增加一次移动">
+
+## 同类型 prvalue 直接初始化结果对象
+
+```cpp
+struct Token {
+    explicit Token(int) {}
+    Token(const Token&) = delete;
+    Token(Token&&) = delete;
+};
+
+Token make_token() {
+    return Token{7};
+}
+
+Token token = make_token(); // C++20 下可以，不需要复制或移动构造函数
+```
+
+这里的 `Token` 不能复制也不能移动，但同类型 prvalue 直接初始化结果对象的规则让代码成立。这是 C++17 起的语言保证，不需要把它解释成“编译器可能帮忙省掉几个临时对象”。示例中的析构函数由编译器隐式声明，是可访问且未删除的。
+
+如果改成先创建有名字的局部变量，再 `return local;`，就进入命名返回值优化等另一组规则，不能直接套用这个结论。
+
+当前只需要记住：`T x = expression` 的复制初始化名称，并不能告诉你一定发生几次复制。操作数量还取决于表达式类型、值类别与相应的语言规则。
+
+回到 `Buffer`：`Buffer{3}` 是否永远代表“三个零”？下一次接口扩展会改变这个答案。
 
 </SlideCard>
 
@@ -252,7 +327,7 @@ data 保存列表中的一个元素 3
 
 这套规则也解释了常见的 `vector<int>(3)` 与 `vector<int>{3}` 的区别。这里限定了非聚合类和非空列表；空列表稍后会遇到。依据见 [列表重载选择](https://timsong-cpp.github.io/cppwp/n4861/over.match.list)。
 
-注意“可行”的门槛很低：只要列表元素能隐式转换成 initializer_list 的元素类型就算，不要求比普通构造函数匹配得更好。`Buffer` 的元素恰好是 `int`，看不出这一点；补充里的“列表构造函数会抢走更匹配的构造函数吗？”换了元素类型来演示。
+注意“可行”的门槛很低：只要列表元素能隐式转换成 initializer_list 的元素类型就算，不要求比普通构造函数匹配得更好。`Buffer` 的元素恰好是 `int`，看不出这一点；本节后面会换一个元素类型不同的类来演示。
 
 </SlideCard>
 
@@ -289,6 +364,110 @@ Buffer b{static_cast<int>(3.5)}; // 一个元素：3
 第二行则先显式转成 `int`，花括号收到的已经是整数。但列表选择规则没有消失：它仍然创建一个元素 `3`，不会变成三个零。
 
 所以，解决窄化报错和选择想要的构造方式，是两个决定。若意图是数量，应该写 `Buffer(3)`；若意图是内容，才写 `Buffer{3}`。完整窄化规则见 [列表初始化](https://timsong-cpp.github.io/cppwp/n4861/dcl.init.list)。
+
+</SlideCard>
+
+<SlideCard title="整数之间存在常量表达式例外">
+
+## 已知常量值与普通变量
+
+```cpp
+unsigned char a{42};  // 可以：常量值能够精确表示
+
+int value = 42;
+// unsigned char b{value}; // 编译错误：value 不是常量表达式
+
+constexpr int fixed = 42;
+unsigned char c{fixed};    // 可以
+```
+
+`int` 的全部取值不一定能放进 `unsigned char`。不过，如果来源是常量表达式，且它的具体值可以由目标类型精确表示，这类整数转换有例外。
+
+这里 `value` 虽然刚被赋成 `42`，也不会因为编译器容易看出它的值，就自动符合常量表达式条件。优化器知道什么，和语言规则允许什么，是两层判断。
+
+浮点到较低精度浮点、整数到浮点也有各自的窄化条件，不宜压成“大小类型之间不能转换”。完整定义见 [C++20 草案 [dcl.init.list]](https://timsong-cpp.github.io/cppwp/n4861/dcl.init.list)。
+
+</SlideCard>
+
+<SlideCard title="int 和 bool 都精确匹配，仍然输了">
+
+## 第一轮只问“能不能转换”
+
+换一个独立的类型，让列表元素类型与普通构造函数的参数不同：
+
+```cpp
+struct Widget {
+    Widget(int, bool) { std::puts("Widget(int, bool)"); }
+    Widget(std::initializer_list<long double>) { std::puts("initializer_list<long double>"); }
+};
+
+Widget a(10, true); // 输出 Widget(int, bool)
+Widget b{10, true}; // 输出 initializer_list<long double>
+```
+
+单看重载决议，`10` 和 `true` 与 `Widget(int, bool)` 精确匹配，转成 `long double` 反而要经过转换。但花括号的第一轮只考虑 initializer-list 构造函数，`int` 和 `bool` 都能隐式转成 `long double`，所以第一轮已经找到可行函数，`Widget(int, bool)` 根本没进入比较。
+
+这就是前面“只有第一轮无可行函数，才进入第二轮”在元素类型不同时的样子。`Buffer` 的列表元素是 `int`，所以之前看不出这种“更差的匹配也赢”。
+
+</SlideCard>
+
+<SlideCard title="选中之后窄化失败，也不会回退">
+
+## 报错，而不是换一个构造函数
+
+```cpp
+struct Flags {
+    Flags(int, double) {}
+    Flags(std::initializer_list<bool>) {}
+};
+
+// Flags f{10, 5.0}; // 编译错误
+```
+
+clang 报出两条错误：常量 `10` 不能窄化为 `bool`，`double` 也不能窄化为 `bool`。`Flags(int, double)` 能完美接收这两个参数，但第一轮已经选中列表构造函数，窄化检查发生在选中之后。
+
+这和前面 `Buffer{3.5}` 的错误是同一条规则：**“选中了但元素初始化不合法”不会让编译器退回普通构造函数。**
+
+</SlideCard>
+
+<SlideCard title="什么情况才真正回退？">
+
+## 元素根本无法转换
+
+```cpp
+struct Named {
+    Named(int, bool) { std::puts("Named(int, bool)"); }
+    Named(std::initializer_list<std::string>) { std::puts("initializer_list<string>"); }
+};
+
+Named c{10, true}; // 输出 Named(int, bool)
+```
+
+`int` 和 `bool` 没有任何隐式转换能得到 `std::string`，这个列表构造函数不可行，第一轮落空，才把元素拆成参数进入第二轮。
+
+所以判断花括号会调用谁，问的不是“哪个更匹配”，而是“列表元素能否隐式转换成那个元素类型”。能，就选列表构造函数，后续再检查窄化。
+
+</SlideCard>
+
+<SlideCard title="连复制都可能被抢走">
+
+## 单元素同类型列表
+
+```cpp
+struct Copyable {
+    Copyable(int, bool) {}
+    Copyable(std::initializer_list<long double>) { std::puts("initializer_list"); }
+    Copyable(const Copyable&) { std::puts("Copyable(const Copyable&)"); }
+    operator float() const { return 1.0f; }
+};
+
+Copyable src(1, true);
+Copyable d{src}; // 输出 initializer_list
+```
+
+`src` 可以通过 `operator float` 转成 `float`，再转成 `long double`，于是列表构造函数可行，复制构造函数没有机会参与。
+
+C++ 标准后来为**聚合类**补了一条规则：单元素列表的元素类型就是目标类型（或其派生类）时，直接用这个元素初始化。`Copyable` 有用户声明的构造函数，不是聚合，这条规则不适用。两个编译器的输出都证实了这一点。这个例子依赖一个不常见的转换运算符，真实代码中很少见；它真正的提醒是：**给类加 initializer-list 构造函数时，要检查它会不会接住原本属于其他构造函数的调用。**
 
 </SlideCard>
 
@@ -352,6 +531,64 @@ void example() {
 
 </SlideCard>
 
+<SlideCard title="构造函数的定义方式会改变结果">
+
+## 默认化构造函数与空函数体
+
+上一张卡片里，用户提供的 `Buffer() {}` 没有让 `writes` 清零。下面把成员简化成一个整数，对照首次声明处的 `= default`，看值初始化的区别。
+
+下面的变量都假定声明在函数体内：
+
+```cpp
+struct Defaulted {
+    int value;
+    Defaulted() = default;
+};
+
+struct UserProvided {
+    int value;
+    UserProvided() {} // 函数体为空，也属于用户提供的构造函数
+};
+
+Defaulted a{};     // a.value 为 0
+UserProvided b{};  // b.value 没有获得确定的初值，不能读取
+```
+
+</SlideCard>
+
+<SlideCard title="值初始化的两个步骤">
+
+## 什么时候先零初始化？
+
+上一张卡片里的 `Defaulted` 和 `UserProvided` 都能默认构造，空花括号都进入值初始化。但类的值初始化还有内部步骤：如果选中的默认构造函数不是用户提供的，先零初始化对象，再默认初始化；否则直接默认初始化。
+
+`Defaulted()` 在首次声明处写成 `= default`，不属于用户提供的构造函数，因此 `a` 得到前面的零初始化。`UserProvided()` 有用户写出的函数体，不获得这一步，而它又没有初始化 `value`。
+
+这解释了为什么“我已经用了花括号”仍不足以证明成员可以读取。
+
+</SlideCard>
+
+<SlideCard title="用户声明与用户提供，是两个术语">
+
+## 首次声明处的 = default
+
+如果先在类里声明 `Defaulted();`，再在类外写 `Defaulted::Defaulted() = default;`，它会属于用户提供的构造函数。不能只搜索有没有 `= default` 来做判断。
+
+更直接的成员设计是把需要的默认值写出来：
+
+```cpp
+struct Counter {
+    int value = 0;
+    Counter() {} // 没有另外初始化 value，使用它的默认成员初值
+};
+```
+
+这里 `Counter c;` 和 `Counter c{};` 的 `value` 都是 `0`。初值来自成员声明，读代码的人不必依赖外部初始化形式来猜测。
+
+相关定义见 [值初始化 [dcl.init]](https://timsong-cpp.github.io/cppwp/n4861/dcl.init) 与 [显式默认化函数 [dcl.fct.def.default]](https://timsong-cpp.github.io/cppwp/n4861/dcl.fct.def.default)。
+
+</SlideCard>
+
 <SlideCard title="把默认值写进类里">
 
 ## 所有构造入口都需要有效的计数
@@ -407,265 +644,46 @@ explicit Buffer(int count) {
 
 </SlideCard>
 
-## 5. 重新读懂这个 Buffer
+<SlideCard title="成员顺序由声明决定">
 
-<SlideCard title="把第五版放在一起">
-
-## 构造入口与成员默认值各自负责一部分
+## 书写顺序不改变构造顺序
 
 ```cpp
-// 第五版（最终版）
-struct Buffer {
-    std::vector<int> data;
-    int writes = 0;
+struct Window {
+    int width;
+    int area;
 
-    Buffer() {}
-    explicit Buffer(int count) : data(count, 0) {}
-    Buffer(std::initializer_list<int> values) : data(values) {}
+    Window(int w) : area(width * 2), width(w) {}
 };
 ```
 
-默认构造得到空内容，圆括号传整数表示数量，非空花括号表示元素列表。三个入口都使用 `writes` 的默认成员初值。
+尽管 `area(...)` 写在前面，仍然先初始化 `width`，再初始化 `area`，因为成员声明顺序是如此。这个例子能够得到 `area == w * 2`，前提是乘法不溢出，但写法容易误导读者，也常触发重排警告。
 
-这些结果没有来自一句“总是用花括号”的建议。我们先弄清楚需要哪一种初始状态，再用相应规则表达它。这里保留空函数体，是为了与上一版比较；稍后的补充会解释 `= default` 为什么不只是换一种拼写。
+把成员初始化列表写成 `width(w), area(width * 2)`，才能让可见顺序与实际顺序一致。如果反过来把 `area` 声明在 `width` 前面，列表中的书写顺序也救不了它对尚未初始化的 `width` 的读取。
 
-</SlideCard>
-
-<SlideCard title="再看最初的四行">
-
-## 同样的代码，随着类定义得到不同结果
-
-| 声明 | 第一版：只有数量构造 | 第二版：数量构造加 explicit | 第五版：增加列表、默认构造与计数 |
-| --- | --- | --- | --- |
-| `Buffer a(3)` | 三个零 | 三个零 | 三个零 |
-| `Buffer b{3}` | 三个零 | 三个零 | 一个元素 3 |
-| `Buffer c = 3` | 三个零 | 不合法 | 不合法 |
-| `Buffer d = {3}` | 三个零 | 不合法 | 一个元素 3 |
-
-这张表中的变化都已经有了原因：`explicit` 限制使用上下文，列表构造函数改变选择，成员初值保证状态。即使变量类型始终叫 `Buffer`，初始化行为也会随接口变化。
-
-以后看到类似声明，先确认它在创建对象，再判断初始化形式、当前可用的构造路径，以及成员最后获得了什么状态。名称帮助定位规则，结果要沿这条过程解释。
+对于有继承的类，虚基类、直接基类也有规定的初始化次序；成员完成之后才执行构造函数体。规则见 [C++20 草案 [class.base.init]](https://timsong-cpp.github.io/cppwp/n4861/class.base.init)。
 
 </SlideCard>
 
-<SlideCard title="从初始化走向类设计">
+## 5. 空括号和空列表，不一定得到空对象
 
-## 构造函数需要保证什么？
+<SlideCard title="想传一个空列表怎么办？">
 
-回头看第四版的错误：它能通过编译，也成功调用了构造函数，但 `writes` 不能被安全读取。第五版补上默认成员初值，才使“每个新缓冲区的写入次数为零”成立。
+## `Buffer({})` 与 `Buffer{{}}` 不一样
 
-这已经触及下一步的类设计：哪些条件必须在对象创建完成时成立，并在后续操作中维持？它们就是类的不变量。继续学习复制、移动、析构和 RAII 时，仍然可以问同一个问题：**这次操作之后，对象处于什么状态，谁负责保证它有效？**
-
-初始化规则到这里便有了实际用途：它让我们解释一个对象如何成为可以使用的对象。
-
-</SlideCard>
-
-## 6. 检验：先判断，再展开答案
-
-<SlideCard title="不看前文，说出调用了谁">
-
-## 每题先写下结果和理由
-
-Quiz 1–4 考正文，Quiz 5–8 考后面的补充。用到 `Buffer` 的题目都在题干里写出了它当时的构造函数，不需要回忆是第几版。回答时不要只给结果，要说出走了哪条路径：哪种初始化形式、候选构造函数有哪些、为什么选中这一个。
-
-<details>
-<summary>Quiz 1：`Buffer` 只有 `Buffer(int)` 一个构造函数（第一版），`void inspect(const Buffer&); inspect(3);` 合法吗？给它加上 `explicit`（第二版）后呢？</summary>
-
-不加 `explicit` 时合法：参数是复制初始化，`Buffer(int)` 可以把 `3` 转成临时 `Buffer`，引用绑定到它，临时对象活到这条完整表达式结束。
-
-加上 `explicit` 后编译错误，复制初始化不能使用 explicit 构造函数。改成 `inspect(Buffer{3})`，在调用点明确写出构造。
-
-</details>
-
-<details>
-<summary>Quiz 2：`Buffer` 有 `Buffer()`、`explicit Buffer(int)`、`Buffer(std::initializer_list<int>)` 和成员 `int writes = 0;`（第五版），`Buffer a(3); Buffer b{3}; Buffer c = {3}; Buffer d{};` 的 `data` 分别是什么？</summary>
-
-- `a`：三个零。圆括号不考虑列表构造函数的优先规则，选 `explicit Buffer(int)`。
-- `b`：一个元素 `3`。非空花括号先考虑 `initializer_list<int>`，可行就选它。
-- `c`：一个元素 `3`。同样选中列表构造函数，它没有 `explicit`，复制列表初始化合法。
-- `d`：空。有默认构造函数时，空花括号走值初始化，调用 `Buffer()`，不走列表构造函数。
-
-四个对象的 `writes` 都是 `0`，来自默认成员初值。
-
-</details>
-
-<details>
-<summary>Quiz 3：`Buffer` 有 `explicit Buffer(int)` 和 `Buffer(std::initializer_list<int>)`（第三版），`Buffer b{3.0};` 能编译吗？编译器会不会改用 `Buffer(int)`？</summary>
-
-不能编译，也不会改用。花括号先选中 `Buffer(std::initializer_list<int>)`，之后把 `3.0` 放进 `int` 元素属于浮点到整数的窄化，列表初始化禁止，即使值恰好没有小数部分。
-
-“选中了但元素不合法”是报错，只有“没有可行的列表构造函数”才进入第二轮。
-
-</details>
-
-<details>
-<summary>Quiz 4：`struct A { int v; A() = default; }; struct B { int v; B() {} };` 在函数内写 `A a{}; B b{};`，能读取 `a.v` 和 `b.v` 吗？</summary>
-
-`a.v` 是 `0`：`A()` 在首次声明处默认化，不是用户提供的，值初始化会先零初始化。
-
-`b.v` 不能读取：`B()` 是用户提供的，值初始化直接调用它，它又没有初始化 `v`。C++20 下读取这个不确定值是未定义行为。最直接的修法是写 `int v = 0;`。
-
-</details>
-
-<details>
-<summary>Quiz 5：`Widget(int, bool)` 与 `Widget(std::initializer_list<long double>)` 同时存在，`Widget w{10, true};` 调用哪个？把列表元素类型换成 `std::string` 呢？</summary>
-
-调用 `initializer_list<long double>` 版本。第一轮只问元素能不能隐式转换成 `long double`，能就选它，不和 `Widget(int, bool)` 比较谁更匹配。
-
-换成 `std::string` 后，`int`、`bool` 都无法转换，第一轮没有可行函数，才进入第二轮选 `Widget(int, bool)`。
-
-</details>
-
-<details>
-<summary>Quiz 6：沿用 Quiz 2 的 `Buffer`（第五版），`Buffer({})` 和 `Buffer{{}}` 的 `data` 分别是什么？</summary>
-
-- `Buffer({})`：空。`{}` 作为一个参数，既能变成空的 `initializer_list<int>`，也能值初始化 `int`；两种列表转换中 `initializer_list` 优先。
-- `Buffer{{}}`：一个元素 `0`。外层花括号走列表构造函数，内层 `{}` 是一个元素，值初始化为 `0`。
-
-《Effective Modern C++》条款 7 把两者都写成传空列表，本文实验环境中只有 `({})` 是空的。
-
-</details>
-
-<details>
-<summary>Quiz 7（面试题）：`std::vector<int> v1(10, 20);`、`std::vector<int> v2{10, 20};`、`std::make_unique<std::vector<int>>(10, 20)` 分别有几个元素？</summary>
-
-`v1` 有 10 个 `20`；`v2` 有两个元素 `10` 和 `20`。
-
-`make_unique` 在内部用圆括号转发参数，所以得到 10 个 `20`。想要两个元素，需要先在调用点写出 `initializer_list`，例如 `auto list = {10, 20};` 再传入。
-
-</details>
-
-<details>
-<summary>Quiz 8（面试题）：`Widget w(Timer());` 声明了什么？怎样改成创建对象？</summary>
-
-声明了一个函数 `w`：返回 `Widget`，参数是“返回 `Timer` 的无参函数”（调整为函数指针）。能解释成声明的语句按声明处理，这就是 most vexing parse，clang 会给出 `-Wvexing-parse` 警告。
-
-改成 `Widget w{Timer{}};`，花括号里不能写参数声明；或者按警告提示多加一层括号 `Widget w((Timer()));`。
-
-</details>
-
-</SlideCard>
-
-## 补充
-
-前面的主线已经解释了 `Buffer` 的几次变化。下面保留涉及其他类型、存储期和接口的边界，按遇到的问题展开阅读。补充中的类型各自独立，不继续修改第五版 `Buffer`。
-
-下面几张卡片的运行结果，在 Apple clang 21 与 GCC 16（`-std=c++20`）上一致。
-
-<details>
-<summary>列表构造函数会抢走更匹配的构造函数吗？</summary>
-
-<SlideCard title="int 和 bool 都精确匹配，仍然输了">
-
-## 第一轮只问“能不能转换”
+第五版 `Buffer` 同时有默认构造函数和列表构造函数，`Buffer{}` 走值初始化，调用 `Buffer()`。如果确实想调用列表构造函数并传一个空列表，可以把空花括号作为参数：
 
 ```cpp
-struct Widget {
-    Widget(int, bool) { std::puts("Widget(int, bool)"); }
-    Widget(std::initializer_list<long double>) { std::puts("initializer_list<long double>"); }
-};
-
-Widget a(10, true); // 输出 Widget(int, bool)
-Widget b{10, true}; // 输出 initializer_list<long double>
+Buffer a{};    // Buffer()，data 为空
+Buffer b({});  // Buffer(std::initializer_list<int>)，data 为空
+Buffer c{{}};  // data 有一个元素 0
 ```
 
-单看重载决议，`10` 和 `true` 与 `Widget(int, bool)` 精确匹配，转成 `long double` 反而要经过转换。但花括号的第一轮只考虑 initializer-list 构造函数，`int` 和 `bool` 都能隐式转成 `long double`，所以第一轮已经找到可行函数，`Widget(int, bool)` 根本没进入比较。
+`b` 用圆括号传入一个 `{}` 参数。它既能转换成空的 `initializer_list<int>`，也能值初始化 `int` 交给数量构造函数；标准在两种列表转换之间规定 `initializer_list` 优先，于是得到空列表。
 
-这就是主线里“只有第一轮无可行函数，才进入第二轮”在元素类型不同时的样子。`Buffer` 的列表元素是 `int`，因此主线中看不出这种“更差的匹配也赢”。
-
-</SlideCard>
-
-<SlideCard title="选中之后窄化失败，也不会回退">
-
-## 报错，而不是换一个构造函数
-
-```cpp
-struct Flags {
-    Flags(int, double) {}
-    Flags(std::initializer_list<bool>) {}
-};
-
-// Flags f{10, 5.0}; // 编译错误
-```
-
-clang 报出两条错误：常量 `10` 不能窄化为 `bool`，`double` 也不能窄化为 `bool`。`Flags(int, double)` 能完美接收这两个参数，但第一轮已经选中列表构造函数，窄化检查发生在选中之后。
-
-这和主线中 `Buffer{3.5}` 的错误是同一条规则：**“选中了但元素初始化不合法”不会让编译器退回普通构造函数。**
+`c` 的外层花括号先走列表构造函数，内层 `{}` 被当作**一个元素**，值初始化为 `0`。《Effective Modern C++》条款 7 把 `{{}}` 和 `({})` 都写成“传空列表”；在 clang 21 和 GCC 16 上，`Buffer{{}}` 实测得到一个元素 `0`。需要空列表时，用 `({})` 更可靠。排序规则见 [[over.ics.rank]](https://timsong-cpp.github.io/cppwp/n4861/over.ics.rank)。
 
 </SlideCard>
-
-<SlideCard title="什么情况才真正回退？">
-
-## 元素根本无法转换
-
-```cpp
-struct Named {
-    Named(int, bool) { std::puts("Named(int, bool)"); }
-    Named(std::initializer_list<std::string>) { std::puts("initializer_list<string>"); }
-};
-
-Named c{10, true}; // 输出 Named(int, bool)
-```
-
-`int` 和 `bool` 没有任何隐式转换能得到 `std::string`，这个列表构造函数不可行，第一轮落空，才把元素拆成参数进入第二轮。
-
-所以判断花括号会调用谁，问的不是“哪个更匹配”，而是“列表元素能否隐式转换成那个元素类型”。能，就选列表构造函数，后续再检查窄化。
-
-</SlideCard>
-
-<SlideCard title="连复制都可能被抢走">
-
-## 单元素同类型列表
-
-```cpp
-struct Copyable {
-    Copyable(int, bool) {}
-    Copyable(std::initializer_list<long double>) { std::puts("initializer_list"); }
-    Copyable(const Copyable&) { std::puts("Copyable(const Copyable&)"); }
-    operator float() const { return 1.0f; }
-};
-
-Copyable src(1, true);
-Copyable d{src}; // 输出 initializer_list
-```
-
-`src` 可以通过 `operator float` 转成 `float`，再转成 `long double`，于是列表构造函数可行，复制构造函数没有机会参与。
-
-C++ 标准后来为**聚合类**补了一条规则：单元素列表的元素类型就是目标类型（或其派生类）时，直接用这个元素初始化。`Copyable` 有用户声明的构造函数，不是聚合，这条规则不适用。两个编译器的输出都证实了这一点。这个例子依赖一个不常见的转换运算符，真实代码中很少见；它真正的提醒是：**给类加 initializer-list 构造函数时，要检查它会不会接住原本属于其他构造函数的调用。**
-
-</SlideCard>
-
-</details>
-
-<details>
-<summary>整数之间的窄化有什么例外？</summary>
-
-<SlideCard title="整数之间存在常量表达式例外">
-
-## 已知常量值与普通变量
-
-```cpp
-unsigned char a{42};  // 可以：常量值能够精确表示
-
-int value = 42;
-// unsigned char b{value}; // 编译错误：value 不是常量表达式
-
-constexpr int fixed = 42;
-unsigned char c{fixed};    // 可以
-```
-
-`int` 的全部取值不一定能放进 `unsigned char`。不过，如果来源是常量表达式，且它的具体值可以由目标类型精确表示，这类整数转换有例外。
-
-这里 `value` 虽然刚被赋成 `42`，也不会因为编译器容易看出它的值，就自动符合常量表达式条件。优化器知道什么，和语言规则允许什么，是两层判断。
-
-浮点到较低精度浮点、整数到浮点也有各自的窄化条件，不宜压成“大小类型之间不能转换”。完整定义见 [C++20 草案 [dcl.init.list]](https://timsong-cpp.github.io/cppwp/n4861/dcl.init.list)。
-
-</SlideCard>
-
-</details>
-
-<details>
-<summary>空初始化：存储期、函数声明与 = default</summary>
 
 <SlideCard title="存储期也参与决定">
 
@@ -722,90 +740,11 @@ void example() {
 
 C++ 规定，能解释成声明的语句就按声明处理。这里 `Timer()` 被当成了一个函数类型参数，`w` 也就成了函数。clang 对这一行给出 `-Wvexing-parse` 警告，`w.run()` 则报错 `Widget (Timer (*)())` 不是类类型。
 
-花括号里不能写参数声明，所以 `v` 没有这种歧义。这是花括号的一个实际优点，但它不足以让所有初始化都改成花括号，原因在下面关于括号选择的补充里。
+花括号里不能写参数声明，所以 `v` 没有这种歧义。这是花括号的一个实际优点，但它不足以让所有初始化都改成花括号，原因在第 7 节。
 
 </SlideCard>
 
-<SlideCard title="想传一个空列表怎么办？">
-
-## `Buffer({})` 与 `Buffer{{}}` 不一样
-
-第五版 `Buffer` 同时有默认构造函数和列表构造函数，`Buffer{}` 走值初始化，调用 `Buffer()`。如果确实想调用列表构造函数并传一个空列表，可以把空花括号作为参数：
-
-```cpp
-Buffer a{};    // Buffer()，data 为空
-Buffer b({});  // Buffer(std::initializer_list<int>)，data 为空
-Buffer c{{}};  // data 有一个元素 0
-```
-
-`b` 用圆括号传入一个 `{}` 参数。它既能转换成空的 `initializer_list<int>`，也能值初始化 `int` 交给数量构造函数；标准在两种列表转换之间规定 `initializer_list` 优先，于是得到空列表。
-
-`c` 的外层花括号先走列表构造函数，内层 `{}` 被当作**一个元素**，值初始化为 `0`。《Effective Modern C++》条款 7 把 `{{}}` 和 `({})` 都写成“传空列表”；在 clang 21 和 GCC 16 上，`Buffer{{}}` 实测得到一个元素 `0`。需要空列表时，用 `({})` 更可靠。排序规则见 [[over.ics.rank]](https://timsong-cpp.github.io/cppwp/n4861/over.ics.rank)。
-
-</SlideCard>
-
-<SlideCard title="构造函数的定义方式会改变结果">
-
-## 默认化构造函数与空函数体
-
-正文中，用户提供的 `Buffer() {}` 没有让 `writes` 清零。下面把成员简化成一个整数，对照首次声明处的 `= default`，看值初始化的区别。
-
-下面的变量都假定声明在函数体内：
-
-```cpp
-struct Defaulted {
-    int value;
-    Defaulted() = default;
-};
-
-struct UserProvided {
-    int value;
-    UserProvided() {} // 函数体为空，也属于用户提供的构造函数
-};
-
-Defaulted a{};     // a.value 为 0
-UserProvided b{};  // b.value 没有获得确定的初值，不能读取
-```
-
-</SlideCard>
-
-<SlideCard title="值初始化的两个步骤">
-
-## 什么时候先零初始化？
-
-上一张卡片里的 `Defaulted` 和 `UserProvided` 都能默认构造，空花括号都进入值初始化。但类的值初始化还有内部步骤：如果选中的默认构造函数不是用户提供的，先零初始化对象，再默认初始化；否则直接默认初始化。
-
-`Defaulted()` 在首次声明处写成 `= default`，不属于用户提供的构造函数，因此 `a` 得到前面的零初始化。`UserProvided()` 有用户写出的函数体，不获得这一步，而它又没有初始化 `value`。
-
-这解释了为什么“我已经用了花括号”仍不足以证明成员可以读取。
-
-</SlideCard>
-
-<SlideCard title="用户声明与用户提供，是两个术语">
-
-## 首次声明处的 = default
-
-如果先在类里声明 `Defaulted();`，再在类外写 `Defaulted::Defaulted() = default;`，它会属于用户提供的构造函数。不能只搜索有没有 `= default` 来做判断。
-
-更直接的成员设计是把需要的默认值写出来：
-
-```cpp
-struct Counter {
-    int value = 0;
-    Counter() {} // 没有另外初始化 value，使用它的默认成员初值
-};
-```
-
-这里 `Counter c;` 和 `Counter c{};` 的 `value` 都是 `0`。初值来自成员声明，读代码的人不必依赖外部初始化形式来猜测。
-
-相关定义见 [值初始化 [dcl.init]](https://timsong-cpp.github.io/cppwp/n4861/dcl.init) 与 [显式默认化函数 [dcl.fct.def.default]](https://timsong-cpp.github.io/cppwp/n4861/dcl.fct.def.default)。
-
-</SlideCard>
-
-</details>
-
-<details>
-<summary>没有对应构造函数时：聚合初始化</summary>
+## 6. 没有构造函数时：聚合初始化
 
 <SlideCard title="这些参数没有交给三参数构造函数">
 
@@ -895,95 +834,7 @@ Point c(1.5, 2);  // 可以，x 为 1
 
 </SlideCard>
 
-</details>
-
-<details>
-<summary>成员初始化列表的书写顺序有用吗？</summary>
-
-<SlideCard title="成员顺序由声明决定">
-
-## 书写顺序不改变构造顺序
-
-```cpp
-struct Window {
-    int width;
-    int area;
-
-    Window(int w) : area(width * 2), width(w) {}
-};
-```
-
-尽管 `area(...)` 写在前面，仍然先初始化 `width`，再初始化 `area`，因为成员声明顺序是如此。这个例子能够得到 `area == w * 2`，前提是乘法不溢出，但写法容易误导读者，也常触发重排警告。
-
-把成员初始化列表写成 `width(w), area(width * 2)`，才能让可见顺序与实际顺序一致。如果反过来把 `area` 声明在 `width` 前面，列表中的书写顺序也救不了它对尚未初始化的 `width` 的读取。
-
-对于有继承的类，虚基类、直接基类也有规定的初始化次序；成员完成之后才执行构造函数体。规则见 [C++20 草案 [class.base.init]](https://timsong-cpp.github.io/cppwp/n4861/class.base.init)。
-
-</SlideCard>
-
-</details>
-
-<details>
-<summary>把相同的规则用在返回对象上</summary>
-
-<SlideCard title="explicit 的影响会延伸到接口边界">
-
-## 返回值也需要初始化
-
-```cpp
-struct Limit {
-    explicit Limit(int value) : value(value) {}
-    int value;
-};
-
-void consume(Limit limit);
-
-Limit make_limit() {
-    return Limit{8}; // 明确构造 Limit
-}
-
-// Limit bad_limit() { return 8; }   // 编译错误
-// Limit bad_list() { return {8}; }  // 编译错误
-```
-
-按值参数需要初始化参数对象，按值返回也需要初始化结果对象。这些上下文会使用复制初始化或复制列表初始化规则，所以不能只在带 `=` 的声明里寻找它们。
-
-`return Limit{8}` 先在语义上明确要求一个 `Limit` 类型的 prvalue；而 `return {8}` 把列表交给返回对象的复制列表初始化，最后选中 explicit 构造函数，因此被拒绝。
-
-返回规则见 [C++20 草案 [stmt.return]](https://timsong-cpp.github.io/cppwp/n4861/stmt.return)。
-
-</SlideCard>
-
-<SlideCard title="明确写出对象，不一定增加一次移动">
-
-## 同类型 prvalue 直接初始化结果对象
-
-```cpp
-struct Token {
-    explicit Token(int) {}
-    Token(const Token&) = delete;
-    Token(Token&&) = delete;
-};
-
-Token make_token() {
-    return Token{7};
-}
-
-Token token = make_token(); // C++20 下可以，不需要复制或移动构造函数
-```
-
-这里的 `Token` 不能复制也不能移动，但同类型 prvalue 直接初始化结果对象的规则让代码成立。这是 C++17 起的语言保证，不需要把它解释成“编译器可能帮忙省掉几个临时对象”。示例中的析构函数由编译器隐式声明，是可访问且未删除的。
-
-如果改成先创建有名字的局部变量，再 `return local;`，就进入命名返回值优化等另一组规则，不能直接套用这个结论。
-
-当前只需要记住：`T x = expression` 的复制初始化名称，并不能告诉你一定发生几次复制。操作数量还取决于表达式类型、值类别与相应的语言规则。
-
-</SlideCard>
-
-</details>
-
-<details>
-<summary>再与类型推导、引用绑定对照</summary>
+## 7. 圆括号还是花括号
 
 <SlideCard title="花括号既可能影响推导，也可能影响构造">
 
@@ -1006,11 +857,6 @@ std::vector<int> e{3, 7}; // 两个元素 3、7
 
 </SlideCard>
 
-</details>
-
-<details>
-<summary>圆括号还是花括号：有没有默认选择？</summary>
-
 <SlideCard title="花括号能用的地方更多">
 
 ## 默认成员初值不接受圆括号
@@ -1025,7 +871,7 @@ struct Holder {
 
 再加上不允许窄化、不受 most vexing parse 影响，这是“统一初始化”这个说法的来由：花括号几乎在所有初始化位置都能写。
 
-代价也已经在正文里见过：只要类有 initializer-list 构造函数，花括号就会优先选它，而 `std::vector`、`std::string` 这些常用类型都有。
+代价在第 3 节已经见过：只要类有 initializer-list 构造函数，花括号就会优先选它，而 `std::vector`、`std::string` 这些常用类型都有。
 
 </SlideCard>
 
@@ -1055,30 +901,150 @@ auto q = std::make_unique<std::vector<int>>(list);
 - 传的是构造参数（数量、容量、配置），用圆括号，例如 `Buffer(3)`、`std::vector<int>(3, 7)`。
 - 传的是对象的内容（元素列表、聚合成员），用花括号，例如 `Buffer{3, 7}`、`Options{.workers = 4}`。
 - 需要防窄化、类内默认成员初值、或者避开 most vexing parse，用花括号，但先确认目标类型有没有 initializer-list 构造函数。
-- 设计类时，加 initializer-list 构造函数前，检查旧的花括号调用会不会改变含义，正文中加入列表构造（第三版）后，`Buffer{3}` 从三个零变成了一个元素 `3`。
+- 设计类时，加 initializer-list 构造函数前，检查旧的花括号调用会不会改变含义，第三版加入列表构造后，`Buffer{3}` 从三个零变成了一个元素 `3`。
 
-这和正文的结论一致：没有一种括号永远正确，先确定需要哪一种初始状态，再选择能表达它的语法。
+下一节回到 `Buffer`，会得到同一个结论：没有一种括号永远正确，先确定需要哪一种初始状态，再选择能表达它的语法。
 
 </SlideCard>
 
-<SlideCard title="初始化引用，建立的是绑定关系">
+## 8. 重新读懂这个 Buffer
 
-## 绑定已有对象或临时对象
+<SlideCard title="把第五版放在一起">
+
+## 构造入口与成员默认值各自负责一部分
 
 ```cpp
-int source = 7;
-int& alias = source;           // 绑定已有整数
-const int& temporary = 7;      // 绑定临时对象，这里延长它的生命周期
-// int& invalid = 7;           // 编译错误
+// 第五版（最终版）
+struct Buffer {
+    std::vector<int> data;
+    int writes = 0;
+
+    Buffer() {}
+    explicit Buffer(int count) : data(count, 0) {}
+    Buffer(std::initializer_list<int> values) : data(values) {}
+};
 ```
 
-`alias` 的初始化没有复制 `source`，而是让引用绑定到已有整数。引用初始化按引用绑定规则处理来源表达式；像 `temporary` 这样，它也可能涉及临时对象，而生命周期延长有严格的适用上下文。
+默认构造得到空内容，圆括号传整数表示数量，非空花括号表示元素列表。三个入口都使用 `writes` 的默认成员初值。
 
-这里的局部引用 `temporary` 可以使用，但不能据此推出“返回一个引用也会把临时对象一直保住”。类型正确、绑定合法、使用时仍然存活，仍要分别检查。依据见 [引用初始化 [dcl.init.ref]](https://timsong-cpp.github.io/cppwp/n4861/dcl.init.ref) 与 [临时对象 [class.temporary]](https://timsong-cpp.github.io/cppwp/n4861/class.temporary)。
+这些结果没有来自一句“总是用花括号”的建议。我们先弄清楚需要哪一种初始状态，再用相应规则表达它。这里保留空函数体，是为了与第四版比较；第 4 节已经解释了 `= default` 为什么不只是换一种拼写。
 
 </SlideCard>
 
+<SlideCard title="再看最初的四行">
+
+## 同样的代码，随着类定义得到不同结果
+
+| 声明 | 第一版：只有数量构造 | 第二版：数量构造加 explicit | 第五版：增加列表、默认构造与计数 |
+| --- | --- | --- | --- |
+| `Buffer a(3)` | 三个零 | 三个零 | 三个零 |
+| `Buffer b{3}` | 三个零 | 三个零 | 一个元素 3 |
+| `Buffer c = 3` | 三个零 | 不合法 | 不合法 |
+| `Buffer d = {3}` | 三个零 | 不合法 | 一个元素 3 |
+
+这张表中的变化都已经有了原因：`explicit` 限制使用上下文，列表构造函数改变选择，成员初值保证状态。即使变量类型始终叫 `Buffer`，初始化行为也会随接口变化。
+
+以后看到类似声明，先确认它在创建对象，再判断初始化形式、当前可用的构造路径，以及成员最后获得了什么状态。名称帮助定位规则，结果要沿这条过程解释。
+
+</SlideCard>
+
+<SlideCard title="从初始化走向类设计">
+
+## 构造函数需要保证什么？
+
+回头看第四版的错误：它能通过编译，也成功调用了构造函数，但 `writes` 不能被安全读取。第五版补上默认成员初值，才使“每个新缓冲区的写入次数为零”成立。
+
+这已经触及下一步的类设计：哪些条件必须在对象创建完成时成立，并在后续操作中维持？它们就是类的不变量。继续学习复制、移动、析构和 RAII 时，仍然可以问同一个问题：**这次操作之后，对象处于什么状态，谁负责保证它有效？**
+
+初始化规则到这里便有了实际用途：它让我们解释一个对象如何成为可以使用的对象。
+
+</SlideCard>
+
+## 9. 检验：先判断，再展开答案
+
+<SlideCard title="不看前文，说出调用了谁">
+
+## 每题先写下结果和理由
+
+Quiz 1–4 考 `Buffer` 主线，Quiz 5–8 考第 3、5、7 节中的其他类型。用到 `Buffer` 的题目都在题干里写出了它当时的构造函数，不需要回忆是第几版。回答时不要只给结果，要说出走了哪条路径：哪种初始化形式、候选构造函数有哪些、为什么选中这一个。
+
+<details>
+<summary>Quiz 1：`Buffer` 只有 `Buffer(int)` 一个构造函数（第一版），`void inspect(const Buffer&); inspect(3);` 合法吗？给它加上 `explicit`（第二版）后呢？</summary>
+
+不加 `explicit` 时合法：参数是复制初始化，`Buffer(int)` 可以把 `3` 转成临时 `Buffer`，引用绑定到它，临时对象活到这条完整表达式结束。
+
+加上 `explicit` 后编译错误，复制初始化不能使用 explicit 构造函数。改成 `inspect(Buffer{3})`，在调用点明确写出构造。
+
 </details>
+
+<details>
+<summary>Quiz 2：`Buffer` 有 `Buffer()`、`explicit Buffer(int)`、`Buffer(std::initializer_list<int>)` 和成员 `int writes = 0;`（第五版），`Buffer a(3); Buffer b{3}; Buffer c = {3}; Buffer d{};` 的 `data` 分别是什么？</summary>
+
+- `a`：三个零。圆括号不考虑列表构造函数的优先规则，选 `explicit Buffer(int)`。
+- `b`：一个元素 `3`。非空花括号先考虑 `initializer_list<int>`，可行就选它。
+- `c`：一个元素 `3`。同样选中列表构造函数，它没有 `explicit`，复制列表初始化合法。
+- `d`：空。有默认构造函数时，空花括号走值初始化，调用 `Buffer()`，不走列表构造函数。
+
+四个对象的 `writes` 都是 `0`，来自默认成员初值。
+
+</details>
+
+<details>
+<summary>Quiz 3：`Buffer` 有 `explicit Buffer(int)` 和 `Buffer(std::initializer_list<int>)`（第三版），`Buffer b{3.0};` 能编译吗？编译器会不会改用 `Buffer(int)`？</summary>
+
+不能编译，也不会改用。花括号先选中 `Buffer(std::initializer_list<int>)`，之后把 `3.0` 放进 `int` 元素属于浮点到整数的窄化，列表初始化禁止，即使值恰好没有小数部分。
+
+“选中了但元素不合法”是报错，只有“没有可行的列表构造函数”才进入第二轮。
+
+</details>
+
+<details>
+<summary>Quiz 4：`struct A { int v; A() = default; }; struct B { int v; B() {} };` 在函数内写 `A a{}; B b{};`，能读取 `a.v` 和 `b.v` 吗？</summary>
+
+`a.v` 是 `0`：`A()` 在首次声明处默认化，不是用户提供的，值初始化会先零初始化。
+
+`b.v` 不能读取：`B()` 是用户提供的，值初始化直接调用它，它又没有初始化 `v`。C++20 下读取这个不确定值是未定义行为。最直接的修法是写 `int v = 0;`。
+
+</details>
+
+<details>
+<summary>Quiz 5：`Widget(int, bool)` 与 `Widget(std::initializer_list<long double>)` 同时存在，`Widget w{10, true};` 调用哪个？把列表元素类型换成 `std::string` 呢？</summary>
+
+调用 `initializer_list<long double>` 版本。第一轮只问元素能不能隐式转换成 `long double`，能就选它，不和 `Widget(int, bool)` 比较谁更匹配。
+
+换成 `std::string` 后，`int`、`bool` 都无法转换，第一轮没有可行函数，才进入第二轮选 `Widget(int, bool)`。
+
+</details>
+
+<details>
+<summary>Quiz 6：沿用 Quiz 2 的 `Buffer`（第五版），`Buffer({})` 和 `Buffer{{}}` 的 `data` 分别是什么？</summary>
+
+- `Buffer({})`：空。`{}` 作为一个参数，既能变成空的 `initializer_list<int>`，也能值初始化 `int`；两种列表转换中 `initializer_list` 优先。
+- `Buffer{{}}`：一个元素 `0`。外层花括号走列表构造函数，内层 `{}` 是一个元素，值初始化为 `0`。
+
+《Effective Modern C++》条款 7 把两者都写成传空列表，本文实验环境中只有 `({})` 是空的。
+
+</details>
+
+<details>
+<summary>Quiz 7（面试题）：`std::vector<int> v1(10, 20);`、`std::vector<int> v2{10, 20};`、`std::make_unique<std::vector<int>>(10, 20)` 分别有几个元素？</summary>
+
+`v1` 有 10 个 `20`；`v2` 有两个元素 `10` 和 `20`。
+
+`make_unique` 在内部用圆括号转发参数，所以得到 10 个 `20`。想要两个元素，需要先在调用点写出 `initializer_list`，例如 `auto list = {10, 20};` 再传入。
+
+</details>
+
+<details>
+<summary>Quiz 8（面试题）：`Widget w(Timer());` 声明了什么？怎样改成创建对象？</summary>
+
+声明了一个函数 `w`：返回 `Widget`，参数是“返回 `Timer` 的无参函数”（调整为函数指针）。能解释成声明的语句按声明处理，这就是 most vexing parse，clang 会给出 `-Wvexing-parse` 警告。
+
+改成 `Widget w{Timer{}};`，花括号里不能写参数声明；或者按警告提示多加一层括号 `Widget w((Timer()));`。
+
+</details>
+
+</SlideCard>
 
 ## 延伸阅读
 
@@ -1097,6 +1063,6 @@ const int& temporary = 7;      // 绑定临时对象，这里延长它的生命�
 
 <Note title="书籍">
 
-- 《Effective Modern C++》条款 7：区别使用 `()` 和 `{}` 创建对象。本文的主线和补充覆盖了它的全部要点，可以对照阅读；书以 C++14 为背景，`{{}}` 一处与实测不同，见上面的空列表补充。
+- 《Effective Modern C++》条款 7：区别使用 `()` 和 `{}` 创建对象。本文覆盖了它的全部要点，可以对照阅读；书以 C++14 为背景，`{{}}` 一处与实测不同，见第 5 节的空列表卡片。
 
 </Note>
