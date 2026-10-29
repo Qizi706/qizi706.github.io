@@ -1,8 +1,8 @@
 ---
 title: 'C++ 对象初始化'
-description: '围绕一个逐步完善的 Buffer 类，解释初始化与赋值、explicit、列表构造、窄化转换和成员初值，让每次代码变化引出下一条规则。'
+description: '围绕一个逐步完善的 Buffer 类，解释初始化与赋值、explicit、列表构造、窄化转换和成员初值，再补上 initializer_list 构造函数抢走重载、空列表和圆括号与花括号的选择。'
 pubDate: '2026-09-16T12:00:00+08:00'
-updatedDate: '2026-09-17T12:00:00+08:00'
+updatedDate: '2026-10-29T12:00:00+08:00'
 readingOrder: 4
 readingNote: '语言语义：类型确定后，理解初始化路径与对象创建'
 categories:
@@ -236,6 +236,8 @@ data 保存列表中的一个元素 3
 
 这套规则也解释了常见的 `vector<int>(3)` 与 `vector<int>{3}` 的区别。这里限定了非聚合类和非空列表；空列表稍后会遇到。依据见 [列表重载选择](https://timsong-cpp.github.io/cppwp/n4861/over.match.list)。
 
+注意“可行”的门槛很低：只要列表元素能隐式转换成 initializer_list 的元素类型就算，不要求比普通构造函数匹配得更好。`Buffer` 的元素恰好是 `int`，看不出这一点；补充里的“列表构造函数会抢走更匹配的构造函数吗？”换了元素类型来演示。
+
 </SlideCard>
 
 <SlideCard title="如果元素不是整数呢？">
@@ -434,6 +436,93 @@ struct Buffer {
 
 前面的主线已经解释了 `Buffer` 的几次变化。下面保留涉及其他类型、存储期和接口的边界，按遇到的问题展开阅读。补充中的类型各自独立，不继续修改第五版 `Buffer`。
 
+下面几张卡片的运行结果，在 Apple clang 21 与 GCC 16（`-std=c++20`）上一致。
+
+<details>
+<summary>列表构造函数会抢走更匹配的构造函数吗？</summary>
+
+<SlideCard title="int 和 bool 都精确匹配，仍然输了">
+
+## 第一轮只问“能不能转换”
+
+```cpp
+struct Widget {
+    Widget(int, bool) { std::puts("Widget(int, bool)"); }
+    Widget(std::initializer_list<long double>) { std::puts("initializer_list<long double>"); }
+};
+
+Widget a(10, true); // 输出 Widget(int, bool)
+Widget b{10, true}; // 输出 initializer_list<long double>
+```
+
+单看重载决议，`10` 和 `true` 与 `Widget(int, bool)` 精确匹配，转成 `long double` 反而要经过转换。但花括号的第一轮只考虑 initializer-list 构造函数，`int` 和 `bool` 都能隐式转成 `long double`，所以第一轮已经找到可行函数，`Widget(int, bool)` 根本没进入比较。
+
+这就是主线里“只有第一轮无可行函数，才进入第二轮”在元素类型不同时的样子。`Buffer` 的列表元素是 `int`，因此主线中看不出这种“更差的匹配也赢”。
+
+</SlideCard>
+
+<SlideCard title="选中之后窄化失败，也不会回退">
+
+## 报错，而不是换一个构造函数
+
+```cpp
+struct Flags {
+    Flags(int, double) {}
+    Flags(std::initializer_list<bool>) {}
+};
+
+// Flags f{10, 5.0}; // 编译错误
+```
+
+clang 报出两条错误：常量 `10` 不能窄化为 `bool`，`double` 也不能窄化为 `bool`。`Flags(int, double)` 能完美接收这两个参数，但第一轮已经选中列表构造函数，窄化检查发生在选中之后。
+
+这和主线中 `Buffer{3.5}` 的错误是同一条规则：**“选中了但元素初始化不合法”不会让编译器退回普通构造函数。**
+
+</SlideCard>
+
+<SlideCard title="什么情况才真正回退？">
+
+## 元素根本无法转换
+
+```cpp
+struct Named {
+    Named(int, bool) { std::puts("Named(int, bool)"); }
+    Named(std::initializer_list<std::string>) { std::puts("initializer_list<string>"); }
+};
+
+Named c{10, true}; // 输出 Named(int, bool)
+```
+
+`int` 和 `bool` 没有任何隐式转换能得到 `std::string`，这个列表构造函数不可行，第一轮落空，才把元素拆成参数进入第二轮。
+
+所以判断花括号会调用谁，问的不是“哪个更匹配”，而是“列表元素能否隐式转换成那个元素类型”。能，就选列表构造函数，后续再检查窄化。
+
+</SlideCard>
+
+<SlideCard title="连复制都可能被抢走">
+
+## 单元素同类型列表
+
+```cpp
+struct Copyable {
+    Copyable(int, bool) {}
+    Copyable(std::initializer_list<long double>) { std::puts("initializer_list"); }
+    Copyable(const Copyable&) { std::puts("Copyable(const Copyable&)"); }
+    operator float() const { return 1.0f; }
+};
+
+Copyable src(1, true);
+Copyable d{src}; // 输出 initializer_list
+```
+
+`src` 可以通过 `operator float` 转成 `float`，再转成 `long double`，于是列表构造函数可行，复制构造函数没有机会参与。
+
+C++ 标准后来为**聚合类**补了一条规则：单元素列表的元素类型就是目标类型（或其派生类）时，直接用这个元素初始化。`Copyable` 有用户声明的构造函数，不是聚合，这条规则不适用。两个编译器的输出都证实了这一点。这个例子依赖一个不常见的转换运算符，真实代码中很少见；它真正的提醒是：**给类加 initializer-list 构造函数时，要检查它会不会接住原本属于其他构造函数的调用。**
+
+</SlideCard>
+
+</details>
+
 <details>
 <summary>整数之间的窄化有什么例外？</summary>
 
@@ -494,6 +583,50 @@ std::string c();  // 函数声明：无参数，返回 std::string
 ```
 
 `c` 不是一个空字符串。看起来像初始化的语法，也可能被解析成声明函数。分析初始化之前，先确认代码实际声明的是什么。
+
+</SlideCard>
+
+<SlideCard title="参数里也藏着函数声明">
+
+## most vexing parse
+
+空圆括号只是最简单的情形。参数本身写成临时对象时，同样可能被读成声明：
+
+```cpp
+struct Timer {};
+struct Widget {
+    Widget(Timer) {}
+    void run() {}
+};
+
+void example() {
+    Widget w(Timer()); // 函数声明：参数是“返回 Timer 的无参函数”
+    // w.run();        // 编译错误
+    Widget v{Timer{}}; // 对象
+}
+```
+
+C++ 规定，能解释成声明的语句就按声明处理。这里 `Timer()` 被当成了一个函数类型参数，`w` 也就成了函数。clang 对这一行给出 `-Wvexing-parse` 警告，`w.run()` 则报错 `Widget (Timer (*)())` 不是类类型。
+
+花括号里不能写参数声明，所以 `v` 没有这种歧义。这是花括号的一个实际优点，但它不足以让所有初始化都改成花括号，原因在下面关于括号选择的补充里。
+
+</SlideCard>
+
+<SlideCard title="想传一个空列表怎么办？">
+
+## `Buffer({})` 与 `Buffer{{}}` 不一样
+
+第五版 `Buffer` 同时有默认构造函数和列表构造函数，`Buffer{}` 走值初始化，调用 `Buffer()`。如果确实想调用列表构造函数并传一个空列表，可以把空花括号作为参数：
+
+```cpp
+Buffer a{};    // Buffer()，data 为空
+Buffer b({});  // Buffer(std::initializer_list<int>)，data 为空
+Buffer c{{}};  // data 有一个元素 0
+```
+
+`b` 用圆括号传入一个 `{}` 参数。它既能转换成空的 `initializer_list<int>`，也能值初始化 `int` 交给数量构造函数；标准在两种列表转换之间规定 `initializer_list` 优先，于是得到空列表。
+
+`c` 的外层花括号先走列表构造函数，内层 `{}` 被当作**一个元素**，值初始化为 `0`。《Effective Modern C++》条款 7 把 `{{}}` 和 `({})` 都写成“传空列表”；在 clang 21 和 GCC 16 上，`Buffer{{}}` 实测得到一个元素 `0`。需要空列表时，用 `({})` 更可靠。排序规则见 [[over.ics.rank]](https://timsong-cpp.github.io/cppwp/n4861/over.ics.rank)。
 
 </SlideCard>
 
@@ -759,6 +892,61 @@ std::vector<int> e{3, 7}; // 两个元素 3、7
 
 </SlideCard>
 
+</details>
+
+<details>
+<summary>圆括号还是花括号：有没有默认选择？</summary>
+
+<SlideCard title="花括号能用的地方更多">
+
+## 默认成员初值不接受圆括号
+
+```cpp
+struct Holder {
+    int a = 0;  // 可以
+    int b{0};   // 可以
+    // int c(0); // 编译错误：类内会被当作成员函数声明来解析
+};
+```
+
+再加上不允许窄化、不受 most vexing parse 影响，这是“统一初始化”这个说法的来由：花括号几乎在所有初始化位置都能写。
+
+代价也已经在正文里见过：只要类有 initializer-list 构造函数，花括号就会优先选它，而 `std::vector`、`std::string` 这些常用类型都有。
+
+</SlideCard>
+
+<SlideCard title="模板作者不知道该选哪个">
+
+## make_unique 选择了圆括号
+
+```cpp
+auto p = std::make_unique<std::vector<int>>(3, 7);
+// p->size() == 3：三个 7
+
+auto list = {3, 7}; // std::initializer_list<int>
+auto q = std::make_unique<std::vector<int>>(list);
+// q->size() == 2：3 和 7
+```
+
+`make_unique` 在内部用圆括号把参数转发给构造函数，所以 `(3, 7)` 得到三个 7。想要两个元素，就要先在调用点形成一个 `initializer_list` 再传进去。
+
+写转发参数的模板时，内部用圆括号还是花括号是接口的一部分，结果会随着类型是否有列表构造函数而不同。标准库选了圆括号，并在文档里写明；自己写类似模板时也应该写清楚。
+
+</SlideCard>
+
+<SlideCard title="把选择落到意图上">
+
+## 先问要的是“参数”还是“内容”
+
+- 传的是构造参数（数量、容量、配置），用圆括号，例如 `Buffer(3)`、`std::vector<int>(3, 7)`。
+- 传的是对象的内容（元素列表、聚合成员），用花括号，例如 `Buffer{3, 7}`、`Options{.workers = 4}`。
+- 需要防窄化、类内默认成员初值、或者避开 most vexing parse，用花括号，但先确认目标类型有没有 initializer-list 构造函数。
+- 设计类时，加 initializer-list 构造函数前，检查旧的花括号调用会不会改变含义，正文第三版的 `Buffer{3}` 就是例子。
+
+这和正文的结论一致：没有一种括号永远正确，先确定需要哪一种初始状态，再选择能表达它的语法。
+
+</SlideCard>
+
 <SlideCard title="初始化引用，建立的是绑定关系">
 
 ## 绑定已有对象或临时对象
@@ -790,5 +978,11 @@ const int& temporary = 7;      // 绑定临时对象，这里延长它的生命�
 - [基类与成员初始化 [class.base.init]](https://timsong-cpp.github.io/cppwp/n4861/class.base.init)：解释默认成员初值和实际构造顺序。
 
 这些条款适合在某个例子让你产生疑问时查阅。先明确“我正在判断哪一层”，再进入对应规则，比一次记住所有术语更容易形成稳定的理解。
+
+</Note>
+
+<Note title="书籍">
+
+- 《Effective Modern C++》条款 7：区别使用 `()` 和 `{}` 创建对象。本文的主线和补充覆盖了它的全部要点，可以对照阅读；书以 C++14 为背景，`{{}}` 一处与实测不同，见上面的空列表补充。
 
 </Note>
