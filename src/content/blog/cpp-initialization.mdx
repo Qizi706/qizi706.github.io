@@ -26,6 +26,7 @@ mathjax: false
 假设我们需要一个保存整数的缓冲区。第一版只提供一种创建方式：传入元素数量，内容全部填零。
 
 ```cpp
+// 第一版：只有数量构造
 struct Buffer {
     std::vector<int> data;
 
@@ -43,7 +44,19 @@ Buffer a(3); // a.data 包含 0、0、0
 
 <Note title="示例约定">
 
-全文以 **C++20** 为基线。`Buffer` 会逐步修改，每次给出的完整类定义替换上一版；同一版本下的调用片段分别阅读，不要拼接成一个文件。使用 `<vector>` 和 `<initializer_list>`，数量参数假定非负且在可分配范围内，示例不展开输入校验。
+全文以 **C++20** 为基线。使用 `<vector>` 和 `<initializer_list>`，数量参数假定非负且在可分配范围内，示例不展开输入校验。
+
+`Buffer` 会改五次，每次只多一处变化，新定义替换旧定义。每段类定义的第一行注释标出版本；调用片段默认使用离它最近的那个版本，跨版本对比时会写明。同一版本下的调用片段分别阅读，不要拼接成一个文件。
+
+| 版本 | 相对上一版的变化 | 构造函数 |
+| --- | --- | --- |
+| 第一版 | 起点 | `Buffer(int)` |
+| 第二版 | 数量构造加 `explicit` | `explicit Buffer(int)` |
+| 第三版 | 增加列表构造 | `explicit Buffer(int)`、`Buffer(std::initializer_list<int>)` |
+| 第四版 | 增加默认构造和成员 `int writes;` | 以上两个，再加 `Buffer() {}` |
+| 第五版 | 成员改为 `int writes = 0;` | 同第四版 |
+
+读到某一版时，如果记不清它有哪些构造函数，回来查这张表。
 
 这是[现代 C++ 长期学习计划](/blog/modern-cpp-mastery-roadmap/)中接在类型推导之后的一篇。文中的程序结果会直接解释，不需要先完成练习才能继续阅读。
 
@@ -123,7 +136,7 @@ const Buffer fixed = source; // 可以初始化
 ```cpp
 void inspect(const Buffer& buffer);
 
-inspect(3); // 第一版 Buffer 下合法
+inspect(3); // 第一版（Buffer(int) 没有 explicit）下合法
 ```
 
 `inspect` 需要一个 `Buffer`，调用者却传了整数。编译器可以通过 `Buffer(int)` 创建临时缓冲区，再让参数引用绑定到它。这个临时对象会存活到包含调用的完整表达式结束，足以供本次调用使用。
@@ -136,9 +149,10 @@ inspect(3); // 第一版 Buffer 下合法
 
 ## 直接构造仍然可用
 
-第二版只改构造函数的声明：
+第二版只给数量构造函数加上 `explicit`：
 
 ```cpp
+// 第二版：数量构造加 explicit
 struct Buffer {
     std::vector<int> data;
 
@@ -183,6 +197,7 @@ inspect(Buffer{3});  // 明确创建 Buffer，再传给 inspect
 现在希望能写 `Buffer{3, 7}`，直接得到两个元素 `3`、`7`。第三版增加一个构造函数：
 
 ```cpp
+// 第三版：增加列表构造
 struct Buffer {
     std::vector<int> data;
 
@@ -193,7 +208,7 @@ struct Buffer {
 
 `std::initializer_list<int>` 可以访问花括号列表所对应的一组 `const int` 元素。这里把它交给 `vector`，让 `data` 保存这些元素。
 
-数量构造函数没有改。但重新看第二版的调用代码，原来的 `Buffer b{3}` 已经不再表示三个零了。
+数量构造函数没有改。但第二版下得到三个零的 `Buffer b{3}`，换到第三版就不再是三个零了。
 
 </SlideCard>
 
@@ -202,6 +217,7 @@ struct Buffer {
 ## 圆括号选数量，花括号选元素
 
 ```cpp
+// 第三版下，重新运行第二版的调用
 Buffer a(3);      // 三个零：0、0、0
 Buffer b{3};      // 一个元素：3
 Buffer c{3, 7};   // 两个元素：3、7
@@ -210,7 +226,7 @@ Buffer d = {3};  // 现在合法，一个元素：3
 
 对第三版这样的非聚合类，非空列表初始化先考虑 initializer-list 构造函数。`b` 的列表可以作为一个 `int` 元素，因此选中新增的构造函数。
 
-`d` 也选中它，而新增的构造函数没有 `explicit`，所以复制列表初始化现在合法了。第二版的 `d` 失败，是因为当时选中了另一个构造函数。
+`d` 也选中它，而新增的构造函数没有 `explicit`，所以复制列表初始化现在合法了。第二版下 `d` 失败，是因为当时只有 `explicit Buffer(int)` 可选。
 
 这两次变化来自同一件事：**列表语法影响候选选择，选中的构造函数又决定后续是否合法、数据是什么。**
 
@@ -232,7 +248,7 @@ Buffer d = {3};  // 现在合法，一个元素：3
 data 保存列表中的一个元素 3
 ```
 
-如果第一轮没有可行的 initializer-list 构造函数，才把列表元素拆成参数，考虑普通构造函数。第二版没有列表构造函数，所以当时 `Buffer b{3}` 能走到数量构造函数。
+如果第一轮没有可行的 initializer-list 构造函数，才把列表元素拆成参数，考虑普通构造函数。第二版只有 `explicit Buffer(int)`，第一轮没有任何候选，所以那时 `Buffer b{3}` 走到了数量构造函数。
 
 这套规则也解释了常见的 `vector<int>(3)` 与 `vector<int>{3}` 的区别。这里限定了非聚合类和非空列表；空列表稍后会遇到。依据见 [列表重载选择](https://timsong-cpp.github.io/cppwp/n4861/over.match.list)。
 
@@ -245,11 +261,12 @@ data 保存列表中的一个元素 3
 ## 选中构造函数之后，还会检查转换
 
 ```cpp
+// 仍是第三版
 Buffer a(3.5);     // 可以：3.5 转成 int 3，创建三个零
 // Buffer b{3.5}; // 编译错误：列表元素需要 double 转 int
 ```
 
-两行都发生在第三版。`a` 走普通构造路径，允许这里从 `double` 到 `int` 的转换；`explicit` 没有禁止构造函数参数上的转换。
+`a` 走普通构造路径，允许这里从 `double` 到 `int` 的转换；`explicit` 没有禁止构造函数参数上的转换。
 
 `b` 则先选中列表构造函数，但把 `3.5` 放进 `int` 元素需要窄化转换，列表初始化不允许它。编译器不会因为这一步失败，就退回数量构造函数。
 
@@ -262,13 +279,14 @@ Buffer a(3.5);     // 可以：3.5 转成 int 3，创建三个零
 ## 窄化按转换类别判断
 
 ```cpp
+// 仍是第三版
 // Buffer a{3.0}; // 仍然是编译错误
 Buffer b{static_cast<int>(3.5)}; // 一个元素：3
 ```
 
 浮点到整数是列表初始化禁止的窄化类别，`3.0` 恰好没有小数部分也不能获得例外。
 
-第二行则先显式转成 `int`，花括号收到的已经是整数。但第三版的列表选择规则没有消失：它仍然创建一个元素 `3`，不会变成三个零。
+第二行则先显式转成 `int`，花括号收到的已经是整数。但列表选择规则没有消失：它仍然创建一个元素 `3`，不会变成三个零。
 
 所以，解决窄化报错和选择想要的构造方式，是两个决定。若意图是数量，应该写 `Buffer(3)`；若意图是内容，才写 `Buffer{3}`。完整窄化规则见 [列表初始化](https://timsong-cpp.github.io/cppwp/n4861/dcl.init.list)。
 
@@ -296,6 +314,7 @@ Buffer a{}; // 第三版：空列表交给列表构造函数，data 为空
 ## 第四版遗漏了写入次数
 
 ```cpp
+// 第四版：增加默认构造和 writes（尚未初始化）
 struct Buffer {
     std::vector<int> data;
     int writes;
@@ -329,7 +348,7 @@ void example() {
 
 但值初始化不是对所有对象统一清零。这里 `Buffer() {}` 是用户提供的默认构造函数，不会得到值初始化中针对非用户提供默认构造函数的那一步预先零初始化。它自己没初始化 `writes`，花括号也没有替它补上。
 
-第三版和第四版都能写 `Buffer{}`，走的路径却不同。**初始化语法的含义必须结合当前类定义来判断。**
+第三版和第四版都能写 `Buffer{}`，走的路径却不同：第三版没有默认构造函数，空列表交给列表构造函数；第四版有 `Buffer()`，空列表走值初始化。**初始化语法的含义必须结合当前类定义来判断。**
 
 </SlideCard>
 
@@ -337,13 +356,21 @@ void example() {
 
 ## 所有构造入口都需要有效的计数
 
-第五版只改成员声明：
+第五版只把 `int writes;` 改成 `int writes = 0;`，构造函数不变：
 
 ```cpp
-int writes = 0; // 替换第四版中的 int writes;
+// 第五版：writes 有默认成员初值
+struct Buffer {
+    std::vector<int> data;
+    int writes = 0;
+
+    Buffer() {}
+    explicit Buffer(int count) : data(count, 0) {}
+    Buffer(std::initializer_list<int> values) : data(values) {}
+};
 ```
 
-只要构造函数没有单独初始化 `writes`，就使用这个默认成员初值。于是第五版的结果可以一起检查：
+只要构造函数没有单独初始化 `writes`，就使用这个默认成员初值。于是可以一起检查结果：
 
 | 写法 | data 的内容 | writes |
 | --- | --- | --- |
@@ -387,6 +414,7 @@ explicit Buffer(int count) {
 ## 构造入口与成员默认值各自负责一部分
 
 ```cpp
+// 第五版（最终版）
 struct Buffer {
     std::vector<int> data;
     int writes = 0;
@@ -438,19 +466,19 @@ struct Buffer {
 
 ## 每题先写下结果和理由
 
-Quiz 1–4 对应正文的五版 `Buffer`，Quiz 5–8 对应后面的补充。回答时不要只给结果，要说出走了哪条路径：哪种初始化形式、候选构造函数有哪些、为什么选中这一个。
+Quiz 1–4 考正文，Quiz 5–8 考后面的补充。用到 `Buffer` 的题目都在题干里写出了它当时的构造函数，不需要回忆是第几版。回答时不要只给结果，要说出走了哪条路径：哪种初始化形式、候选构造函数有哪些、为什么选中这一个。
 
 <details>
-<summary>Quiz 1：第一版 `Buffer(int)` 没有 `explicit`，`void inspect(const Buffer&); inspect(3);` 合法吗？加上 `explicit` 后呢？</summary>
+<summary>Quiz 1：`Buffer` 只有 `Buffer(int)` 一个构造函数（第一版），`void inspect(const Buffer&); inspect(3);` 合法吗？给它加上 `explicit`（第二版）后呢？</summary>
 
-第一版合法：参数是复制初始化，`Buffer(int)` 可以把 `3` 转成临时 `Buffer`，引用绑定到它，临时对象活到这条完整表达式结束。
+不加 `explicit` 时合法：参数是复制初始化，`Buffer(int)` 可以把 `3` 转成临时 `Buffer`，引用绑定到它，临时对象活到这条完整表达式结束。
 
 加上 `explicit` 后编译错误，复制初始化不能使用 explicit 构造函数。改成 `inspect(Buffer{3})`，在调用点明确写出构造。
 
 </details>
 
 <details>
-<summary>Quiz 2：第五版中，`Buffer a(3); Buffer b{3}; Buffer c = {3}; Buffer d{};` 的 `data` 分别是什么？</summary>
+<summary>Quiz 2：`Buffer` 有 `Buffer()`、`explicit Buffer(int)`、`Buffer(std::initializer_list<int>)` 和成员 `int writes = 0;`（第五版），`Buffer a(3); Buffer b{3}; Buffer c = {3}; Buffer d{};` 的 `data` 分别是什么？</summary>
 
 - `a`：三个零。圆括号不考虑列表构造函数的优先规则，选 `explicit Buffer(int)`。
 - `b`：一个元素 `3`。非空花括号先考虑 `initializer_list<int>`，可行就选它。
@@ -462,7 +490,7 @@ Quiz 1–4 对应正文的五版 `Buffer`，Quiz 5–8 对应后面的补充。�
 </details>
 
 <details>
-<summary>Quiz 3：第三版中 `Buffer b{3.0};` 能编译吗？编译器会不会改用 `Buffer(int)`？</summary>
+<summary>Quiz 3：`Buffer` 有 `explicit Buffer(int)` 和 `Buffer(std::initializer_list<int>)`（第三版），`Buffer b{3.0};` 能编译吗？编译器会不会改用 `Buffer(int)`？</summary>
 
 不能编译，也不会改用。花括号先选中 `Buffer(std::initializer_list<int>)`，之后把 `3.0` 放进 `int` 元素属于浮点到整数的窄化，列表初始化禁止，即使值恰好没有小数部分。
 
@@ -489,7 +517,7 @@ Quiz 1–4 对应正文的五版 `Buffer`，Quiz 5–8 对应后面的补充。�
 </details>
 
 <details>
-<summary>Quiz 6：第五版中，`Buffer({})` 和 `Buffer{{}}` 的 `data` 分别是什么？</summary>
+<summary>Quiz 6：沿用 Quiz 2 的 `Buffer`（第五版），`Buffer({})` 和 `Buffer{{}}` 的 `data` 分别是什么？</summary>
 
 - `Buffer({})`：空。`{}` 作为一个参数，既能变成空的 `initializer_list<int>`，也能值初始化 `int`；两种列表转换中 `initializer_list` 优先。
 - `Buffer{{}}`：一个元素 `0`。外层花括号走列表构造函数，内层 `{}` 是一个元素，值初始化为 `0`。
@@ -1027,7 +1055,7 @@ auto q = std::make_unique<std::vector<int>>(list);
 - 传的是构造参数（数量、容量、配置），用圆括号，例如 `Buffer(3)`、`std::vector<int>(3, 7)`。
 - 传的是对象的内容（元素列表、聚合成员），用花括号，例如 `Buffer{3, 7}`、`Options{.workers = 4}`。
 - 需要防窄化、类内默认成员初值、或者避开 most vexing parse，用花括号，但先确认目标类型有没有 initializer-list 构造函数。
-- 设计类时，加 initializer-list 构造函数前，检查旧的花括号调用会不会改变含义，正文第三版的 `Buffer{3}` 就是例子。
+- 设计类时，加 initializer-list 构造函数前，检查旧的花括号调用会不会改变含义，正文中加入列表构造（第三版）后，`Buffer{3}` 从三个零变成了一个元素 `3`。
 
 这和正文的结论一致：没有一种括号永远正确，先确定需要哪一种初始状态，再选择能表达它的语法。
 
