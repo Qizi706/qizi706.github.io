@@ -432,6 +432,92 @@ struct Buffer {
 
 </SlideCard>
 
+## 6. 检验：先判断，再展开答案
+
+<SlideCard title="不看前文，说出调用了谁">
+
+## 每题先写下结果和理由
+
+Quiz 1–4 对应正文的五版 `Buffer`，Quiz 5–8 对应后面的补充。回答时不要只给结果，要说出走了哪条路径：哪种初始化形式、候选构造函数有哪些、为什么选中这一个。
+
+<details>
+<summary>Quiz 1：第一版 `Buffer(int)` 没有 `explicit`，`void inspect(const Buffer&); inspect(3);` 合法吗？加上 `explicit` 后呢？</summary>
+
+第一版合法：参数是复制初始化，`Buffer(int)` 可以把 `3` 转成临时 `Buffer`，引用绑定到它，临时对象活到这条完整表达式结束。
+
+加上 `explicit` 后编译错误，复制初始化不能使用 explicit 构造函数。改成 `inspect(Buffer{3})`，在调用点明确写出构造。
+
+</details>
+
+<details>
+<summary>Quiz 2：第五版中，`Buffer a(3); Buffer b{3}; Buffer c = {3}; Buffer d{};` 的 `data` 分别是什么？</summary>
+
+- `a`：三个零。圆括号不考虑列表构造函数的优先规则，选 `explicit Buffer(int)`。
+- `b`：一个元素 `3`。非空花括号先考虑 `initializer_list<int>`，可行就选它。
+- `c`：一个元素 `3`。同样选中列表构造函数，它没有 `explicit`，复制列表初始化合法。
+- `d`：空。有默认构造函数时，空花括号走值初始化，调用 `Buffer()`，不走列表构造函数。
+
+四个对象的 `writes` 都是 `0`，来自默认成员初值。
+
+</details>
+
+<details>
+<summary>Quiz 3：第三版中 `Buffer b{3.0};` 能编译吗？编译器会不会改用 `Buffer(int)`？</summary>
+
+不能编译，也不会改用。花括号先选中 `Buffer(std::initializer_list<int>)`，之后把 `3.0` 放进 `int` 元素属于浮点到整数的窄化，列表初始化禁止，即使值恰好没有小数部分。
+
+“选中了但元素不合法”是报错，只有“没有可行的列表构造函数”才进入第二轮。
+
+</details>
+
+<details>
+<summary>Quiz 4：`struct A { int v; A() = default; }; struct B { int v; B() {} };` 在函数内写 `A a{}; B b{};`，能读取 `a.v` 和 `b.v` 吗？</summary>
+
+`a.v` 是 `0`：`A()` 在首次声明处默认化，不是用户提供的，值初始化会先零初始化。
+
+`b.v` 不能读取：`B()` 是用户提供的，值初始化直接调用它，它又没有初始化 `v`。C++20 下读取这个不确定值是未定义行为。最直接的修法是写 `int v = 0;`。
+
+</details>
+
+<details>
+<summary>Quiz 5：`Widget(int, bool)` 与 `Widget(std::initializer_list<long double>)` 同时存在，`Widget w{10, true};` 调用哪个？把列表元素类型换成 `std::string` 呢？</summary>
+
+调用 `initializer_list<long double>` 版本。第一轮只问元素能不能隐式转换成 `long double`，能就选它，不和 `Widget(int, bool)` 比较谁更匹配。
+
+换成 `std::string` 后，`int`、`bool` 都无法转换，第一轮没有可行函数，才进入第二轮选 `Widget(int, bool)`。
+
+</details>
+
+<details>
+<summary>Quiz 6：第五版中，`Buffer({})` 和 `Buffer{{}}` 的 `data` 分别是什么？</summary>
+
+- `Buffer({})`：空。`{}` 作为一个参数，既能变成空的 `initializer_list<int>`，也能值初始化 `int`；两种列表转换中 `initializer_list` 优先。
+- `Buffer{{}}`：一个元素 `0`。外层花括号走列表构造函数，内层 `{}` 是一个元素，值初始化为 `0`。
+
+《Effective Modern C++》条款 7 把两者都写成传空列表，本文实验环境中只有 `({})` 是空的。
+
+</details>
+
+<details>
+<summary>Quiz 7（面试题）：`std::vector<int> v1(10, 20);`、`std::vector<int> v2{10, 20};`、`std::make_unique<std::vector<int>>(10, 20)` 分别有几个元素？</summary>
+
+`v1` 有 10 个 `20`；`v2` 有两个元素 `10` 和 `20`。
+
+`make_unique` 在内部用圆括号转发参数，所以得到 10 个 `20`。想要两个元素，需要先在调用点写出 `initializer_list`，例如 `auto list = {10, 20};` 再传入。
+
+</details>
+
+<details>
+<summary>Quiz 8（面试题）：`Widget w(Timer());` 声明了什么？怎样改成创建对象？</summary>
+
+声明了一个函数 `w`：返回 `Widget`，参数是“返回 `Timer` 的无参函数”（调整为函数指针）。能解释成声明的语句按声明处理，这就是 most vexing parse，clang 会给出 `-Wvexing-parse` 警告。
+
+改成 `Widget w{Timer{}};`，花括号里不能写参数声明；或者按警告提示多加一层括号 `Widget w((Timer()));`。
+
+</details>
+
+</SlideCard>
+
 ## 补充
 
 前面的主线已经解释了 `Buffer` 的几次变化。下面保留涉及其他类型、存储期和接口的边界，按遇到的问题展开阅读。补充中的类型各自独立，不继续修改第五版 `Buffer`。
