@@ -13,7 +13,7 @@ draft: true
 - 卡片按学习顺序排列，前面的卡片是后面的基础。
 - 复习时先只看问题和要点，口头答完再展开对照。能答到“到底层”那一层才算过。
 - 答不上来的卡片，在标题后面加上“（卡住过）”，下次复习时优先看。
-- 答案里的输出都来自对应文章中的实验：Apple clang 21，arm64 macOS；汇编用 `-target x86_64-linux-gnu` 生成。
+- 答案里的输出都来自实验：Apple clang 21，arm64 macOS；汇编用 `-target x86_64-linux-gnu` 生成。卡片 1–9 的实验在对应文章里，卡片 10、11 没有对应文章，结果在 clang 21 和 GCC 16 上一致。
 
 ## W2：对象模型与类型推导
 
@@ -219,5 +219,77 @@ draft: true
   - 不打算多态删除的基类怎么写？把析构函数设为 `protected` 且非虚，`delete p` 直接编译失败（`calling a protected destructor of class 'Base'`）。
   - 通过非主基类指针 `delete` 时，怎么找到对象开头？虚表第二部分的 deleting destructor 槽位放的是 thunk，先把 `this` 调回对象开头。
 - **出处**：[对象内存布局 · 第 8 节](/blog/cpp-object-layout/)
+
+</details>
+
+### 9. 圆括号和花括号初始化有什么区别？
+
+要点：花括号禁止窄化、避开 most vexing parse；非空花括号优先选 initializer-list 构造函数；`vector(10, 20)` 和 `{10, 20}` 不同；传参数用 `()`，传内容用 `{}`。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：圆括号走普通重载决议；花括号多了两条规则：不允许窄化，而且只要类有可行的 initializer-list 构造函数，就优先选它。所以 `std::vector<int> v1(10, 20)` 是 10 个 `20`，`v2{10, 20}` 是两个元素。
+- **往下一层**：
+  - 花括号的好处：禁止窄化（`int x{3.5}` 报错）；能写在类内默认成员初值里，`int c(0);` 不行；不会被解析成函数声明。
+  - 花括号的代价：第一轮只问“列表元素能不能隐式转换成 initializer_list 的元素类型”，能就选中，不比较谁更匹配。
+  - 选中之后窄化失败会直接报错，不回退。只有元素完全无法转换时，才进入第二轮考虑普通构造函数。
+  - 空花括号 `T{}`：类有默认构造函数时走值初始化，不走列表构造函数。
+- **到底层**：规则是 [over.match.list] 的两阶段选择。`Widget(int, bool)` 和 `Widget(std::initializer_list<long double>)` 同时存在时，`Widget a(10, true)` 输出 `Widget(int, bool)`，`Widget b{10, true}` 输出 `initializer_list<long double>`，尽管前者是精确匹配。把元素类型换成 `std::string`，`int` 和 `bool` 都转换不了，`{10, true}` 才回到 `(int, bool)`。
+- **追问**：
+  - 想调用列表构造函数并传空列表怎么写？`Buffer({})`。`Buffer{{}}` 得到的是一个元素 `0`，内层 `{}` 被当成一个元素。《Effective Modern C++》条款 7 把两者都写成传空列表，这里以实测为准。
+  - 什么是 most vexing parse？`Widget w(Timer());` 声明的是函数，参数是“返回 `Timer` 的无参函数”。改成 `Widget w{Timer{}};`。
+  - `make_unique<vector<int>>(10, 20)` 有几个元素？10 个，它内部用圆括号转发。
+  - 给已有的类加 initializer-list 构造函数有什么风险？旧的花括号调用可能改变含义，`Buffer{3}` 就从三个零变成了一个元素 `3`。
+- **出处**：[C++ 对象初始化 · 第 3、5、7 节](/blog/cpp-initialization/)，《Effective Modern C++》条款 7
+
+</details>
+
+### 10. nullptr 为什么比 NULL 好？
+
+要点：`0` 和 `NULL` 是整数；重载选错或有歧义；经过模板推导后不再是空指针常量；`std::nullptr_t` 能转换成任意指针，不能转换成整数。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：`0` 和 `NULL` 的类型是整数，只是字面量 `0` 可以当空指针常量用；`nullptr` 的类型是 `std::nullptr_t`，本身就表示空指针。它在重载决议和模板推导里都不会被当成整数。
+- **往下一层**：
+  - 重载：有 `f(int)`、`f(bool)`、`f(void*)` 时，`f(0)` 调用 `f(int)`，`f(nullptr)` 调用 `f(void*)`。
+  - `f(NULL)` 取决于 `NULL` 的定义，本机是 `__null`，clang 和 GCC 都报重载歧义。
+  - 模板：`template<class F, class P> void call(F fn, P p) { fn(p); }`，`g` 接收 `int*`。`g(0)` 能编译，`call(g, 0)` 不能：`P` 推导成 `int`，`p` 已经是普通的 `int` 变量，不是字面量 `0`。`call(g, nullptr)` 可以。
+- **到底层**：空指针常量（null pointer constant）的定义在 [conv.ptr]：值为零的整数字面量，或 `std::nullptr_t` 类型的纯右值。整数字面量经过推导就变成变量，失去了这个身份；`nullptr_t` 类型的变量则保持类型，仍然能转换成任意指针。`using nullptr_t = decltype(nullptr)`，`sizeof(std::nullptr_t)` 等于 `sizeof(void*)`，本机都是 8。
+- **追问**：
+  - `int i = nullptr;` 能编译吗？不能，`nullptr` 不能转换成整数。
+  - `bool b = nullptr;` 呢？不能，只允许直接初始化 `bool b{nullptr}`，结果是 `false`，clang 还会给出 `-Wnull-conversion` 警告。
+  - 为什么这个问题和完美转发有关？转发函数也是模板，`0` 和 `NULL` 转发过去就是整数，这是完美转发失败的一类情形。
+- **出处**：《Effective Modern C++》条款 8，标准 [conv.ptr]
+
+</details>
+
+### 11. enum class 和普通 enum 有什么区别？
+
+要点：名字不污染外层作用域；不隐式转换成整数；默认底层类型 `int`，可以指定；能前置声明；`uint8_t` 打印时会变成字符。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：`enum class` 的枚举值要写 `Side::Buy`，不会泄漏到外层作用域，也不会隐式转换成整数；底层类型默认是 `int`，所以不需要定义就能前置声明。
+- **往下一层**：
+  - 作用域：`enum C { red }; int red = 1;` 报重定义，换成 `enum class` 就合法。
+  - 类型安全：`int x = S::A;` 和 `S::A == 0` 都编译失败，要转换就写 `static_cast`。同类型枚举值之间可以比较大小。
+  - 大小：普通 `enum` 不指定底层类型时由实现决定，本机 `enum Old { Oa }` 是 4 字节，取值超出 `int` 的 `enum Big { X = 1LL << 40 }` 是 8 字节。`enum class` 默认 4 字节，指定 `: std::uint8_t` 后是 1 字节。
+  - 前置声明：`enum class Fwd;` 合法，`enum U;` 不合法，要写成 `enum U : int;`。编译器必须知道大小。前置声明能减少头文件依赖。
+- **到底层**：底层类型直接影响布局。同一个订单结构体，用默认的 `int` 底层类型和 `std::uint8_t` 对比：
+
+  ```cpp
+  struct Order { std::uint64_t id; double price; std::uint32_t qty; Side side; Status status; };
+  ```
+
+  `-fdump-record-layouts` 显示，默认底层类型时 `side` 在 20、`status` 在 24，`sizeof` 为 32；换成 `std::uint8_t` 后 `side` 在 20、`status` 在 21，`sizeof` 为 24。规则见标准 [dcl.enum]。
+- **追问**：
+  - 普通 `enum` 还有用吗？需要隐式转成整数时写起来方便，比如当数组下标；但类型安全上要自己负责。
+  - `enum class Side : std::uint8_t { Sell = 66 }` 用 `std::cout` 打印 `static_cast<std::uint8_t>(Side::Sell)` 输出什么？输出 `B`，`uint8_t` 被当成字符。写成 `+static_cast<std::uint8_t>(...)` 才输出 `66`。C++23 可以用 `std::to_underlying`，打印时同样要注意这个问题。
+  - `static_cast<Side>(200)` 合法吗？合法。有固定底层类型时，底层类型的所有值都是有效的枚举值，所以 `switch` 不能假设只有列出的那几个值。
+- **出处**：《Effective Modern C++》条款 10，标准 [dcl.enum]
 
 </details>
