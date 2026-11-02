@@ -57,7 +57,7 @@ names.push_back(String("a very long name"));
 
 `String("a very long name")` 是临时对象，这一行结束就销毁。`push_back` 却把它的内容完整复制了一份，然后原来那份立刻被释放。
 
-既然来源马上就没用了，为什么不直接把 `data_` 指针拿过来？只需要复制一个指针和一个长度，**不分配，也不复制字符**。
+既然来源马上就没用了，为什么不直接把 `data_` 指针拿过来？只需要复制一个指针和一个长度，**不分配，也不复制字符**。这种把资源从来源拿走、而不是复制一份的操作，就是**移动**。下文说的“偷”都是这个意思。
 
 </SlideCard>
 
@@ -71,7 +71,7 @@ String b = a;               // a 之后还要用，不能偷
 String c = String("hello"); // 来源是临时对象，可以偷
 ```
 
-所以语言需要回答两个问题：怎样在重载决议里区分这两种来源？如果程序员明确不再使用 `a`，怎样主动允许偷？
+所以语言需要回答两个问题：编译器选择重载时，怎样区分这两种来源？如果程序员明确不再使用 `a`，怎样主动允许偷？
 
 第一个问题的答案是值类别和右值引用，第二个问题的答案是 `std::move`。接下来的内容都建立在这两点上。
 
@@ -81,7 +81,7 @@ String c = String("hello"); // 来源是临时对象，可以偷
 
 全文以 **C++20** 为基线，有版本差异的地方会标出。`String` 只为讲解所写，真实项目应使用 `std::string`；示例省略了 `<cstdio>`、`<cstring>`、`<utility>`、`<vector>`、`<memory>`、`<string>`、`<type_traits>`、`<concepts>` 等头文件。
 
-文中的输出、编译错误和链接错误都在 Apple clang 21 与 GCC 16（`-std=c++20`）上核对过，两者只有 `sizeof(std::string)` 不同，第 7 节会写明。输出来自默认优化级别，打印语句本身不影响选中的重载。第 6 节的测量另行说明环境。
+代码注释里的 `copy`、`move` 是 `String` 打印的内容。文中的输出、编译错误和链接错误都在 Apple clang 21 与 GCC 16（`-std=c++20`）上核对过，两者只有 `sizeof(std::string)` 不同，第 7 节会写明。输出来自默认优化级别，打印语句本身不影响选中的重载。第 6 节的测量另行说明环境。
 
 这是[现代 C++ 长期学习计划](/blog/modern-cpp-mastery-roadmap/)中的一篇。如果对 `decltype` 和转发引用的推导还不熟，可以先读[类型推导文章](/blog/cpp-type-deduction/)的第 4 节。
 
@@ -93,13 +93,17 @@ String c = String("hello"); // 来源是临时对象，可以偷
 
 ## 值类别属于表达式
 
+编译器判断来源，靠的是表达式的**值类别**。粗略地说，**左值**是之后还能继续使用的对象，比如变量 `a`；**右值**是用完就没的临时结果，比如 `String("hello")`。`String&&` 叫**右值引用**，专门绑定右值。
+
+先看一个容易想错的例子：
+
 ```cpp
 void take(String&& s) {
     String copy = s; // 这里是拷贝，不是移动
 }
 ```
 
-`s` 的**声明类型**是 `String&&`，但初始化看的是表达式。表达式 `s` 指代一个已经确定的对象，所以是左值。声明类型和值类别是两件事。
+`s` 的**声明类型**是 `String&&`，但选哪个构造函数要看表达式 `s` 的值类别。表达式 `s` 指代一个已经确定的对象，所以是左值。声明类型和值类别是两件事：值类别属于每个表达式，不会保存在变量里。
 
 这个设计是有意的：进入函数后你可能多次使用 `s`，如果语言自动把它当右值，第一次使用就可能把它搬空。右值引用只表示调用方**允许**你移动，真正移动要自己写出来。
 
@@ -157,7 +161,7 @@ CATEGORY(x++);          // prvalue
 
 这张表是整篇文章的基础：`const String&` 什么都能接，`String&&` 只接右值，而且右值优先选它。于是拷贝构造函数和移动构造函数可以共存，由来源决定走哪条路。
 
-prvalue 不标识对象，引用绑定到它时绑定的是什么？这时发生**临时量实质化**（temporary materialization）：编译器从 prvalue 创建一个临时对象，引用绑定到这个对象上，表达式随之变成 xvalue。规则见 [[conv.rval]](https://timsong-cpp.github.io/cppwp/n4861/conv.rval)。
+这里有个问题：纯右值没有对应的具体对象，比如 `const String& r = String("a");`，引用绑定的是什么？答案是**临时量实质化**（temporary materialization）：编译器先用纯右值创建一个临时对象，引用再绑定到这个对象上，表达式也随之变成将亡值。规则见 [[conv.rval]](https://timsong-cpp.github.io/cppwp/n4861/conv.rval)。
 
 </SlideCard>
 
@@ -226,7 +230,7 @@ String y = std::move(x);
 String z = x; // ASAN 报告 SEGV
 ```
 
-第 1 节的拷贝构造函数默认 `data_` 非空，而移动构造函数打破了这个前提，`memcpy` 从空指针读取。加入移动后，类的**不变式**变了：`data_` 可以为空，所有读取它的地方都要重新检查。
+第 1 节的拷贝构造函数默认 `data_` 非空，而移动构造函数打破了这个前提，`memcpy` 从空指针读取。类的**不变式**是对象始终要满足的条件。加入移动后，不变式从“`data_` 非空”变成了“`data_` 可以为空”，所有读取它的地方都要重新检查。
 
 ```cpp
 String(const String& other)
@@ -242,7 +246,7 @@ const char* data() const { return data_ ? data_ : ""; }
 
 ## 有效但未指定
 
-标准库类型的约定是“有效但未指定”：可以销毁、可以重新赋值，也可以调用没有前置条件的函数，比如 `size()`，但不能假设它的内容。
+标准库类型的约定是“有效但未指定”：对象可以销毁、可以重新赋值，也可以调用对当前状态没有要求的函数，比如 `size()`，但不能假设它里面是什么内容。
 
 ```cpp
 std::string s(100, 'a');
@@ -363,11 +367,11 @@ v.push_back(std::move(s)); // 实际发生拷贝
 | `return std::move(s);` | move | 手动转换后不再是变量名，NRVO 失效 |
 | `return b ? x : y;` | copy | 这是条件表达式，不是“返回变量名”，不触发自动移动 |
 
-第一行是**保证的复制消除**：从 C++17 起，prvalue 不再创建中间对象，而是直接初始化最终目标，即使类型不可移动也能编译。
+第一行是**保证的复制消除**：从 C++17 起，纯右值不再创建中间对象，而是直接初始化最终目标，即使类型不可移动也能编译。
 
 第二行是 **NRVO**：编译器把局部变量 `s` 直接构造在返回值的位置。它是允许的优化，但不保证发生。
 
-第三、四行说明了后备方案：不能省略时，`return 局部变量名` 会先按右值做重载决议。所以局部变量返回时最差也是移动，不需要自己写 `std::move`。
+第三、四行是后备方案：对象省略不掉时，`return 局部变量名` 会先把变量当作右值来选构造函数。所以返回局部变量最差也是移动，不需要自己写 `std::move`。
 
 ## return std::move 反而更差
 
@@ -389,7 +393,7 @@ String make() {
 | 按值返回右值引用参数：`String f(String&& s)` | `return s;` | C++20 起自动 move，不必写 `std::move` |
 | 返回右值引用：`String&& f(String&& s)` | `return std::move(s);` | 只写 `return s;` 编译不过，`s` 是左值，不能绑定到返回类型 `String&&` |
 | 返回局部对象的成员 `h.m` | `return std::move(h.m);` | 只写 `return h.m;` 是 copy，`h.m` 不是局部变量名 |
-| 按值返回转发引用参数：`template<class T> String f(T&& x)` | `return std::forward<T>(x);` | C++20 起只写 `return x;` 结果相同（右值实参 move，左值实参 copy），写 `forward` 是为了表明意图 |
+| 按值返回转发引用参数（第 8 节介绍）：`template<class T> String f(T&& x)` | `return std::forward<T>(x);` | C++20 起只写 `return x;` 结果相同（右值实参 move，左值实参 copy），写 `forward` 是为了表明意图 |
 
 第一行和最后一行都依赖 C++20 把右值引用参数纳入自动移动。`-std=c++17` 下 GCC 16 对这两行的右值实参执行 copy，Apple clang 21 仍是 move，所以需要兼容旧标准的代码要显式写 `std::move` 或 `std::forward`。
 
@@ -401,7 +405,7 @@ String make() {
 
 ## 扩容实验
 
-下面三个类型都有移动构造函数，只差在 `noexcept` 和拷贝构造函数：
+`vector` 容量不足时要申请新内存，把旧元素搬过去，下文称为**搬迁**。下面三个类型都有移动构造函数，只差在 `noexcept` 和拷贝构造函数，看看搬迁时走哪条路：
 
 ```cpp
 struct NoexceptMove {
@@ -606,7 +610,18 @@ wrap(String("t")); // sink(String&&)
 
 `String& &&` 不能手写，但模板代入时会产生，这时按[引用折叠](https://timsong-cpp.github.io/cppwp/n4861/dcl.ref#6)处理：**只要出现一个 `&`，结果就是 `&`；两层都是 `&&`，结果才是 `&&`。**
 
-`x` 这个表达式永远是左值，但 `T` 这一列保留了实参原本的值类别，后面的 `std::forward` 就靠它恢复信息。
+注意最后一行：右值实参推导出的 `T` 是 `String`，不是 `String&&`，带 `&&` 的是 `x` 的类型。
+
+推导只看实参表达式的值类别，不看变量的声明类型：
+
+```cpp
+String&& r = String("t");
+
+wrap(r);            // r 是左值：T = String&
+wrap(std::move(r)); // 实参是右值：T = String
+```
+
+在 `wrap` 内部，表达式 `x` 永远是左值，只有 `T` 还记得实参原本的值类别，后面的 `std::forward` 就靠它恢复信息。
 
 ## 哪些 `T&&` 才是转发引用
 
@@ -652,7 +667,7 @@ String& forward(String& t) { return static_cast<String&>(t); }
 String&& forward(String& t) { return static_cast<String&&>(t); }
 ```
 
-原始实参是左值时什么都不改变，是右值时才转成右值，这就是**有条件的 move**。
+原始实参是左值时什么都不改变，是右值时才转成右值，这就是**有条件的 move**。结果只由 `T` 决定，和 `x` 绑定到什么对象无关。
 
 ## 为什么不能省略 `<T>`
 
@@ -665,7 +680,7 @@ String&& forward(String& t) { return static_cast<String&&>(t); }
 
 如果参数写成普通的 `T&`，漏写 `<T>` 也能编译：`forward(x)` 推导出 `T = String`，返回 `String&&`，左值实参也被转成右值，资源可能被悄悄拿走。现在的写法把这个隐蔽的 bug 变成了编译错误。
 
-完整的 `std::forward` 还有一个接收右值的重载，只在直接传入右值时用到，`wrap` 里用不到。它用 `static_assert` 拒绝把右值转成左值引用，规范见 [[forward]](https://timsong-cpp.github.io/cppwp/n4861/forward)。
+完整的 `std::forward` 还有一个接收右值的重载，只在括号里直接写右值表达式时用到，比如 `std::forward<String>(make())`，`wrap` 里用不到。它用 `static_assert` 拒绝把右值转成左值引用，规范见 [[forward]](https://timsong-cpp.github.io/cppwp/n4861/forward)。
 
 ## std::move 和 std::forward 怎么选
 
@@ -724,7 +739,7 @@ void twice(T&& x) {
 }
 ```
 
-**转发不延长生命周期**。下面的 `r` 在这一行结束后悬空。GCC 16 在 `-Wextra` 下给出 `-Wdangling-reference` 警告，clang 没有报告，所以不能依赖编译器。
+**转发不延长生命周期**。`forward` 返回的是引用，下面的临时字符串在这一行结束时销毁，`r` 随之悬空。GCC 16 在 `-Wextra` 下给出 `-Wdangling-reference` 警告，clang 没有报告，所以不能依赖编译器。
 
 ```cpp
 template<class T>
@@ -794,6 +809,20 @@ explicit Person(T&& n) : name(std::forward<T>(n)) {}
 | 一定要留一份，比如存进成员 | 按值接收，再 `std::move` 进成员 | 传左值：一次拷贝加一次移动；传临时对象：一次移动；传 `std::move(x)`：两次移动 |
 | 接管对象的所有权 | `Widget&&`，或按值接收 `std::unique_ptr<T>` | 只有移动，调用方必须写 `std::move`，所有权转移一眼可见 |
 | 只是转交给别的函数，不知道最终类型 | 转发引用加 `std::forward` | 没有额外拷贝，但代码要放头文件，模板实例增多，报错更长 |
+
+第二行是最常见的写法：
+
+```cpp
+class Person {
+public:
+    explicit Person(std::string name) : name_(std::move(name)) {}
+
+private:
+    std::string name_;
+};
+```
+
+只写一个构造函数，左值和右值都能接：调用方传左值时，拷贝发生在构造参数 `name` 时；传右值时全程只有移动。
 
 判断转发是否值得，只问一句：**这个函数是否只是中转参数，并且不知道最终目标的类型？** 否则普通重载或按值传参通常更好。
 
