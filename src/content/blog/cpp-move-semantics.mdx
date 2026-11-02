@@ -611,20 +611,38 @@ wrap(String("t")); // sink(String&&)
 ## std::forward 把信息取出来
 
 ```cpp
+// 简化版，只保留 wrap 里用到的重载
 template<class T>
 constexpr T&& forward(std::remove_reference_t<T>& t) noexcept {
     return static_cast<T&&>(t);
 }
+
+template<class T>
+void wrap(T&& x) {
+    sink(std::forward<T>(x)); // T 由 wrap 推导，再手动传给 forward
+}
 ```
 
-把上一张表的 `T` 代入，就能算出 `std::forward<T>(x)` 的结果：
+沿着调用链看，`forward` 收到的 `x` 始终是左值，结果的差别完全来自 `T`：
 
-| 最初传入的实参 | `T` | `forward` 的返回类型 | 表达式 `std::forward<T>(x)` 的类别 |
-| --- | --- | --- | --- |
-| 左值 | `String&` | `String&`（折叠后） | 左值 |
-| 右值 | `String` | `String&&` | 将亡值 |
+| 传给 `wrap` 的实参 | `wrap` 推导出的 `T` | 传给 `forward` 的 `x` | `forward` 返回类型 | `sink` 收到 |
+| --- | --- | --- | --- | --- |
+| 左值 | `String&` | 左值 | `String&` | 左值 |
+| 右值 | `String` | 左值 | `String&&` | 将亡值 |
 
-同一行代码在左值时什么都不改变，在右值时才转成右值，这就是**有条件的 move**。参数写成 `remove_reference_t<T>&` 使 `T` 不可推导，强迫你写出 `std::forward<T>`。如果让它自己推导，看到的永远是左值。标准库另有一个接收右值的重载，用 `static_assert` 拒绝把右值转成左值引用，规范见 [[forward]](https://timsong-cpp.github.io/cppwp/n4861/forward)。
+同一行代码在左值时什么都不改变，在右值时才转成右值，这就是**有条件的 move**。
+## 为什么不能省略 `<T>`
+
+`std::forward(x)` 无法通过编译，这是有意的设计。`x` 在 `wrap` 内部永远是左值，实参原本是左值还是右值，只记录在 `wrap` 的 `T` 里。`forward` 无法从 `x` 得知这一点，所以 `T` 必须由你写在尖括号里传给它。
+
+参数类型 `remove_reference_t<T>&` 同时保证了两件事：
+
+- **漏写 `<T>` 会编译报错**：编译器不会从 `remove_reference_t<T>` 倒推 `T`。这个结果是 `String` 时，`T` 可能是 `String`、`String&` 或 `String&&`，无法确定。标准把这种情况称为不可推导语境。
+- **总能接收 `x`**：`T` 是 `String&` 或 `String` 时，去掉引用再加 `&`，参数都是 `String&`，正好能绑定左值 `x`。
+
+如果参数写成普通的 `T&`，漏写 `<T>` 也能编译：`forward(x)` 推导出 `T = String`，返回 `String&&`，左值实参也被转成右值，资源可能被悄悄拿走。现在的写法把这个隐蔽的 bug 变成了编译错误。
+
+标准库另有一个接收右值的重载，用 `static_assert` 拒绝把右值转成左值引用，规范见 [[forward]](https://timsong-cpp.github.io/cppwp/n4861/forward)。
 
 | | `std::move(x)` | `std::forward<T>(x)` |
 | --- | --- | --- |
