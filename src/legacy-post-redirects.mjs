@@ -19,7 +19,6 @@ export const legacyPostRedirects = {
 	...createLegacyPostRedirects('c-c-plus-plus', [
 		'cast',
 		'cpp-build-tools',
-		'perfect-forwarding',
 		'thread',
 	]),
 	...createLegacyPostRedirects('随笔', ['conjecture-verification-practice']),

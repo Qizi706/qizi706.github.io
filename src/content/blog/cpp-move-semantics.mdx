@@ -1,0 +1,779 @@
+---
+title: 'C++ 移动语义'
+description: '从 String 的深拷贝浪费出发，理解值类别、移动构造、std::move、返回值优化、noexcept 与 vector 扩容、移动不划算的场景，最后用完美转发把右值信息穿过包装函数。'
+pubDate: '2026-11-02T12:00:00+08:00'
+readingOrder: 7
+readingNote: '资源与性能：用值类别解释移动、返回值优化和完美转发'
+categories:
+  - 'C/C++'
+tags:
+  - 'C++特性'
+  - '移动语义'
+  - '值类别'
+  - '现代C++'
+draft: false
+mathjax: false
+---
+
+## 1. 这次拷贝，真的有必要吗？
+
+<SlideCard title="先写一个 String">
+
+## 一个管理堆内存的类
+
+下面的 `String` 自己持有一块堆内存，拷贝时要申请新内存，再把字符复制过去：
+
+```cpp
+class String {
+public:
+    String(const char* s = "")
+        : size_(std::strlen(s)), data_(new char[size_ + 1]) {
+        std::memcpy(data_, s, size_ + 1);
+    }
+
+    ~String() { delete[] data_; }
+
+    String(const String& other)
+        : size_(other.size_), data_(new char[size_ + 1]) {
+        std::memcpy(data_, other.data_, size_ + 1);
+        std::puts("  copy");
+    }
+
+    std::size_t size() const { return size_; }
+    const char* data() const { return data_; }
+
+private:
+    std::size_t size_;
+    char* data_;
+};
+```
+
+拷贝的成本和字符串长度成正比，还多一次堆分配。这在下面的情况里完全是浪费：
+
+```cpp
+std::vector<String> names;
+names.push_back(String("a very long name"));
+```
+
+`String("a very long name")` 是临时对象，这一行结束就销毁。`push_back` 却把它的内容完整复制了一份，然后原来那份立刻被释放。
+
+既然来源马上就没用了，为什么不直接把 `data_` 指针拿过来？只需要复制一个指针和一个长度，**不分配，也不复制字符**。
+
+</SlideCard>
+
+<SlideCard title="难点在判断来源">
+
+## 同样是初始化，能不能偷取决于来源
+
+```cpp
+String a("hello");
+String b = a;               // a 之后还要用，不能偷
+String c = String("hello"); // 来源是临时对象，可以偷
+```
+
+所以语言需要回答两个问题：怎样在重载决议里区分这两种来源？如果程序员明确不再使用 `a`，怎样主动允许偷？
+
+第一个问题的答案是值类别和右值引用，第二个问题的答案是 `std::move`。接下来的内容都建立在这两点上。
+
+</SlideCard>
+
+<Note title="示例约定">
+
+全文以 **C++20** 为基线，有版本差异的地方会标出。`String` 只为讲解所写，真实项目应使用 `std::string`；示例省略了 `<cstdio>`、`<cstring>`、`<utility>`、`<vector>`、`<memory>`、`<string>`、`<type_traits>`、`<concepts>` 等头文件。
+
+文中的输出、编译错误和链接错误都在 Apple clang 21 与 GCC 16（`-std=c++20`）上核对过，两者只有 `sizeof(std::string)` 不同，第 7 节会写明。输出来自默认优化级别，打印语句本身不影响选中的重载。第 6 节的测量另行说明环境。
+
+这是[现代 C++ 长期学习计划](/blog/modern-cpp-mastery-roadmap/)中的一篇。如果对 `decltype` 和转发引用的推导还不熟，可以先读[类型推导文章](/blog/cpp-type-deduction/)的第 4 节。
+
+</Note>
+
+## 2. 值类别：编译器怎样知道能偷？
+
+<SlideCard title="三种值类别">
+
+## 值类别属于表达式
+
+```cpp
+void take(String&& s) {
+    String copy = s; // 这里是拷贝，不是移动
+}
+```
+
+`s` 的**声明类型**是 `String&&`，但初始化看的是表达式。表达式 `s` 指代一个已经确定的对象，所以是左值。声明类型和值类别是两件事。
+
+这个设计是有意的：进入函数后你可能多次使用 `s`，如果语言自动把它当右值，第一次使用就可能把它搬空。右值引用只表示调用方**允许**你移动，真正移动要自己写出来。
+
+## “有名字就是左值”不够准确
+
+这句话好用，但两个方向都有例外：枚举项 `Red` 和非类型模板参数 `N` 有名字，却是纯右值；`*p`、`v[0]`、`"hello"` 没有名字，却是左值。
+
+准确的分类看两件事：表达式是否**标识一个对象**，以及它是否**可以被移动**。
+
+| 类别 | 标识对象？ | 可移动？ | 例子 |
+| --- | --- | --- | --- |
+| lvalue，左值 | 是 | 否 | `x`、`*p`、`v[0]`、`++x`、`"hello"`、返回 `int&` 的函数调用 |
+| xvalue，将亡值 | 是 | 是 | `std::move(x)`、`static_cast<int&&>(x)`、返回 `int&&` 的函数调用、`S{}.m` |
+| prvalue，纯右值 | 否 | 是 | `7`、`x + 1`、`x++`、`nullptr`、`Red`、`std::string("a")`、返回 `int` 的函数调用 |
+
+左值和将亡值合称 glvalue，它们标识对象。将亡值和纯右值合称 rvalue，它们可以被移动。“将亡”不代表对象快销毁了，`std::move(x)` 之后 `x` 还活着，它只表示这里可以把资源拿走。标准定义见 [[basic.lval]](https://timsong-cpp.github.io/cppwp/n4861/basic.lval)。
+
+## 让编译器判断
+
+`decltype` 加双层括号会把值类别写进类型：左值得到 `T&`，将亡值得到 `T&&`，纯右值得到 `T`。
+
+```cpp
+template<class T> struct category      { static constexpr auto v = "prvalue"; };
+template<class T> struct category<T&>  { static constexpr auto v = "lvalue";  };
+template<class T> struct category<T&&> { static constexpr auto v = "xvalue";  };
+
+#define CATEGORY(e) std::printf("%-14s %s\n", #e, category<decltype((e))>::v)
+
+int x = 1;
+int&& named = 2;
+CATEGORY(named);        // lvalue
+CATEGORY(std::move(x)); // xvalue
+CATEGORY(x++);          // prvalue
+```
+
+表格里的每个例子都这样跑过一遍。
+
+</SlideCard>
+
+<SlideCard title="引用绑定决定了重载">
+
+## 右值引用让重载能区分来源
+
+| 实参 | `T&` | `const T&` | `T&&` |
+| --- | --- | --- | --- |
+| 非 `const` 左值 | 可以，优先 | 可以 | 不可以 |
+| `const` 左值 | 不可以 | 可以 | 不可以 |
+| 右值 | 不可以 | 可以 | 可以，优先 |
+
+这张表是整篇文章的基础：`const String&` 什么都能接，`String&&` 只接右值，而且右值优先选它。于是拷贝构造函数和移动构造函数可以共存，由来源决定走哪条路。
+
+prvalue 不标识对象，引用绑定到它时绑定的是什么？这时发生**临时量实质化**（temporary materialization）：编译器从 prvalue 创建一个临时对象，引用绑定到这个对象上，表达式随之变成 xvalue。规则见 [[conv.rval]](https://timsong-cpp.github.io/cppwp/n4861/conv.rval)。
+
+</SlideCard>
+
+## 3. 移动构造：把资源拿走
+
+<SlideCard title="给 String 加上移动">
+
+## 移动构造函数
+
+```cpp
+String(String&& other) noexcept
+    : size_(other.size_), data_(other.data_) {
+    other.size_ = 0;
+    other.data_ = nullptr;
+    std::puts("  move");
+}
+```
+
+这里做两件事：拿走指针，再把来源置空。第二步不能省，否则两个对象指向同一块内存，析构时会重复释放。置空后 `delete[] nullptr` 是安全的空操作。
+
+```cpp
+String a("hello");
+String b = a;            //   copy
+String c = std::move(a); //   move
+a.size();                // 0
+```
+
+`noexcept` 不是装饰，第 6 节会看到它决定了 `vector` 能不能走这条路。
+
+## 移动赋值
+
+赋值和构造不同，目标对象已经持有资源，要先释放。用临时对象加 `swap` 可以一次解决释放和自赋值：
+
+```cpp
+void swap(String& other) noexcept {
+    std::swap(size_, other.size_);
+    std::swap(data_, other.data_);
+}
+
+String& operator=(const String& other) {
+    String tmp(other);
+    swap(tmp);
+    return *this;
+}
+
+String& operator=(String&& other) noexcept {
+    String tmp(std::move(other));
+    swap(tmp);
+    return *this;
+}
+```
+
+旧资源换进 `tmp`，离开作用域时释放。`t = std::move(t)` 这样的自移动也安全：`tmp` 先拿走资源，`swap` 再换回来，结果 `t` 不变。
+
+</SlideCard>
+
+<SlideCard title="被移动后的对象">
+
+## 我们的 String 还不够有效
+
+被移动的对象没有销毁，之后还会析构，也可能继续使用，所以它必须保持**有效**。现在的 `String` 只保证析构安全，再拷贝一次就出问题：
+
+```cpp
+String x("hello");
+String y = std::move(x);
+String z = x; // ASAN 报告 SEGV
+```
+
+第 1 节的拷贝构造函数默认 `data_` 非空，而移动构造函数打破了这个前提，`memcpy` 从空指针读取。加入移动后，类的**不变式**变了：`data_` 可以为空，所有读取它的地方都要重新检查。
+
+```cpp
+String(const String& other)
+    : size_(other.size_), data_(other.data_ ? new char[size_ + 1] : nullptr) {
+    if (data_) std::memcpy(data_, other.data_, size_ + 1);
+    std::puts("  copy");
+}
+
+const char* data() const { return data_ ? data_ : ""; }
+```
+
+不在移动时重新分配一个空字符串，是因为分配可能抛异常，移动构造函数就不能标记 `noexcept` 了。修改后，上面的代码和对 `x` 重新赋值都能通过 ASAN 与 UBSan。
+
+## 有效但未指定
+
+标准库类型的约定是“有效但未指定”：可以销毁、可以重新赋值，也可以调用没有前置条件的函数，比如 `size()`，但不能假设它的内容。
+
+```cpp
+std::string s(100, 'a');
+std::string t = std::move(s);
+
+// s.front();   // 不可以：front 要求非空，而 s 可能为空
+s.clear();      // 可以
+s = "reused";   // 可以，重新赋值后正常使用
+```
+
+实测这里 `s.size()` 是 0，但这不是标准保证，代码不应依赖它。
+
+</SlideCard>
+
+<SlideCard title="编译器什么时候帮你生成？">
+
+## 声明一个函数，移动可能就没了
+
+很多类不需要手写移动。`String` 这样的成员已经会移动，外层类默认就能逐成员移动：
+
+```cpp
+struct WithDefault {
+    String s;
+};
+struct WithDtor {
+    String s;
+    ~WithDtor() {}
+};
+
+WithDefault a;
+WithDefault b = std::move(a); //   move
+
+WithDtor c;
+WithDtor d = std::move(c);    //   copy
+```
+
+只是多写了一个空析构函数，`std::move` 就退化成了拷贝，而且没有任何编译错误。因为声明析构函数后，编译器不再生成移动操作，右值只能绑定到拷贝构造函数的 `const` 引用上。
+
+| 用户声明了 | 隐式移动操作 | 隐式拷贝操作 |
+| --- | --- | --- |
+| 都没声明 | 生成 | 生成 |
+| 析构函数 | 不生成 | 生成，但已弃用 |
+| 拷贝构造或拷贝赋值 | 不生成 | 另一个生成，但已弃用 |
+| 移动构造或移动赋值 | 另一个不生成 | 删除 |
+
+因此有两个常用原则：能不写就都不写（Rule of Zero），由 `std::string`、`std::vector`、`std::unique_ptr` 这样的成员管理资源；写了其中一个，就把五个都写清楚（Rule of Five），需要默认行为时用 `= default`。
+
+最后一行也解释了 `std::unique_ptr` 的只移动特性：声明移动构造后，拷贝被删除。规则见 [[class.copy.ctor]](https://timsong-cpp.github.io/cppwp/n4861/class.copy.ctor) 和 [[class.copy.assign]](https://timsong-cpp.github.io/cppwp/n4861/class.copy.assign)。
+
+</SlideCard>
+
+## 4. std::move：它什么都没移动
+
+<SlideCard title="只是一次转换">
+
+## 看实现就明白了
+
+`std::move` 的核心是一行 `static_cast`：
+
+```cpp
+template<class T>
+constexpr std::remove_reference_t<T>&& move(T&& t) noexcept {
+    return static_cast<std::remove_reference_t<T>&&>(t);
+}
+```
+
+这里的 `T&&` 能同时接收左值和右值，原理留到第 8 节，现在只需知道它什么都能接。不管传入什么，返回的都是右值引用。它运行时不做任何事，真正搬动资源的是后面选中的移动构造函数。更准确的名字应该是 `rvalue_cast`。
+
+## 移动成员时最常漏的一步
+
+```cpp
+struct Bad {
+    String s;
+    Bad(String&& v) : s(v) {}
+};
+
+struct Good {
+    String s;
+    Good(String&& v) : s(std::move(v)) {}
+};
+
+Bad b(String("x"));  //   copy
+Good g(String("x")); //   move
+```
+
+`v` 的类型是 `String&&`，但表达式 `v` 是左值，所以 `Bad` 走的是拷贝。这是第 2 节那条规则最常见的后果。
+
+## std::move 救不了 const
+
+```cpp
+std::vector<std::string> v;
+const std::string s = "hello";
+v.push_back(std::move(s)); // 实际发生拷贝
+```
+
+`std::move(s)` 的类型是 `const std::string&&`。移动构造函数要的是非 `const` 的 `std::string&&`，接不住，于是匹配到 `const std::string&`。`std::move` 不会去掉 `const`，编译也不报错。
+
+所以想要移动的变量不要声明成 `const`。
+
+</SlideCard>
+
+## 5. 返回值：大多数时候不用写 move
+
+<SlideCard title="编译器比你想的更省">
+
+## 三层优化
+
+把 `String` 从函数返回，实测结果如下：
+
+| 函数体 | 结果 | 原因 |
+| --- | --- | --- |
+| `return String("x");` | 无拷贝无移动 | prvalue，C++17 起保证省略 |
+| `String s("x"); return s;` | 无拷贝无移动 | NRVO，允许但不保证 |
+| `if (b) return x; return y;` | move | 无法 NRVO，自动按右值返回 |
+| 参数 `String s`，`return s;` | move | 参数不能 NRVO，自动按右值返回 |
+| `return std::move(s);` | move | 破坏 NRVO |
+| `return b ? x : y;` | copy | 条件表达式是左值，不算返回局部变量名 |
+
+第一行是**保证的复制消除**：从 C++17 起，prvalue 不再创建中间对象，而是直接初始化最终目标，即使类型不可移动也能编译。
+
+第二行是 **NRVO**：编译器把局部变量 `s` 直接构造在返回值的位置。它是允许的优化，但不保证发生。
+
+第三、四行说明了后备方案：不能省略时，`return 局部变量名` 会先按右值做重载决议。所以局部变量返回时最差也是移动，不需要自己写 `std::move`。
+
+## return std::move 反而更差
+
+```cpp
+String make() {
+    String s("hello");
+    return std::move(s); //   move
+}
+```
+
+`return` 后面不再是局部变量名，而是一个表达式，NRVO 的条件不成立，省掉的那次构造变成了一次移动。clang 和 GCC 都会用 `-Wpessimizing-move` 警告这一行。
+
+## 什么时候才需要显式写？
+
+自动按右值返回只覆盖 `return` 后面直接写名字的情况，下面这些要单独判断：
+
+| 写法 | `return` 里写什么 | 不写的结果 |
+| --- | --- | --- |
+| `String f(String&& s)` | 写 `return s;` 即可 | C++20 起自动 move |
+| `String&& f(String&& s)` | `return std::move(s);` | 编译错误，左值不能绑定到 `String&&` |
+| 返回局部对象的成员 `h.m` | `return std::move(h.m);` | copy，`h.m` 不是局部变量名 |
+| `template<class T> String f(T&& x)` | `return std::forward<T>(x);`，表明意图 | C++20 起结果相同：右值实参 move，左值实参 copy |
+
+第一行和最后一行都依赖 C++20 把右值引用参数纳入自动移动。`-std=c++17` 下 GCC 16 对它执行 copy，Apple clang 21 仍是 move，所以需要兼容旧标准的代码要写 `std::move`。
+
+</SlideCard>
+
+## 6. noexcept：vector 敢不敢移动
+
+<SlideCard title="同样有移动构造，结果不同">
+
+## 扩容实验
+
+下面三个类型都有移动构造函数，只差在 `noexcept` 和拷贝构造函数：
+
+```cpp
+struct NoexceptMove {
+    NoexceptMove() = default;
+    NoexceptMove(const NoexceptMove&) { std::puts("copy"); }
+    NoexceptMove(NoexceptMove&&) noexcept { std::puts("move"); }
+};
+
+struct ThrowingMove {
+    ThrowingMove() = default;
+    ThrowingMove(const ThrowingMove&) { std::puts("copy"); }
+    ThrowingMove(ThrowingMove&&) { std::puts("move"); }
+};
+
+struct MoveOnly {
+    MoveOnly() = default;
+    MoveOnly(const MoveOnly&) = delete;
+    MoveOnly(MoveOnly&&) { std::puts("move"); }
+};
+
+template<class T>
+void grow() {
+    std::vector<T> v;
+    v.reserve(2);
+    v.emplace_back();
+    v.emplace_back();
+    v.emplace_back(); // 容量不足，搬迁旧的两个元素
+}
+```
+
+| 类型 | 搬迁旧元素时 |
+| --- | --- |
+| `NoexceptMove` | move、move |
+| `ThrowingMove` | **copy、copy** |
+| `MoveOnly` | move、move |
+
+## 为什么不加 noexcept 会退化成拷贝？
+
+`push_back` 有强异常保证：如果扩容失败，`vector` 保持原样。
+
+用拷贝搬迁时，新内存里某个元素抛异常，旧元素完好无损，释放新内存就能回滚。用移动搬迁时，移动到一半抛异常，部分旧元素已经被搬空，移动回去也可能再抛异常，回滚不了。
+
+所以 `vector` 用 `std::move_if_noexcept` 判断：移动构造是 `noexcept` 才移动，否则宁可拷贝。没有拷贝构造可用时，比如 `MoveOnly`，只能移动，这时放弃强保证。
+
+如果 `String` 的移动构造忘了写 `noexcept`，一个大 `vector<String>` 每次扩容都会深拷贝所有字符串，功能完全正常，只有性能悄悄变差。
+
+## 测一下差多少
+
+用一个 37 字符的字符串类型，构造函数和拷贝都走堆分配，只切换移动构造的 `noexcept`，然后向空 `vector` 插入 100 万个元素：
+
+| 移动构造 | 搬迁时 copy | 搬迁时 move | 堆分配次数 | 耗时 |
+| --- | --- | --- | --- | --- |
+| `noexcept` | 0 | 1048575 | 1000000 | 15–17 ms |
+| 不加 `noexcept` | 1048575 | 0 | 2048575 | 33–36 ms |
+
+环境是 Apple M5 Pro，`-O2`，耗时取 7 次中的最小值，区间的两端分别来自 GCC 16 和 Apple clang 21，包含构造、扩容和析构全过程。次数在两个编译器上完全相同：`vector` 容量逐次翻倍，搬迁总数是 `2^20 - 1`，也就是说这里的 `n` 个元素大约被搬迁了一遍。
+
+堆分配次数翻倍是确定的结果，耗时差约 2 倍只代表这台机器和这个字符串长度，元素越大，字符复制的成本占比越高。
+
+## 什么时候写 noexcept？
+
+移动构造、移动赋值和 `swap` 通常只交换指针，确实不会抛异常，应当标记。用 `= default` 时编译器会根据成员自动判断。可以用 `static_assert` 守住这件事：
+
+```cpp
+static_assert(std::is_nothrow_move_constructible_v<String>);
+```
+
+</SlideCard>
+
+## 7. 移动并不总是更快
+
+<SlideCard title="移动的收益来自间接持有">
+
+## 短字符串没有指针可偷
+
+移动之所以快，是因为资源放在对象外面，只要转移指针。如果数据就在对象内部，移动也得逐字节复制。
+
+`std::string` 的短字符串优化（SSO）把短内容直接存在对象里：
+
+```cpp
+std::string s1(5, 'a');
+auto p1 = s1.data();
+std::string s2 = std::move(s1);
+p1 == s2.data(); // false，内容被复制到 s2 内部
+
+std::string l1(100, 'a');
+auto p2 = l1.data();
+std::string l2 = std::move(l1);
+p2 == l2.data(); // true，堆内存指针被转移
+```
+
+这两行在 libc++（`sizeof(std::string)` 为 24）和 libstdc++（为 32）上结果相同。
+
+| 情况 | 移动的效果 |
+| --- | --- |
+| 内置类型、无指针成员的结构体 | 就是拷贝 |
+| `std::array<String, N>` | 逐元素移动，成本随 `N` 增长，元素本身在对象内 |
+| 短字符串 | 复制内部缓冲区 |
+| `std::vector`、长 `std::string` | 转移指针，常数时间 |
+| 移动没有标记 `noexcept` | 在容器搬迁时走不到移动 |
+
+所以全是整数和 `double` 的结构体，加移动构造没有意义。写通用模板时，也不能假设移动一定便宜。
+
+</SlideCard>
+
+## 8. 完美转发：让右值穿过包装函数
+
+<SlideCard title="多包一层，移动就没了">
+
+## 信息在哪一步丢的
+
+移动依赖实参的值类别，但函数参数一有名字就成了左值。看这三个重载：
+
+```cpp
+void sink(const String&) { std::puts("sink(const String&)"); }
+void sink(String&)       { std::puts("sink(String&)"); }
+void sink(String&&)      { std::puts("sink(String&&)"); }
+```
+
+现在想包一层加日志，理想情况是 `wrap(实参)` 和 `sink(实参)` 选中同一个重载：
+
+| 写法 | 左值 `a` | `const` 左值 `c` | 右值 |
+| --- | --- | --- | --- |
+| 直接调用 `sink` | `String&` | `const String&` | `String&&` |
+| `template<class T> void wrap(T x)` | 多一次 copy，`String&` | 多一次 copy，`String&` | `String&` |
+| `template<class T> void wrap(const T& x)` | `const String&` | `const String&` | `const String&` |
+| `template<class T> void wrap(T&& x)`，内部 `sink(x)` | `String&` | `const String&` | `String&` |
+| 同上，内部 `sink(std::forward<T>(x))` | `String&` | `const String&` | `String&&` |
+
+只有最后一行和直接调用一致。为每个参数分别写左值和右值版本也行，但 `n` 个参数至少要 `2^n` 个重载。
+
+</SlideCard>
+
+<SlideCard title="T 记住了实参">
+
+## 转发引用的推导
+
+函数模板的 `T&&`，且 `T` 由这次调用推导，这样的参数叫**转发引用**（forwarding reference），《Effective Modern C++》称为万能引用。它的推导规则是专门设计的（[[temp.deduct.call]/3](https://timsong-cpp.github.io/cppwp/n4861/temp.deduct.call#3)）：实参是左值时，`T` 推导成左值引用；实参是右值时，`T` 不带引用。
+
+| 实参 | `T` | 代入 `T&&` | 折叠后 `x` 的类型 |
+| --- | --- | --- | --- |
+| 左值 `a` | `String&` | `String& &&` | `String&` |
+| `const` 左值 `c` | `const String&` | `const String& &&` | `const String&` |
+| 右值 | `String` | `String&&` | `String&&` |
+
+`String& &&` 不能手写，但模板代入时会产生，这时按[引用折叠](https://timsong-cpp.github.io/cppwp/n4861/dcl.ref#6)处理：**只要出现一个 `&`，结果就是 `&`；两层都是 `&&`，结果才是 `&&`。**
+
+`x` 这个表达式永远是左值，但 `T` 这一列保留了信息。只有形式是不带 `const` 的 `T&&`（或 `auto&&`）且 `T` 由此次初始化推导时才成立，`std::vector<T>&&`、`const T&&` 和类模板成员 `void put(T&&)` 都只是右值引用，详见[类型推导文章](/blog/cpp-type-deduction/)。
+
+## std::forward 把信息取出来
+
+```cpp
+template<class T>
+constexpr T&& forward(std::remove_reference_t<T>& t) noexcept {
+    return static_cast<T&&>(t);
+}
+```
+
+| 实参 | `T` | 返回类型 | 结果 |
+| --- | --- | --- | --- |
+| 左值 | `String&` | `String&`（折叠后） | 左值 |
+| 右值 | `String` | `String&&` | 将亡值 |
+
+同一行代码在左值时什么都不改变，在右值时才转成右值，这就是**有条件的 move**。参数写成 `remove_reference_t<T>&` 使 `T` 不可推导，强迫你写出 `std::forward<T>`。如果让它自己推导，看到的永远是左值。标准库另有一个接收右值的重载，用 `static_assert` 拒绝把右值转成左值引用，规范见 [[forward]](https://timsong-cpp.github.io/cppwp/n4861/forward)。
+
+| | `std::move(x)` | `std::forward<T>(x)` |
+| --- | --- | --- |
+| 转换 | 无条件转成右值 | 按 `T` 决定 |
+| 适合的参数 | 右值引用，或确定不再用的对象 | 转发引用 |
+| 运行时 | 不做任何事 | 不做任何事 |
+
+在转发引用上写 `std::move` 是危险的错误：调用方传的是普通左值，没有表达“可以拿走”，资源却被偷走了。
+
+</SlideCard>
+
+<SlideCard title="真正的包装">
+
+## 自己实现 make_unique
+
+```cpp
+template<class T, class... Args>
+std::unique_ptr<T> make_unique(Args&&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
+```
+
+`std::forward<Args>(args)...` 展开后，每个参数各用自己的类型，因此不同参数可以各自是左值、右值或 `const`。`std::vector::emplace_back` 结构相同，所以 `v.emplace_back(3, 'x')` 能在容器内原地构造出 `"xxx"`。
+
+泛型 lambda 没有写得出来的 `T` 时，用 `decltype` 取回；C++20 也可以直接写模板参数：
+
+```cpp
+auto l1 = [](auto&& x) { sink(std::forward<decltype(x)>(x)); };
+auto l2 = []<class T>(T&& x) { sink(std::forward<T>(x)); };
+```
+
+包装函数还要原样交出返回值。`auto` 会退化引用，`decltype(auto)` 才能保留：
+
+```cpp
+template<class F, class... A>
+decltype(auto) call(F&& f, A&&... a) {
+    return std::forward<F>(f)(std::forward<A>(a)...);
+}
+```
+
+</SlideCard>
+
+<SlideCard title="转发的三个陷阱">
+
+## 用错转发时会发生什么
+
+**同一参数只转发一次。**第二次拿到的可能是被搬空的对象。需要多次使用时，只在最后一次写 `forward`。
+
+```cpp
+template<class T>
+void twice(T&& x) {
+    String a(std::forward<T>(x));
+    String b(std::forward<T>(x)); // 右值时，x 已被搬空
+}
+```
+
+**转发不延长生命周期。**下面的 `r` 在这一行结束后悬空。GCC 16 在 `-Wextra` 下给出 `-Wdangling-reference` 警告，clang 没有报告，所以不能依赖编译器。
+
+```cpp
+template<class T>
+T&& id(T&& x) { return std::forward<T>(x); }
+
+auto&& r = id(std::string("temp"));
+```
+
+**转发引用会抢走重载。**它几乎能精确匹配任何实参：
+
+```cpp
+struct Person {
+    std::string name;
+
+    template<class T>
+    explicit Person(T&& n) : name(std::forward<T>(n)) {}
+
+    Person(const Person&) = default;
+};
+
+Person p("Alice");
+Person q(p); // 编译错误
+```
+
+`p` 是非 `const` 左值，模板生成的 `Person(Person&)` 比 `const Person&` 更精确，于是尝试用 `Person` 初始化 `std::string`。把 `p` 改成 `const Person` 反而能编译，因为两者同样精确时非模板优先。
+
+C++20 用约束说明模板能处理什么：
+
+```cpp
+template<class T>
+    requires std::constructible_from<std::string, T>
+explicit Person(T&& n) : name(std::forward<T>(n)) {}
+```
+
+`T = Person&` 不满足约束，模板退出候选，`Person q(p)` 选中拷贝构造函数。
+
+</SlideCard>
+
+<SlideCard title="转发不过去的实参">
+
+## 直接调用可以，包一层就不行
+
+转发要先**推导**再绑定。下表中 `fwd` 表示 `template<class... A> void fwd(A&&... a)`，内部转发给目标函数。
+
+| 实参 | 经过 `fwd` | 原因 | 修正 |
+| --- | --- | --- | --- |
+| `{1, 2, 3}` | 编译错误 | 花括号列表没有类型，无法推导 | `std::vector<int>{1, 2, 3}` |
+| `0`、`NULL` 作空指针 | 编译错误 | 推导成整数类型，整数变量不能转成指针 | `nullptr` |
+| 重载函数名 `cb` | 编译错误 | 一个名字对应多个函数 | `static_cast<int(*)(int)>(cb)` |
+| 函数模板名 `tf` | 编译错误 | 模板本身不是函数 | `tf<int>` |
+| 位域 `b.a` | 编译错误 | 非 `const` 引用不能绑定位域 | 先复制成普通变量 |
+| 只声明的 `static const int` 成员 | `-O0` 链接失败 | 绑定引用需要地址，成员没有定义 | C++17 起写 `static constexpr` 或 `inline static` |
+
+最后一行特别隐蔽：实测 `-O2` 下值被优化掉，又能链接通过。《Effective Modern C++》基于 C++14，所以书里需要手写类外定义。
+
+</SlideCard>
+
+## 9. 参数到底怎么写？
+
+<SlideCard title="一个默认选择">
+
+## 按函数对参数做什么来选
+
+| 场景 | 建议写法 | 成本 |
+| --- | --- | --- |
+| 只读，不保存 | `const T&`，字符串用 `std::string_view` | 无 |
+| 一定保存一份 | 按值接收，再 `std::move` 进成员 | 左值：一次拷贝加一次移动；右值：一次移动 |
+| 接管所有权 | `T&&` 或按值接收 `std::unique_ptr<T>` | 一次移动，接口表达清楚 |
+| 只是中转，不知道最终类型 | 转发引用 + `std::forward` | 要放头文件，模板膨胀，报错更长 |
+
+判断转发是否值得，只问一句：**这个函数是否只是中转参数，并且不知道最终目标的类型？** 否则普通重载或按值传参通常更好。
+
+</SlideCard>
+
+## 10. 检验：先判断，再展开答案
+
+<SlideCard title="说出结果和理由">
+
+## 每题写下选中的函数
+
+回答时不要只给结果，要说出表达式的值类别和选中的重载。
+
+<details>
+<summary>Quiz 1：`String&& r = String("a"); String s = r;` 发生拷贝还是移动？</summary>
+
+拷贝。`r` 的声明类型是 `String&&`，但表达式 `r` 是左值。要移动，写 `String s = std::move(r);`。
+
+</details>
+
+<details>
+<summary>Quiz 2：`x++` 和 `++x` 分别是什么值类别？怎样用编译器验证？</summary>
+
+`x++` 是纯右值，返回旧值的副本。`++x` 是左值，返回 `x` 本身。
+
+`decltype((x++))` 得到 `int`，`decltype((++x))` 得到 `int&`。
+
+</details>
+
+<details>
+<summary>Quiz 3：一个类只多写了 `~Widget() {}`，`Widget b = std::move(a);` 走哪个函数？</summary>
+
+拷贝构造函数。声明析构函数后不再隐式生成移动操作，右值只能绑定到拷贝构造函数的 `const` 引用上，而且没有编译错误。需要移动时要把五个特殊成员函数都声明出来。只补 `Widget(Widget&&) = default;` 会让隐式拷贝操作被删除，移动赋值也不会生成。
+
+</details>
+
+<details>
+<summary>Quiz 4（面试题）：`const std::string s = "a"; std::string t = std::move(s);` 发生了什么？</summary>
+
+拷贝。`std::move(s)` 的类型是 `const std::string&&`，移动构造函数绑定不了 `const` 对象，于是匹配到 `const std::string&`。`std::move` 不会去掉 `const`。
+
+</details>
+
+<details>
+<summary>Quiz 5（面试题）：函数里写 `return std::move(local);` 好不好？</summary>
+
+不好。这样 `return` 后面不再是局部变量名，NRVO 失效，本来可以省略的构造变成一次移动。直接写 `return local;`，不能省略时编译器也会自动按右值返回。
+
+</details>
+
+<details>
+<summary>Quiz 6（面试题）：为什么移动构造不加 `noexcept`，`vector` 扩容会退化成拷贝？</summary>
+
+`vector` 扩容要提供强异常保证。移动到一半抛异常时，部分旧元素已被搬空，无法回滚。所以它用 `move_if_noexcept`：移动是 `noexcept` 才移动，否则用拷贝。如果类型不可拷贝，就只能移动，放弃强保证。
+
+</details>
+
+<details>
+<summary>Quiz 7（面试题）：`std::move` 和 `std::forward` 有什么区别？运行时做什么？</summary>
+
+`std::move` 无条件转成右值。`std::forward<T>` 按 `T` 有条件转换：`T` 是左值引用时保持左值，否则转成右值，用在转发引用上。
+
+两者都只是 `static_cast`，运行时不做任何事。是否真的发生移动，取决于后面选中的函数。
+
+</details>
+
+<details>
+<summary>Quiz 8（面试题）：`template<class T> void f(T&& v) { log(std::forward<T>(v)); store(std::forward<T>(v)); }` 有什么问题？</summary>
+
+转发了两次。实参是右值时，`log` 可能已经把 `v` 搬空，`store` 拿到的是被移动过的对象。只在最后一次使用处转发：`log(v); store(std::forward<T>(v));`。
+
+</details>
+
+</SlideCard>
+
+## 延伸阅读
+
+<Note title="C++20 标准条款">
+
+- [值类别 [basic.lval]](https://timsong-cpp.github.io/cppwp/n4861/basic.lval)：查询 lvalue、xvalue、prvalue 的定义。
+- [临时量实质化 [conv.rval]](https://timsong-cpp.github.io/cppwp/n4861/conv.rval)：核对 prvalue 何时变成 xvalue。
+- [复制消除 [class.copy.elision]](https://timsong-cpp.github.io/cppwp/n4861/class.copy.elision)：确认 NRVO 的条件，以及 C++20 中自动按右值返回覆盖的范围。
+- [移动操作的隐式声明 [class.copy.ctor]](https://timsong-cpp.github.io/cppwp/n4861/class.copy.ctor)：核对哪些声明会阻止生成。
+- [转发引用的推导 [temp.deduct.call]](https://timsong-cpp.github.io/cppwp/n4861/temp.deduct.call#3) 和[引用折叠 [dcl.ref]](https://timsong-cpp.github.io/cppwp/n4861/dcl.ref#6)：解释第 8 节的类型变化。
+- [`std::forward` [forward]](https://timsong-cpp.github.io/cppwp/n4861/forward)：确认转发和对右值转左值的限制。
+
+</Note>
+
+<Note title="书籍">
+
+- 《Effective Modern C++》条款 23–30：条款 23 对应第 4 节，条款 24、28 对应转发引用，条款 25 对应第 4、5 节，条款 26–27 对应构造函数劫持，条款 29 对应第 7 节，条款 30 对应转发失败。书以 C++14 为背景，保证的复制消除、C++20 的自动移动和 `static const` 成员这三处已有变化。
+
+</Note>
