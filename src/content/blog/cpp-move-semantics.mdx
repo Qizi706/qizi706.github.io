@@ -286,8 +286,8 @@ WithDtor d = std::move(c);    //   copy
 | 你手写了 | 还生成移动操作吗 | 还生成拷贝操作吗 | 实际影响 |
 | --- | --- | --- | --- |
 | 五个都没写 | 生成 | 生成 | 拷贝和移动都能用 |
-| 析构函数 | 不生成 | 生成，已弃用 | `std::move` 悄悄退化成 copy |
-| 拷贝构造或拷贝赋值 | 不生成 | 另一个生成，已弃用 | `std::move` 悄悄退化成 copy |
+| 析构函数 | 不生成 | 生成，已弃用 | `std::move` 悄悄退化成拷贝 |
+| 拷贝构造或拷贝赋值 | 不生成 | 另一个生成，已弃用 | `std::move` 悄悄退化成拷贝 |
 | 移动构造或移动赋值 | 另一个不生成 | 不生成，拷贝被删除 | 拷贝时编译错误，没写的那个移动操作也不能用 |
 
 因此有两个常用原则：能不写就都不写（Rule of Zero），由 `std::string`、`std::vector`、`std::unique_ptr` 这样的成员管理资源；写了其中一个，就把五个都写清楚（Rule of Five），需要默认行为时用 `= default`。
@@ -391,7 +391,7 @@ String make() {
 | 返回局部对象的成员 `h.m` | `return std::move(h.m);` | 只写 `return h.m;` 是 copy，`h.m` 不是局部变量名 |
 | 按值返回转发引用参数：`template<class T> String f(T&& x)` | `return std::forward<T>(x);` | C++20 起只写 `return x;` 结果相同（右值实参 move，左值实参 copy），写 `forward` 是为了表明意图 |
 
-第一行和最后一行都依赖 C++20 把右值引用参数纳入自动移动。`-std=c++17` 下 GCC 16 对它执行 copy，Apple clang 21 仍是 move，所以需要兼容旧标准的代码要写 `std::move`。
+第一行和最后一行都依赖 C++20 把右值引用参数纳入自动移动。`-std=c++17` 下 GCC 16 对这两行的右值实参执行 copy，Apple clang 21 仍是 move，所以需要兼容旧标准的代码要显式写 `std::move` 或 `std::forward`。
 
 </SlideCard>
 
@@ -454,14 +454,14 @@ void grow() {
 
 用一个 37 字符的字符串类型，构造函数和拷贝都走堆分配，只切换移动构造的 `noexcept`，然后向空 `vector` 插入 100 万个元素：
 
-| 移动构造 | 搬迁时 copy | 搬迁时 move | 堆分配次数 | 耗时 |
+| 移动构造 | 搬迁时 copy | 搬迁时 move | 字符串堆分配次数 | 耗时 |
 | --- | --- | --- | --- | --- |
 | `noexcept` | 0 | 1048575 | 1000000 | 15–17 ms |
 | 不加 `noexcept` | 1048575 | 0 | 2048575 | 33–36 ms |
 
-环境是 Apple M5 Pro，`-O2`，耗时取 7 次中的最小值，区间的两端分别来自 GCC 16 和 Apple clang 21，包含构造、扩容和析构全过程。次数在两个编译器上完全相同：`vector` 容量逐次翻倍，搬迁总数是 `2^20 - 1`，也就是说这里的 `n` 个元素大约被搬迁了一遍。
+测量环境是 Apple M5 Pro，`-O2`，耗时取 7 次中的最小值，区间的两端分别来自 GCC 16 和 Apple clang 21，包含构造、扩容和析构全过程。
 
-堆分配次数翻倍是确定的结果，耗时差约 2 倍只代表这台机器和这个字符串长度，元素越大，字符复制的成本占比越高。
+次数在两个编译器上完全相同：`vector` 容量逐次翻倍，搬迁总数是 `2^20 - 1`，平均每个元素被搬迁约一次。不加 `noexcept` 时，每次搬迁都多一次堆分配，所以分配次数翻倍，这是确定的结果。耗时差约 2 倍只代表这台机器和这个字符串长度，不能直接推广到其他元素大小。
 
 ## 什么时候写 noexcept？
 
@@ -495,7 +495,7 @@ std::string l2 = std::move(l1);
 p2 == l2.data(); // true，堆内存指针被转移
 ```
 
-这两行在 libc++（`sizeof(std::string)` 为 24）和 libstdc++（为 32）上结果相同。
+这两组比较在 libc++（`sizeof(std::string)` 为 24）和 libstdc++（为 32）上结果相同。其他类型也可以这样判断：
 
 | 类型 | 移动时实际做什么 | 比拷贝省多少 |
 | --- | --- | --- |
@@ -515,7 +515,7 @@ p2 == l2.data(); // true，堆内存指针被转移
 
 ## 信息在哪一步丢的
 
-移动依赖实参的值类别，但函数参数一有名字就成了左值。看这三个重载：
+移动依赖实参的值类别，但实参一旦进入函数，变成有名字的参数，就是左值了。看这三个重载：
 
 ```cpp
 void sink(const String&) { std::puts("sink(const String&)"); }
@@ -586,7 +586,7 @@ wrap(c);           // sink(const String&)
 wrap(String("t")); // sink(String&&)
 ```
 
-只有写法四三行都和标准答案一致。为每个参数分别写左值和右值版本也行，但 `n` 个参数至少要 `2^n` 个重载。
+只有写法四的三行都和标准答案一致。为每个参数分别写左值和右值版本也行，但 `n` 个参数至少要 `2^n` 个重载。
 
 </SlideCard>
 
@@ -606,7 +606,19 @@ wrap(String("t")); // sink(String&&)
 
 `String& &&` 不能手写，但模板代入时会产生，这时按[引用折叠](https://timsong-cpp.github.io/cppwp/n4861/dcl.ref#6)处理：**只要出现一个 `&`，结果就是 `&`；两层都是 `&&`，结果才是 `&&`。**
 
-`x` 这个表达式永远是左值，但 `T` 这一列保留了信息。只有形式是不带 `const` 的 `T&&`（或 `auto&&`）且 `T` 由此次初始化推导时才成立，`std::vector<T>&&`、`const T&&` 和类模板成员 `void put(T&&)` 都只是右值引用，详见[类型推导文章](/blog/cpp-type-deduction/)。
+`x` 这个表达式永远是左值，但 `T` 这一列保留了实参原本的值类别，后面的 `std::forward` 就靠它恢复信息。
+
+## 哪些 `T&&` 才是转发引用
+
+要成为转发引用，形式必须正好是 `T&&`（或 `auto&&`），而且 `T` 由这次初始化推导。下面三种都只是右值引用，详见[类型推导文章](/blog/cpp-type-deduction/)：
+
+- `std::vector<T>&&`：形式不是单独的 `T&&`。
+- `const T&&`：多了 `const`。
+- 类模板成员 `void put(T&&)`：`T` 在类实例化时已经确定，调用 `put` 时不再推导。
+
+</SlideCard>
+
+<SlideCard title="forward 恢复信息">
 
 ## std::forward 把信息取出来
 
@@ -630,7 +642,18 @@ void wrap(T&& x) {
 | 左值 | `String&` | 左值 | `String&` | 左值 |
 | 右值 | `String` | 左值 | `String&&` | 将亡值 |
 
-同一行代码在左值时什么都不改变，在右值时才转成右值，这就是**有条件的 move**。
+代入 `T` 后，就是两个普通函数，它们的参数相同，只有返回类型不同：
+
+```cpp
+// 实参是左值，T = String&
+String& forward(String& t) { return static_cast<String&>(t); }
+
+// 实参是右值，T = String
+String&& forward(String& t) { return static_cast<String&&>(t); }
+```
+
+原始实参是左值时什么都不改变，是右值时才转成右值，这就是**有条件的 move**。
+
 ## 为什么不能省略 `<T>`
 
 `std::forward(x)` 无法通过编译，这是有意的设计。`x` 在 `wrap` 内部永远是左值，实参原本是左值还是右值，只记录在 `wrap` 的 `T` 里。`forward` 无法从 `x` 得知这一点，所以 `T` 必须由你写在尖括号里传给它。
@@ -642,7 +665,9 @@ void wrap(T&& x) {
 
 如果参数写成普通的 `T&`，漏写 `<T>` 也能编译：`forward(x)` 推导出 `T = String`，返回 `String&&`，左值实参也被转成右值，资源可能被悄悄拿走。现在的写法把这个隐蔽的 bug 变成了编译错误。
 
-标准库另有一个接收右值的重载，用 `static_assert` 拒绝把右值转成左值引用，规范见 [[forward]](https://timsong-cpp.github.io/cppwp/n4861/forward)。
+完整的 `std::forward` 还有一个接收右值的重载，只在直接传入右值时用到，`wrap` 里用不到。它用 `static_assert` 拒绝把右值转成左值引用，规范见 [[forward]](https://timsong-cpp.github.io/cppwp/n4861/forward)。
+
+## std::move 和 std::forward 怎么选
 
 | | `std::move(x)` | `std::forward<T>(x)` |
 | --- | --- | --- |
@@ -667,14 +692,14 @@ std::unique_ptr<T> make_unique(Args&&... args) {
 
 `std::forward<Args>(args)...` 展开后，每个参数各用自己的类型，因此不同参数可以各自是左值、右值或 `const`。`std::vector::emplace_back` 结构相同，所以 `v.emplace_back(3, 'x')` 能在容器内原地构造出 `"xxx"`。
 
-泛型 lambda 没有写得出来的 `T` 时，用 `decltype` 取回；C++20 也可以直接写模板参数：
+泛型 lambda 的 `auto&&` 没有可写的 `T`，这时用 `decltype` 取回；C++20 也可以直接写模板参数：
 
 ```cpp
 auto l1 = [](auto&& x) { sink(std::forward<decltype(x)>(x)); };
 auto l2 = []<class T>(T&& x) { sink(std::forward<T>(x)); };
 ```
 
-包装函数还要原样交出返回值。`auto` 会退化引用，`decltype(auto)` 才能保留：
+包装函数还要原样交出返回值。返回类型写 `auto` 会丢掉引用，写 `decltype(auto)` 才能保留：
 
 ```cpp
 template<class F, class... A>
@@ -771,6 +796,16 @@ explicit Person(T&& n) : name(std::forward<T>(n)) {}
 | 只是转交给别的函数，不知道最终类型 | 转发引用加 `std::forward` | 没有额外拷贝，但代码要放头文件，模板实例增多，报错更长 |
 
 判断转发是否值得，只问一句：**这个函数是否只是中转参数，并且不知道最终目标的类型？** 否则普通重载或按值传参通常更好。
+
+## 读代码时问三个问题
+
+看到一段对象传递的代码，想知道到底有没有移动，依次问：
+
+- 这个表达式是左值还是右值？
+- 它选中了哪个重载？
+- 选中的函数真的转移了资源吗？
+
+全文的现象都能这样解释：`String&&` 参数是左值，所以走拷贝；`const` 右值接不住移动构造，所以走拷贝；短字符串走了移动构造，但没有指针可转移。
 
 </SlideCard>
 
