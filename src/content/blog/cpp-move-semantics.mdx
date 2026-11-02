@@ -107,9 +107,13 @@ void take(String&& s) {
 
 这句话好用，但两个方向都有例外：枚举项 `Red` 和非类型模板参数 `N` 有名字，却是纯右值；`*p`、`v[0]`、`"hello"` 没有名字，却是左值。
 
-准确的分类看两件事：表达式是否**标识一个对象**，以及它是否**可以被移动**。
+准确的分类看两件事：表达式是否指向一个具体的对象（术语叫**标识**对象），以及这个对象的资源是否**可以被拿走**（术语叫可移动）。两个问题的答案组合出三种类别：
 
-| 类别 | 标识对象？ | 可移动？ | 例子 |
+- **左值**：指向一个具体对象，调用方之后还可能使用它，资源不能拿走。
+- **将亡值**：同样指向一个具体对象，但代码已经表明它的资源可以拿走。
+- **纯右值**：只是一个值，或者一个待创建的对象，还没有对应到具体对象。
+
+| 类别 | 指向具体对象？ | 资源能拿走？ | 例子 |
 | --- | --- | --- | --- |
 | lvalue，左值 | 是 | 否 | `x`、`*p`、`v[0]`、`++x`、`"hello"`、返回 `int&` 的函数调用 |
 | xvalue，将亡值 | 是 | 是 | `std::move(x)`、`static_cast<int&&>(x)`、返回 `int&&` 的函数调用、`S{}.m` |
@@ -143,7 +147,9 @@ CATEGORY(x++);          // prvalue
 
 ## 右值引用让重载能区分来源
 
-| 实参 | `T&` | `const T&` | `T&&` |
+以 `String` 为例，下表回答一个问题：某种实参能不能传给某种引用参数。“优先”表示几个重载都能接时选它。
+
+| 实参 | 参数是 `String&` | 参数是 `const String&` | 参数是 `String&&` |
 | --- | --- | --- | --- |
 | 非 `const` 左值 | 可以，优先 | 可以 | 不可以 |
 | `const` 左值 | 不可以 | 可以 | 不可以 |
@@ -275,12 +281,14 @@ WithDtor d = std::move(c);    //   copy
 
 只是多写了一个空析构函数，`std::move` 就退化成了拷贝，而且没有任何编译错误。因为声明析构函数后，编译器不再生成移动操作，右值只能绑定到拷贝构造函数的 `const` 引用上。
 
-| 用户声明了 | 隐式移动操作 | 隐式拷贝操作 |
-| --- | --- | --- |
-| 都没声明 | 生成 | 生成 |
-| 析构函数 | 不生成 | 生成，但已弃用 |
-| 拷贝构造或拷贝赋值 | 不生成 | 另一个生成，但已弃用 |
-| 移动构造或移动赋值 | 另一个不生成 | 删除 |
+这条规则涉及五个特殊成员函数：析构函数、拷贝构造、拷贝赋值、移动构造和移动赋值。下表按“你手写了哪一个”，列出编译器还会不会替你生成其余的函数。“已弃用”指现在仍会生成，但标准不建议依赖这种行为。
+
+| 你手写了 | 还生成移动操作吗 | 还生成拷贝操作吗 | 实际影响 |
+| --- | --- | --- | --- |
+| 五个都没写 | 生成 | 生成 | 拷贝和移动都能用 |
+| 析构函数 | 不生成 | 生成，已弃用 | `std::move` 悄悄退化成 copy |
+| 拷贝构造或拷贝赋值 | 不生成 | 另一个生成，已弃用 | `std::move` 悄悄退化成 copy |
+| 移动构造或移动赋值 | 另一个不生成 | 不生成，拷贝被删除 | 拷贝时编译错误，没写的那个移动操作也不能用 |
 
 因此有两个常用原则：能不写就都不写（Rule of Zero），由 `std::string`、`std::vector`、`std::unique_ptr` 这样的成员管理资源；写了其中一个，就把五个都写清楚（Rule of Five），需要默认行为时用 `= default`。
 
@@ -346,14 +354,14 @@ v.push_back(std::move(s)); // 实际发生拷贝
 
 把 `String` 从函数返回，实测结果如下：
 
-| 函数体 | 结果 | 原因 |
+| 函数里的写法 | 实际发生 | 为什么 |
 | --- | --- | --- |
-| `return String("x");` | 无拷贝无移动 | prvalue，C++17 起保证省略 |
-| `String s("x"); return s;` | 无拷贝无移动 | NRVO，允许但不保证 |
-| `if (b) return x; return y;` | move | 无法 NRVO，自动按右值返回 |
-| 参数 `String s`，`return s;` | move | 参数不能 NRVO，自动按右值返回 |
-| `return std::move(s);` | move | 破坏 NRVO |
-| `return b ? x : y;` | copy | 条件表达式是左值，不算返回局部变量名 |
+| `return String("x");` | 不拷贝也不移动 | 对象直接建在调用方接收结果的位置，C++17 起保证 |
+| `String s("x"); return s;` | 不拷贝也不移动 | NRVO：局部变量 `s` 直接建在返回位置，允许但不保证 |
+| `if (b) return x; return y;`，`x`、`y` 是局部变量 | move | 运行时才知道返回哪个，没法提前把两者都建在返回位置 |
+| 参数 `String s`，`return s;` | move | 参数由调用方构造，没法建在返回位置 |
+| `return std::move(s);` | move | 手动转换后不再是变量名，NRVO 失效 |
+| `return b ? x : y;` | copy | 这是条件表达式，不是“返回变量名”，不触发自动移动 |
 
 第一行是**保证的复制消除**：从 C++17 起，prvalue 不再创建中间对象，而是直接初始化最终目标，即使类型不可移动也能编译。
 
@@ -376,12 +384,12 @@ String make() {
 
 自动按右值返回只覆盖 `return` 后面直接写名字的情况，下面这些要单独判断：
 
-| 写法 | `return` 里写什么 | 不写的结果 |
+| 函数 | `return` 这样写 | 原因 |
 | --- | --- | --- |
-| `String f(String&& s)` | 写 `return s;` 即可 | C++20 起自动 move |
-| `String&& f(String&& s)` | `return std::move(s);` | 编译错误，左值不能绑定到 `String&&` |
-| 返回局部对象的成员 `h.m` | `return std::move(h.m);` | copy，`h.m` 不是局部变量名 |
-| `template<class T> String f(T&& x)` | `return std::forward<T>(x);`，表明意图 | C++20 起结果相同：右值实参 move，左值实参 copy |
+| 按值返回右值引用参数：`String f(String&& s)` | `return s;` | C++20 起自动 move，不必写 `std::move` |
+| 返回右值引用：`String&& f(String&& s)` | `return std::move(s);` | 只写 `return s;` 编译不过，`s` 是左值，不能绑定到返回类型 `String&&` |
+| 返回局部对象的成员 `h.m` | `return std::move(h.m);` | 只写 `return h.m;` 是 copy，`h.m` 不是局部变量名 |
+| 按值返回转发引用参数：`template<class T> String f(T&& x)` | `return std::forward<T>(x);` | C++20 起只写 `return x;` 结果相同（右值实参 move，左值实参 copy），写 `forward` 是为了表明意图 |
 
 第一行和最后一行都依赖 C++20 把右值引用参数纳入自动移动。`-std=c++17` 下 GCC 16 对它执行 copy，Apple clang 21 仍是 move，所以需要兼容旧标准的代码要写 `std::move`。
 
@@ -424,11 +432,13 @@ void grow() {
 }
 ```
 
-| 类型 | 搬迁旧元素时 |
-| --- | --- |
-| `NoexceptMove` | move、move |
-| `ThrowingMove` | **copy、copy** |
-| `MoveOnly` | move、move |
+分别调用 `grow<T>()`，第三次 `emplace_back` 搬迁两个旧元素时的输出如下：
+
+| 调用 | 搬迁第 1 个旧元素 | 搬迁第 2 个旧元素 |
+| --- | --- | --- |
+| `grow<NoexceptMove>()` | move | move |
+| `grow<ThrowingMove>()` | **copy** | **copy** |
+| `grow<MoveOnly>()` | move | move |
 
 ## 为什么不加 noexcept 会退化成拷贝？
 
@@ -487,13 +497,13 @@ p2 == l2.data(); // true，堆内存指针被转移
 
 这两行在 libc++（`sizeof(std::string)` 为 24）和 libstdc++（为 32）上结果相同。
 
-| 情况 | 移动的效果 |
-| --- | --- |
-| 内置类型、无指针成员的结构体 | 就是拷贝 |
-| `std::array<String, N>` | 逐元素移动，成本随 `N` 增长，元素本身在对象内 |
-| 短字符串 | 复制内部缓冲区 |
-| `std::vector`、长 `std::string` | 转移指针，常数时间 |
-| 移动没有标记 `noexcept` | 在容器搬迁时走不到移动 |
+| 类型 | 移动时实际做什么 | 比拷贝省多少 |
+| --- | --- | --- |
+| 内置类型、成员全是 `int` 和 `double` 的结构体 | 按成员复制 | 不省 |
+| `std::array<String, N>` | 元素就在对象内部，要逐个移动 `N` 个元素 | 省掉元素的堆分配，但耗时仍随 `N` 增长 |
+| 短字符串 | 字符存在对象内部，只能复制过去 | 基本不省 |
+| `std::vector`、长 `std::string` | 只转移指向堆内存的指针 | 最省，耗时与元素数量无关 |
+| 移动构造没有标记 `noexcept` 的类型 | `vector` 扩容时改用拷贝 | 这个场景下不省 |
 
 所以全是整数和 `double` 的结构体，加移动构造没有意义。写通用模板时，也不能假设移动一定便宜。
 
@@ -513,17 +523,70 @@ void sink(String&)       { std::puts("sink(String&)"); }
 void sink(String&&)      { std::puts("sink(String&&)"); }
 ```
 
-现在想包一层加日志，理想情况是 `wrap(实参)` 和 `sink(实参)` 选中同一个重载：
+现在想包一层加日志，比如写一个 `wrap`，先打印再调用 `sink`。目标是：**实参经过 `wrap` 后调到的 `sink`，要和直接调用时完全相同**。先记下直接调用的结果，作为标准答案：
 
-| 写法 | 左值 `a` | `const` 左值 `c` | 右值 |
-| --- | --- | --- | --- |
-| 直接调用 `sink` | `String&` | `const String&` | `String&&` |
-| `template<class T> void wrap(T x)` | 多一次 copy，`String&` | 多一次 copy，`String&` | `String&` |
-| `template<class T> void wrap(const T& x)` | `const String&` | `const String&` | `const String&` |
-| `template<class T> void wrap(T&& x)`，内部 `sink(x)` | `String&` | `const String&` | `String&` |
-| 同上，内部 `sink(std::forward<T>(x))` | `String&` | `const String&` | `String&&` |
+```cpp
+String a("a");
+const String c("c");
 
-只有最后一行和直接调用一致。为每个参数分别写左值和右值版本也行，但 `n` 个参数至少要 `2^n` 个重载。
+sink(a);           // sink(String&)
+sink(c);           // sink(const String&)
+sink(String("t")); // sink(String&&)
+```
+
+下面依次试四种写法，都传这三个实参，注释里是实际调到的重载。
+
+**写法一：按值接收。**
+
+```cpp
+template<class T>
+void wrap(T x) { sink(x); }
+
+wrap(a);           // 先 copy 一次，再 sink(String&)
+wrap(c);           // 先 copy 一次，再 sink(String&)
+wrap(String("t")); // sink(String&)
+```
+
+`x` 是 `wrap` 自己的新对象，所以左值实参会多一次 copy，`const` 也丢了。右值实参同样落到 `sink(String&)`，因为 `x` 有名字，是左值。三行全错。
+
+**写法二：`const T&`。**
+
+```cpp
+template<class T>
+void wrap(const T& x) { sink(x); }
+
+wrap(a);           // sink(const String&)
+wrap(c);           // sink(const String&)
+wrap(String("t")); // sink(const String&)
+```
+
+没有多余的 copy，但所有实参都变成了 `const`，只有第二行是对的。
+
+**写法三：`T&&`，内部直接传 `x`。**
+
+```cpp
+template<class T>
+void wrap(T&& x) { sink(x); }
+
+wrap(a);           // sink(String&)
+wrap(c);           // sink(const String&)
+wrap(String("t")); // sink(String&)
+```
+
+前两行对了，第三行仍然错：`x` 有名字，是左值，所以右值实参没能走到 `sink(String&&)`。
+
+**写法四：`T&&`，内部用 `std::forward`。**
+
+```cpp
+template<class T>
+void wrap(T&& x) { sink(std::forward<T>(x)); }
+
+wrap(a);           // sink(String&)
+wrap(c);           // sink(const String&)
+wrap(String("t")); // sink(String&&)
+```
+
+只有写法四三行都和标准答案一致。为每个参数分别写左值和右值版本也行，但 `n` 个参数至少要 `2^n` 个重载。
 
 </SlideCard>
 
@@ -533,7 +596,9 @@ void sink(String&&)      { std::puts("sink(String&&)"); }
 
 函数模板的 `T&&`，且 `T` 由这次调用推导，这样的参数叫**转发引用**（forwarding reference），《Effective Modern C++》称为万能引用。它的推导规则是专门设计的（[[temp.deduct.call]/3](https://timsong-cpp.github.io/cppwp/n4861/temp.deduct.call#3)）：实参是左值时，`T` 推导成左值引用；实参是右值时，`T` 不带引用。
 
-| 实参 | `T` | 代入 `T&&` | 折叠后 `x` 的类型 |
+以 `template<class T> void wrap(T&& x)` 为例，三种实参的推导过程如下：
+
+| 传给 `wrap` 的实参 | 推导出的 `T` | 代入 `T&&` | 折叠后 `x` 的类型 |
 | --- | --- | --- | --- |
 | 左值 `a` | `String&` | `String& &&` | `String&` |
 | `const` 左值 `c` | `const String&` | `const String& &&` | `const String&` |
@@ -552,7 +617,9 @@ constexpr T&& forward(std::remove_reference_t<T>& t) noexcept {
 }
 ```
 
-| 实参 | `T` | 返回类型 | 结果 |
+把上一张表的 `T` 代入，就能算出 `std::forward<T>(x)` 的结果：
+
+| 最初传入的实参 | `T` | `forward` 的返回类型 | 表达式 `std::forward<T>(x)` 的类别 |
 | --- | --- | --- | --- |
 | 左值 | `String&` | `String&`（折叠后） | 左值 |
 | 右值 | `String` | `String&&` | 将亡值 |
@@ -561,9 +628,9 @@ constexpr T&& forward(std::remove_reference_t<T>& t) noexcept {
 
 | | `std::move(x)` | `std::forward<T>(x)` |
 | --- | --- | --- |
-| 转换 | 无条件转成右值 | 按 `T` 决定 |
-| 适合的参数 | 右值引用，或确定不再用的对象 | 转发引用 |
-| 运行时 | 不做任何事 | 不做任何事 |
+| 做什么 | 总是转成右值 | 实参原本是右值才转成右值，原本是左值就保持左值 |
+| 什么时候用 | 参数是 `String&&` 这样的右值引用，或对象之后不再使用 | 参数是转发引用，要原样交给下一层 |
+| 运行时成本 | 没有，只是类型转换 | 没有，只是类型转换 |
 
 在转发引用上写 `std::move` 是危险的错误：调用方传的是普通左值，没有表达“可以拿走”，资源却被偷走了。
 
@@ -604,7 +671,7 @@ decltype(auto) call(F&& f, A&&... a) {
 
 ## 用错转发时会发生什么
 
-**同一参数只转发一次。**第二次拿到的可能是被搬空的对象。需要多次使用时，只在最后一次写 `forward`。
+**同一参数只转发一次**。第二次拿到的可能是被搬空的对象。需要多次使用时，只在最后一次写 `forward`。
 
 ```cpp
 template<class T>
@@ -614,7 +681,7 @@ void twice(T&& x) {
 }
 ```
 
-**转发不延长生命周期。**下面的 `r` 在这一行结束后悬空。GCC 16 在 `-Wextra` 下给出 `-Wdangling-reference` 警告，clang 没有报告，所以不能依赖编译器。
+**转发不延长生命周期**。下面的 `r` 在这一行结束后悬空。GCC 16 在 `-Wextra` 下给出 `-Wdangling-reference` 警告，clang 没有报告，所以不能依赖编译器。
 
 ```cpp
 template<class T>
@@ -623,7 +690,7 @@ T&& id(T&& x) { return std::forward<T>(x); }
 auto&& r = id(std::string("temp"));
 ```
 
-**转发引用会抢走重载。**它几乎能精确匹配任何实参：
+**转发引用会抢走重载**。它几乎能精确匹配任何实参：
 
 ```cpp
 struct Person {
@@ -657,16 +724,16 @@ explicit Person(T&& n) : name(std::forward<T>(n)) {}
 
 ## 直接调用可以，包一层就不行
 
-转发要先**推导**再绑定。下表中 `fwd` 表示 `template<class... A> void fwd(A&&... a)`，内部转发给目标函数。
+直接调用时，编译器知道目标函数的参数类型，可以据此转换实参。经过转发函数时，编译器只能先看实参本身来推导类型，目标函数的参数类型帮不上忙，这一步推不出或推错，后面就失败了。下表用 `template<class... A> void fwd(A&&... a)` 把实参转发给目标函数：
 
-| 实参 | 经过 `fwd` | 原因 | 修正 |
+| 传给 `fwd` 的实参 | 结果 | 为什么 | 怎么改 |
 | --- | --- | --- | --- |
-| `{1, 2, 3}` | 编译错误 | 花括号列表没有类型，无法推导 | `std::vector<int>{1, 2, 3}` |
-| `0`、`NULL` 作空指针 | 编译错误 | 推导成整数类型，整数变量不能转成指针 | `nullptr` |
-| 重载函数名 `cb` | 编译错误 | 一个名字对应多个函数 | `static_cast<int(*)(int)>(cb)` |
-| 函数模板名 `tf` | 编译错误 | 模板本身不是函数 | `tf<int>` |
-| 位域 `b.a` | 编译错误 | 非 `const` 引用不能绑定位域 | 先复制成普通变量 |
-| 只声明的 `static const int` 成员 | `-O0` 链接失败 | 绑定引用需要地址，成员没有定义 | C++17 起写 `static constexpr` 或 `inline static` |
+| `{1, 2, 3}` | 编译错误 | 花括号本身没有类型，推不出 `A` | `std::vector<int>{1, 2, 3}` |
+| 用 `0` 或 `NULL` 表示空指针 | 编译错误 | 被推导成整数，转发时已是整数变量，不能再转成指针 | `nullptr` |
+| 有多个重载的函数名 `cb` | 编译错误 | 同名函数有多个，不知道该选哪个 | `static_cast<int(*)(int)>(cb)` |
+| 函数模板名 `tf` | 编译错误 | 模板不是具体函数，没有确定的类型 | `tf<int>` |
+| 位域 `b.a` | 编译错误 | 位域可能不占完整字节，非 `const` 引用不能绑定到它 | 先复制成普通变量 |
+| 只声明、没有定义的 `static const int` 成员 | `-O0` 下链接失败 | 绑定引用需要对象的地址，但这个成员没有定义 | C++17 起写 `static constexpr` 或 `inline static` |
 
 最后一行特别隐蔽：实测 `-O2` 下值被优化掉，又能链接通过。《Effective Modern C++》基于 C++14，所以书里需要手写类外定义。
 
@@ -678,12 +745,12 @@ explicit Person(T&& n) : name(std::forward<T>(n)) {}
 
 ## 按函数对参数做什么来选
 
-| 场景 | 建议写法 | 成本 |
+| 函数要对参数做什么 | 参数这样写 | 代价 |
 | --- | --- | --- |
-| 只读，不保存 | `const T&`，字符串用 `std::string_view` | 无 |
-| 一定保存一份 | 按值接收，再 `std::move` 进成员 | 左值：一次拷贝加一次移动；右值：一次移动 |
-| 接管所有权 | `T&&` 或按值接收 `std::unique_ptr<T>` | 一次移动，接口表达清楚 |
-| 只是中转，不知道最终类型 | 转发引用 + `std::forward` | 要放头文件，模板膨胀，报错更长 |
+| 只读取，函数返回后不再保留 | `const T&`，字符串用 `std::string_view` | 只传引用，不拷贝 |
+| 一定要留一份，比如存进成员 | 按值接收，再 `std::move` 进成员 | 传左值：一次拷贝加一次移动；传临时对象：一次移动；传 `std::move(x)`：两次移动 |
+| 接管对象的所有权 | `Widget&&`，或按值接收 `std::unique_ptr<T>` | 只有移动，调用方必须写 `std::move`，所有权转移一眼可见 |
+| 只是转交给别的函数，不知道最终类型 | 转发引用加 `std::forward` | 没有额外拷贝，但代码要放头文件，模板实例增多，报错更长 |
 
 判断转发是否值得，只问一句：**这个函数是否只是中转参数，并且不知道最终目标的类型？** 否则普通重载或按值传参通常更好。
 
