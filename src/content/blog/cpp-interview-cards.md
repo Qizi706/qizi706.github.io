@@ -13,7 +13,7 @@ draft: true
 - 卡片按学习顺序排列，前面的卡片是后面的基础。
 - 复习时先只看问题和要点，口头答完再展开对照。能答到“到底层”那一层才算过。
 - 答不上来的卡片，在标题后面加上“（卡住过）”，下次复习时优先看。
-- 答案里的输出都来自实验：Apple clang 21，arm64 macOS；汇编用 `-target x86_64-linux-gnu` 生成。卡片 1–9 的实验在对应文章里，卡片 10、11 没有对应文章，结果在 clang 21 和 GCC 16 上一致。
+- 答案里的输出都来自实验：Apple clang 21，arm64 macOS；汇编用 `-target x86_64-linux-gnu` 生成。卡片 1–9、12–14 的实验在对应文章里，卡片 10、11、15 没有对应文章，结果在 clang 21 和 GCC 16 上一致。卡片 13、15 要包含标准库头文件，汇编改在本机 arm64 上用 `-O2` 生成。
 
 ## W2：对象模型与类型推导
 
@@ -291,5 +291,106 @@ draft: true
   - `enum class Side : std::uint8_t { Sell = 66 }` 用 `std::cout` 打印 `static_cast<std::uint8_t>(Side::Sell)` 输出什么？输出 `B`，`uint8_t` 被当成字符。写成 `+static_cast<std::uint8_t>(...)` 才输出 `66`。C++23 可以用 `std::to_underlying`，打印时同样要注意这个问题。
   - `static_cast<Side>(200)` 合法吗？合法。有固定底层类型时，底层类型的所有值都是有效的枚举值，所以 `switch` 不能假设只有列出的那几个值。
 - **出处**：《Effective Modern C++》条款 10，标准 [dcl.enum]
+
+</details>
+
+## W3：移动语义与值类别
+
+### 12. 左值、将亡值、纯右值怎么区分？
+
+要点：值类别属于表达式，不属于变量；按“是否指向具体对象”和“资源能否拿走”两个问题分类；右值引用变量的名字是左值；用 `decltype((e))` 验证。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：每个表达式都有值类别，由两个问题决定：它是否指向一个具体的对象，这个对象的资源能不能拿走。指向对象且不能拿走是左值，指向对象且能拿走是将亡值（xvalue），不指向具体对象的是纯右值（prvalue）。
+- **往下一层**：
+  - 左值：`x`、`*p`、`v[0]`、`++x`、`x = 3`、`"hi"`、返回 `int&` 的函数调用。
+  - 将亡值：`std::move(x)`、`static_cast<int&&>(x)`、返回 `int&&` 的函数调用、`S{}.m`。
+  - 纯右值：`7`、`x + 1`、`x++`、`nullptr`、`S{}`、返回 `int` 的函数调用。
+  - 左值和将亡值合称 glvalue，都指向对象；将亡值和纯右值合称 rvalue，都可以被移动。
+  - 声明类型和值类别是两件事：`int&& r = 2;` 中 `r` 的类型是 `int&&`，表达式 `r` 却是左值。
+- **到底层**：`decltype((e))` 把值类别写进类型，左值得到 `T&`，将亡值得到 `T&&`，纯右值得到 `T`。用偏特化把它打印出来，`r` 输出 `lvalue`，`std::move(x)` 和 `S{}.m` 输出 `xvalue`，`S{}` 输出 `prvalue`。`S{}.m` 是将亡值，是因为 C++17 起纯右值不再直接是临时对象：访问成员时需要一个真实存在的对象，纯右值经过临时量实质化（temporary materialization）变成将亡值。标准见 [basic.lval] 和 [conv.rval]。
+- **追问**：
+  - 为什么右值引用参数在函数里是左值？函数体里可能多次使用它，如果自动当右值，第一次使用就可能把它搬空。右值引用只表示调用方允许移动，真正移动要自己写 `std::move`。
+  - “有名字就是左值”对吗？两个方向都有例外：枚举项和非类型模板参数有名字，却是纯右值；`*p`、`"hi"` 没有名字，却是左值。
+  - 值类别影响哪些事？重载决议（`const T&` 还是 `T&&`）、`decltype` 的结果、能不能对表达式取地址。
+- **出处**：[C++ 移动语义 · 第 2 节](/blog/cpp-move-semantics/)
+
+</details>
+
+### 13. std::move 做了什么？
+
+要点：只是一次 `static_cast`，把表达式变成将亡值；运行时没有指令；真正移动的是之后选中的移动构造或移动赋值；`const` 对象 move 后仍然拷贝。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：`std::move` 不移动任何东西，它无条件地把实参转换成右值引用，让表达式变成将亡值。重载决议因此能选中移动构造函数或移动赋值运算符，资源是在那里被拿走的。
+- **往下一层**：
+  - 实现只有一行：`return static_cast<std::remove_reference_t<T>&&>(t);`。参数是转发引用，左值和右值都能接收；`remove_reference_t` 保证返回的一定是 `T&&`，不会因为引用折叠变成 `T&`。
+  - 对 `int` 这样没有资源的类型，`int y = std::move(x);` 就是一次复制，之后 `x` 仍然是 `1`。
+  - 对 `const std::string s`，`std::move(s)` 的类型是 `const std::string&&`，接不住非 `const` 的移动构造函数，只能匹配拷贝构造函数，编译也不报错。
+- **到底层**：在 arm64 上用 `-O2` 编译 `std::string&& cast(std::string& s) { return std::move(s); }`，clang 和 GCC 生成的函数体都只有一条 `ret`，和返回 `&s` 的函数完全一样：引用就是地址，转换前后地址不变，只有编译期的类型变了。
+- **追问**：
+  - 被移动后的对象处于什么状态？标准库的约定是“有效但未指定”，可以赋新值、析构，也可以调用没有前置条件的函数（如 `size()`、`clear()`），但不能假设它的值。本机 libc++ 和 libstdc++ 中被移动的 `std::string` 都变成空串，长短字符串都一样，但这是实现行为。
+  - `Bad(String&& v) : s(v) {}` 为什么是拷贝？`v` 是左值，要写 `s(std::move(v))`。
+  - `return std::move(local);` 好不好？不好，它让 NRVO 失效，多出一次移动；直接 `return local;` 时，NRVO 做不了也会自动按右值处理。
+  - `std::move` 和 `std::forward` 怎么选？参数是 `T&&` 右值引用时用 `std::move`；参数是转发引用、实参可能是左值时用 `std::forward<T>`。
+- **出处**：[C++ 移动语义 · 第 4、5 节](/blog/cpp-move-semantics/)，《Effective Modern C++》条款 23、25
+
+</details>
+
+### 14. 移动构造不加 noexcept，vector 扩容为什么会退化成拷贝？
+
+要点：`push_back` 的强异常保证；移动到一半失败无法回滚；`std::move_if_noexcept`；实测分配次数从 100 万变成约 205 万。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：`vector` 扩容要保证强异常安全，失败时原数据不变。拷贝失败可以丢掉新内存回滚，移动失败时旧元素已经被搬空，回不去了。所以只有移动构造函数声明为 `noexcept`，`vector` 才敢用移动，否则用拷贝。
+- **往下一层**：
+  - 扩容时 `vector` 用 `std::move_if_noexcept` 选择搬迁方式：移动构造是 `noexcept`，或者类型根本不能拷贝，就移动；否则拷贝。
+  - 只能移动的类型（拷贝构造被删除）即使移动可能抛异常，也只能移动，这时放弃强保证。
+  - 扩容在新内存上**构造**元素，看的是移动构造函数的 `noexcept`，和移动赋值无关。
+- **到底层**：用一个 37 字符的字符串类型向空 `vector` 插入 100 万个元素，容量逐次翻倍，搬迁总数是 `2^20 - 1 = 1048575`。移动构造加 `noexcept` 时，搬迁全是 move，堆分配 1000000 次；不加时搬迁全是 copy，堆分配 2048575 次。耗时分别是 15–17 ms 和 33–36 ms（Apple M5 Pro，`-O2`，7 次取最小值，区间两端分别来自 GCC 16 和 Apple clang 21）。分配次数是确定的，耗时比例只代表这台机器和这个字符串长度。
+- **追问**：
+  - `= default` 的移动构造是 `noexcept` 吗？编译器根据成员和基类判断，所有成员的移动构造都是 `noexcept` 时才是。可以写 `static_assert(std::is_nothrow_move_constructible_v<T>)` 守住。
+  - `noexcept` 函数里真的抛了异常会怎样？异常不会传出去，直接调用 `std::terminate`。
+  - 移动赋值和 `swap` 要不要 `noexcept`？要。`std::swap` 是否 `noexcept` 取决于移动构造和移动赋值；copy-and-swap 写法的赋值运算符也依赖 `swap` 不抛异常。
+  - 为什么移动通常不会抛异常？移动只交换指针和大小，不分配内存；所以移动构造里不要为被移动的对象重新分配一个空缓冲区。
+- **出处**：[C++ 移动语义 · 第 6 节](/blog/cpp-move-semantics/)，《Effective Modern C++》条款 14
+
+</details>
+
+### 15. 为什么 unique_ptr 和裸指针一样大？
+
+要点：默认删除器是空类；空基类优化或 `[[no_unique_address]]`；函数指针删除器变成 16 字节；解引用和裸指针生成相同的指令；按值传参不完全免费。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：`unique_ptr<T, D>` 要保存一个指针和一个删除器。默认删除器 `std::default_delete<T>` 是空类，标准库借助空基类优化（或 C++20 的 `[[no_unique_address]]`）让它不占空间，所以只剩一个指针，8 字节。解引用和裸指针一样，没有额外开销。
+- **往下一层**：在 arm64 macOS 上，clang（libc++）和 GCC 16（libstdc++）测出的大小相同：
+
+  | 类型 | `sizeof` |
+  | --- | --- |
+  | `int*` | 8 |
+  | `unique_ptr<int>` | 8 |
+  | `unique_ptr<int, 无状态函数对象>`，含无捕获 lambda | 8 |
+  | `unique_ptr<int, void(*)(int*)>` | 16 |
+  | `unique_ptr<int, 带一个 int 成员的函数对象>` | 16 |
+  | `unique_ptr<int, std::function<void(int*)>>` | 40 |
+  | `shared_ptr<int>` | 16 |
+
+  删除器有状态时就要占空间：函数指针要保存地址，加上对齐就是 16 字节。
+- **到底层**：用 `-O2` 编译 `int f(const std::unique_ptr<int>& p) { return *p; }`，生成两条 `ldr`：先从引用处读出指针，再读出 `int`。这和 `int g(int* const& p) { return *p; }` 完全相同，`unique_ptr` 本身没有带来额外指令。
+
+  按值传参时情况不同。Itanium ABI 规定，有非平凡析构函数的类型不能放在寄存器里传递，`int take(std::unique_ptr<int> p)` 收到的是对象的地址，同样要读两次内存；析构（也就是 `delete`）由调用方在调用结束后执行。裸指针版本 `int take(int* p)` 的指针直接放在寄存器里，`delete` 在函数内部执行。所以说 `unique_ptr` 零开销，指的是大小和访问，不包括按值传参的调用约定。
+- **追问**：
+  - 怎样让自定义删除器不增加大小？用无状态的函数对象或无捕获 lambda，而不是函数指针。C++20 起无捕获 lambda 可以默认构造，`unique_ptr<FILE, decltype([](FILE* f) { std::fclose(f); })>` 仍然是 8 字节。
+  - 自己实现带删除器的 `UniquePtr`，怎么做到不占空间？把成员写成 `[[no_unique_address]] Deleter d_;`，或者让类继承 `Deleter`。原理见卡片 4。
+  - `shared_ptr` 为什么是 16 字节？它保存两个指针：一个指向对象，一个指向控制块，控制块里有引用计数和删除器。
+- **出处**：卡片 4，标准 [unique.ptr.single]，《Effective Modern C++》条款 18
 
 </details>
