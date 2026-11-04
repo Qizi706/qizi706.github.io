@@ -13,7 +13,7 @@ draft: true
 - 卡片按学习顺序排列，前面的卡片是后面的基础。
 - 复习时先只看问题和要点，口头答完再展开对照。能答到“到底层”那一层才算过。
 - 答不上来的卡片，在标题后面加上“（卡住过）”，下次复习时优先看。
-- 答案里的输出都来自实验：Apple clang 21，arm64 macOS；汇编用 `-target x86_64-linux-gnu` 生成。卡片 1–9、12–14 的实验在对应文章里，卡片 10、11、15 没有对应文章，结果在 clang 21 和 GCC 16 上一致。卡片 13、15 要包含标准库头文件，汇编改在本机 arm64 上用 `-O2` 生成。
+- 答案里的输出都来自实验：Apple clang 21，arm64 macOS；汇编用 `-target x86_64-linux-gnu` 生成。卡片 1–9、12–14、16–18 的实验在对应文章里，卡片 10、11、15 没有对应文章，结果在 clang 21 和 GCC 16 上一致。卡片 13、15 要包含标准库头文件，汇编改在本机 arm64 上用 `-O2` 生成。
 
 ## W2：对象模型与类型推导
 
@@ -392,5 +392,108 @@ draft: true
   - 自己实现带删除器的 `UniquePtr`，怎么做到不占空间？把成员写成 `[[no_unique_address]] Deleter d_;`，或者让类继承 `Deleter`。原理见卡片 4。
   - `shared_ptr` 为什么是 16 字节？它保存两个指针：一个指向对象，一个指向控制块，控制块里有引用计数和删除器。
 - **出处**：卡片 4，标准 [unique.ptr.single]，《Effective Modern C++》条款 18
+
+</details>
+
+### 16. std::forward 怎么实现？为什么必须显式写 `<T>`？
+
+要点：`static_cast<T&&>(t)` 加引用折叠；实参的值类别只保存在外层推导出的 `T` 里；参数写成 `remove_reference_t<T>&` 是不可推导语境，漏写 `<T>` 直接编译失败。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：`std::forward<T>(x)` 是有条件的 `move`：外层实参原本是左值，结果仍是左值；原本是右值，结果转成右值。和 `std::move` 一样，它只是编译期的类型转换，运行时没有指令。
+- **往下一层**：简化实现只有一行：
+
+  ```cpp
+  template <class T>
+  T&& forward(std::remove_reference_t<T>& t) noexcept {
+      return static_cast<T&&>(t);
+  }
+  ```
+
+  以 `template<class T> void wrap(T&& x) { sink(std::forward<T>(x)); }` 为例，推导链路如下：
+
+  ```text
+  wrap(s)，s 是左值 std::string
+    (E1) T = std::string&                 转发引用接收左值
+    (E2) static_cast<std::string& &&>(x)  折叠为 std::string&
+    (E3) sink 收到左值，选中拷贝
+
+  wrap(std::string{})，实参是右值
+    (E1) T = std::string                  转发引用接收右值
+    (E2) static_cast<std::string&&>(x)    得到将亡值
+    (E3) sink 收到右值，选中移动
+  ```
+
+  整条链路只用到三条规则：转发引用的推导（左值推出 `X&`，右值推出 `X`）；引用折叠（出现一个 `&` 就是 `&`）；具名变量是左值。
+- **到底层**：在 `wrap` 内部，`x` 永远是左值，实参原本的值类别只保存在 `T` 里，所以必须把 `T` 显式传给 `forward`。参数写成 `remove_reference_t<T>&` 有两个作用：
+  - 它是不可推导语境，漏写 `<T>` 会编译失败。如果写成普通的 `T&`，`forward(x)` 会推出 `T = std::string`，悄悄把左值转成右值。
+  - `T` 是 `X&` 或 `X` 时，参数都是 `X&`，总能绑定左值 `x`。
+
+  标准见 [forward]、[temp.deduct.call]/3 和 [dcl.ref]/6。
+- **追问**：
+  - `std::move` 的实现里为什么要加 `remove_reference_t`？如果写成 `static_cast<T&&>(t)`，传入左值时 `T = X&`，结果折叠成 `X&`，没有转成右值。
+  - 为什么不能用 `forward` 全面代替 `move`？`forward` 要写类型实参，写成 `std::forward<X&>(x)` 也能编译，结果是悄悄拷贝。名字还表达意图：`move` 表示“可以拿走”，`forward` 表示“按原来的值类别转交”。
+  - 完整的 `std::forward` 还有第二个重载，接收右值，用 `static_assert` 拒绝把右值转成左值引用。只有直接写 `std::forward<X>(make())` 时才会用到它。
+  - 泛型 lambda 的 `auto&&` 没有可写的 `T`，怎么转发？写成 `std::forward<decltype(x)>(x)`，或者在 C++20 里写 `[]<class T>(T&& x)`。
+- **出处**：[C++ 移动语义 · 第 8 节](/blog/cpp-move-semantics/)，《Effective Modern C++》条款 23、28
+
+</details>
+
+### 17. 怎样判断 `T&&` 是转发引用还是右值引用？
+
+要点：两个条件缺一不可，一是本次调用发生类型推导，二是形式恰好是 `T&&` 或 `auto&&`；`const T&&`、`vector<T>&&` 和类模板成员 `push_back(T&&)` 都只是右值引用。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：转发引用必须同时满足两个条件：这次调用或初始化会推导 `T`；参数的形式恰好是 `T&&`（或 `auto&&`），不能带任何修饰。少一个条件，就只是普通的右值引用。
+- **往下一层**：
+
+  | 写法 | 推导了吗 | 形式恰好是 `T&&` 吗 | 结论 |
+  | --- | --- | --- | --- |
+  | `auto&& a = f();` | 是 | 是 | 转发引用 |
+  | `template<class T> void g(const T&&)` | 是 | 否，多了 `const` | 右值引用 |
+  | `template<class T> void h(std::vector<T>&&)` | 是 | 否 | 右值引用 |
+  | `vector<T>::push_back(T&&)` | 否，`T` 在类实例化时已经确定 | 是 | 右值引用 |
+  | `template<class... Args> void emplace_back(Args&&...)` | 是，每次调用都推导 | 是 | 转发引用 |
+
+  `const T&&` 和 `vector<T>&&` 中的 `T` 照样要推导，它们不算转发引用，是因为形式不对，而不是因为“类型已经确定”。
+- **到底层**：标准 [temp.deduct.call]/3 只对“无 cv 限定的模板参数的右值引用”开了特殊规则：实参是左值时，`T` 推导成左值引用。只有满足这个形式，左值实参才能绑定上来，再经过引用折叠得到 `X&`。其他形式没有这条特殊规则，左值实参直接推导失败或匹配失败。
+- **追问**：
+  - 一个参数只接收 `std::string`，为什么书里还建议把 `setName` 写成模板 `T&&`，而不是写 `const std::string&` 和 `std::string&&` 两个重载？调用 `w.setName("Adela Novak")` 时，重载版本要先构造一个临时 `std::string`，再移动赋值，最后析构这个临时对象。模板版本把 `const char(&)[12]` 原样转发，直接调用 `string::operator=(const char*)`。参数有 n 个时，重载版本还需要 2^n 个函数。
+  - 模板版本的代价是什么？转发引用几乎能精确匹配任何实参，会抢走重载。比如 `Person` 有模板构造函数时，拷贝一个非 `const` 的 `Person`，选中的是模板。C++20 可以用 `requires std::constructible_from<std::string, T>` 约束它。
+  - 为什么右值引用参数在函数里要写 `move`，转发引用参数要写 `forward`？右值引用参数一定绑定右值，可以无条件转换；转发引用参数可能绑定调用方的左值，无条件 `move` 会偷走调用方的资源。两者都只在最后一次使用时写。
+- **出处**：[C++ 移动语义 · 第 8 节](/blog/cpp-move-semantics/)，[C++ 类型推导](/blog/cpp-type-deduction/)，《Effective Modern C++》条款 24–26
+
+</details>
+
+### 18. return 的时候要不要写 std::move？
+
+要点：返回局部变量不写，靠保证的复制消除、NRVO 和自动移动三层兜底；`return std::move(local)` 会让 NRVO 失效；C++20 起按值返回右值引用参数也会自动移动，C++17 下 GCC 16 会拷贝。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：返回局部变量时不要写 `std::move`。对象省略不掉时，`return 变量名` 也会先把它当右值处理，最差也是一次移动。只有 `return` 后面不是一个可以自动移动的名字时，才需要显式写。
+- **往下一层**：
+
+  | 写法 | 实际发生 | 原因 |
+  | --- | --- | --- |
+  | `return String("x");` | 不拷贝也不移动 | 保证的复制消除，C++17 起 |
+  | `String s; return s;` | 通常不拷贝也不移动 | NRVO，允许但不保证 |
+  | `if (b) return x; return y;` | move | 省略不了，自动按右值处理 |
+  | `return std::move(s);` | move | 不再是变量名，NRVO 失效 |
+  | `return b ? x : y;` | copy | 条件表达式不是变量名，不触发自动移动 |
+  | 参数 `String&& s`，`return s;` | C++20 起 move | 自动移动扩展到右值引用参数 |
+  | 局部对象的成员，`return h.m;` | copy | `h.m` 不是变量名，要写 `std::move(h.m)` |
+
+- **到底层**：标准 [class.copy.elision] 规定了两件事：什么情况允许省略构造，也就是 NRVO 的条件；省略不了时，哪些 `return` 表达式先按右值进行重载决议。C++20 把右值引用参数纳入后一类（[P1825](https://wg21.link/p1825)）。实测 `-std=c++17` 时，按值返回右值引用参数，GCC 16 对右值实参执行 copy，Apple clang 21 仍是 move。需要兼容旧标准的代码，要显式写 `std::move` 或 `std::forward`。`return std::move(local);` 会触发 clang 和 GCC 的 `-Wpessimizing-move` 警告。
+- **追问**：
+  - 《Effective Modern C++》条款 25 为什么建议 `Matrix operator+(Matrix&& lhs, const Matrix& rhs)` 写 `return std::move(lhs);`？书以 C++14 为背景，那时 `lhs` 是引用参数，不能 NRVO，也不在自动移动的范围内，`return lhs;` 会拷贝。C++20 起直接写 `return lhs;` 就会移动。这是规则变了，不是优化器变聪明了。
+  - 返回类型能不能写成 `String&&`，以免产生新对象？如果引用的是函数里的局部对象，函数返回时对象已经销毁，调用方拿到的是悬空引用。返回 `String&&` 只适合把参数原样交回，比如 `String&& f(String&& s) { return std::move(s); }`，在 C++20 下，这里只写 `return s;` 会编译失败；C++23 的 P2266 把这种情况也改成了按将亡值处理。
+  - 按值返回转发引用参数怎么写？写 `return std::forward<T>(x);`。C++20 起只写 `return x;` 结果相同，写 `forward` 是为了表明意图。
+- **出处**：[C++ 移动语义 · 第 5 节](/blog/cpp-move-semantics/)，卡片 13，《Effective Modern C++》条款 25
 
 </details>
