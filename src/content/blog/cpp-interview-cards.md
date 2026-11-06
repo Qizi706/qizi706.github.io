@@ -13,7 +13,7 @@ draft: true
 - 卡片按学习顺序排列，前面的卡片是后面的基础。
 - 复习时先只看问题和要点，口头答完再展开对照。能答到“到底层”那一层才算过。
 - 答不上来的卡片，在标题后面加上“（卡住过）”，下次复习时优先看。
-- 答案里的输出都来自实验：Apple clang 21，arm64 macOS；汇编用 `-target x86_64-linux-gnu` 生成。卡片 1–9、12–14、16–18 的实验在对应文章里，卡片 20、21 的实测写在卡片里，卡片 10、11、15 没有对应文章，结果在 clang 21 和 GCC 16 上一致。卡片 13、15 要包含标准库头文件，汇编改在本机 arm64 上用 `-O2` 生成。
+- 答案里的输出都来自实验：Apple clang 21，arm64 macOS；汇编用 `-target x86_64-linux-gnu` 生成。卡片 1–9、12–14、16–18 的实验在对应文章里，卡片 20、21 的实测写在卡片里，卡片 22–26 的实测写在卡片里，卡片 10、11、15 没有对应文章，这些结果都在 clang 21 和 GCC 16 上一致（卡片 26 的 TSan 实验只在 clang 上跑，`atomic<shared_ptr>` 两者不同，卡片里有说明）。卡片 13、15 要包含标准库头文件，汇编改在本机 arm64 上用 `-O2` 生成。
 
 ## W2：对象模型与类型推导
 
@@ -587,5 +587,177 @@ draft: true
   - `emplace_back` 有什么坑？它会调用 `explicit` 构造函数，比如 `std::vector<std::unique_ptr<int>> v; v.emplace_back(new int(1));` 能编译，但如果 `emplace_back` 在分配新内存时抛异常，这个裸指针就泄漏了；`push_back(std::make_unique<int>(1))` 没有这个问题。
   - 低延迟代码里怎么用？已知元素个数就先 `reserve`，构造元素用 `emplace_back` 传参数，热路径上不发生扩容和多余的移动。
 - **出处**：卡片 14，《Effective Modern C++》条款 42
+
+</details>
+
+### 22. 字符串参数该用 string_view、const string&、string 还是 string&&？
+
+要点：只读用 `string_view`；要存一份就按值传 `string` 再 `move`；要修改调用方的字符串用 `string&`；`string&&` 只在想强制调用方交出所有权时用。`string_view` 不拥有内容，也不保证以 `'\0'` 结尾。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：先问函数要对字符串做什么：只读、存一份、还是修改调用方的那份。三种用途各有最合适的写法，不存在一种到处都最好的参数类型。
+- **往下一层**：用一个超过 SSO 长度的字符串，统计构造成员 `std::string n` 时调用 `operator new` 的次数（包括实参临时对象的分配）：
+
+  | 参数写法 | 传左值 `s` | 传临时对象 `std::string(...)` | 传字面量 |
+  | --- | --- | --- | --- |
+  | `const std::string&`，再拷贝给成员 | 1 | 2 | 2 |
+  | `std::string` 按值，再 `move` 给成员 | 1 | 1 | 1 |
+  | `std::string_view`，再构造成员 | 1 | 2 | 1 |
+  | `std::string&&`，再 `move` 给成员 | 编译错误 | 1 | 1 |
+
+  只读的函数，传字面量时 `const std::string&` 要先构造一个临时 `string`，分配 1 次；`string_view` 是 0 次。
+
+  要存一份时，按值传参在三种实参下都只分配 1 次，代价是多一次移动；`const&` 碰到临时对象和字面量都会多分配一次；`string_view` 碰到临时对象时没法“偷”它的缓冲区，只能再拷贝一次。
+- **到底层**：`string_view` 只有一个指针和一个长度，16 字节，可平凡复制，按 SysV x86-64 和 AAPCS64 的调用约定都放在两个寄存器里传递。它不拥有内容，下面的代码在临时字符串销毁后读取：
+
+  ```cpp
+  std::string a = "a string that is definitely longer than SSO";
+  std::string_view sv = a + "!";   // 临时对象在这一行结束时销毁
+  std::printf("%c\n", sv[0]);
+  ```
+
+  clang 编译时给出 `-Wdangling-gsl` 警告，ASan 运行时报 `heap-use-after-free`。另外，`sv.data()` 不保证以 `'\0'` 结尾，不能直接传给 `printf("%s")`、`fopen` 这类 C 接口；需要传给这类接口时，参数用 `const std::string&`，调用 `c_str()`。
+- **追问**：
+  - 按值传参总是更好吗？不是。给已有的成员赋值时，成员原来的容量够用，`n = s` 直接复用缓冲区，实测 0 次分配；按值版本 `n = std::move(s)` 要先构造参数，1 次分配。按值传参适合“构造时存一份”的场景，频繁调用的 setter 用 `const&` 可能更省。
+  - `string&&` 版本为什么不接受左值？右值引用不能绑定到左值，调用方必须写 `std::move(s)`，这正好表达了“我把所有权交给你”。
+  - 拿到 `const` 的东西想修改，能用 `const_cast` 吗？只有原对象本身不是 `const` 时才不是未定义行为，而且会让读代码的人无法相信 `const`。真需要修改，就改成接收 `string` 或 `string&`。
+- **出处**：卡片 19，《Effective Modern C++》条款 41，[cppreference: std::basic_string_view](https://en.cppreference.com/w/cpp/string/basic_string_view)
+
+</details>
+
+## W4：智能指针与资源管理
+
+### 23. make_shared 和 shared_ptr(new T) 有什么区别？
+
+要点：`make_shared` 把对象和控制块放在一次分配里，`new` 的写法要两次；代价是只要还有 `weak_ptr`，整块内存就不能释放；不能指定删除器，也调用不了私有构造函数。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：`shared_ptr` 需要一个控制块存引用计数。`shared_ptr<T>(new T)` 先分配对象，再分配控制块，一共两次；`make_shared<T>()` 一次分配一块内存，同时放下控制块和对象，访问时局部性也更好。
+- **往下一层**：用替换的全局 `operator new` / `operator delete` 计数，对象是 1000 字节的 `Big`，clang 和 GCC 16 结果相同：
+
+  | 情况 | 分配次数 | 最后一个 `shared_ptr` 释放时 | `weak_ptr` 释放时 |
+  | --- | --- | --- | --- |
+  | `shared_ptr<Big>(new Big)` | 2 | 析构对象，释放 1 块（对象） | 释放 1 块（控制块） |
+  | `make_shared<Big>()` | 1 | 析构对象，释放 0 块 | 释放 1 块（整块） |
+
+  `make_shared` 的对象和控制块在同一块内存里，对象已经析构，但只要 `weak_ptr` 还在，它就要读控制块里的计数，这块内存就不能还回去。对象很大、`weak_ptr` 活得很久时，这会占住内存。
+- **到底层**：控制块里有两个计数：`shared_count` 降到 0 时析构对象，`weak_count` 降到 0 时释放控制块。两次分配时，对象所在的那块可以先释放；一次分配时，只能等两个计数都归零。
+- **追问**：
+  - `f(std::shared_ptr<A>(new A), g())` 会泄漏吗？C++17 之前可能会：编译器可以先执行 `new A`，再执行 `g()`，`g()` 抛异常时 `A` 就泄漏了。C++17 规定每个参数的初始化不会和其他参数交错（[expr.call]），这个问题已经消失，但 `make_shared` 仍然是更简单的写法。
+  - 什么时候不能用 `make_shared`？要自定义删除器时；构造函数是 `private`、只能由类自己的工厂函数调用时；想用花括号初始化时（`make_shared` 内部用圆括号）。
+  - `make_unique` 有什么好处？`unique_ptr` 没有控制块，好处只剩不写 `new`，以及和 `make_shared` 风格一致。
+- **出处**：《Effective Modern C++》条款 21，[util.smartptr.shared.create]
+
+</details>
+
+### 24. 为什么 unique_ptr 的删除器是模板参数，shared_ptr 不是？
+
+要点：`unique_ptr` 追求零开销，删除器写进类型里，无状态删除器不占空间，调用能内联；`shared_ptr` 已经有控制块，就把删除器类型擦除后存进控制块，删除器不同的 `shared_ptr<T>` 仍是同一个类型。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：这是两种开销取舍。`unique_ptr` 要和裸指针一样小、一样快，所以删除器是类型的一部分；`shared_ptr` 本来就要在堆上分配控制块，多存一个删除器几乎不增加成本，换来的是类型更统一。
+- **往下一层**：用 `fopen` 打开的文件要用 `fclose` 关闭，这是最常见的自定义删除器。clang 和 GCC 16 实测：
+
+  | 写法 | `sizeof` | 类型 |
+  | --- | --- | --- |
+  | `shared_ptr<FILE>(f, 无捕获 lambda)` | 16 | `shared_ptr<FILE>` |
+  | `shared_ptr<FILE>(f, &fclose)` | 16 | `shared_ptr<FILE>`，和上一行能放进同一个 `vector` |
+  | `unique_ptr<FILE, 无捕获 lambda>` | 8 | 和下一行是不同的类型 |
+  | `unique_ptr<FILE, int(*)(FILE*)>` | 16 | |
+
+  `unique_ptr` 的大小随删除器变化，原理见卡片 15。
+- **到底层**：`shared_ptr` 的构造函数本身是模板 `template<class Y, class D> shared_ptr(Y* p, D d)`，它在构造时创建一个知道 `Y` 和 `D` 的控制块，这个控制块继承自一个公共基类，基类有一个虚函数负责销毁对象。`shared_ptr<T>` 只保存指向基类的指针，所以类型里不需要出现 `D`，代价是销毁时多一次虚函数调用。
+
+  同样的机制还记住了构造时的真实类型 `Y`：`shared_ptr<Base>(new Derived)` 在 `~Base` 不是虚函数时也会调用 `~Derived`，`shared_ptr<void>(new Derived)` 也一样；`unique_ptr<Base>(new Derived)` 只调用 `~Base`，这是未定义行为。实测两种编译器都是这样。
+- **追问**：
+  - 那基类析构函数还需要写成 `virtual` 吗？需要。只要有人用 `Base*` 裸指针构造 `shared_ptr`，或者改用 `unique_ptr`，就会出错。不要依赖这个副作用，见卡片 8。
+  - `shared_ptr` 想换删除器，需要改类型吗？不需要，这正是它适合放进接口和容器的原因。
+  - 自己实现带删除器的 `UniquePtr`，删除器放哪？作为模板参数，用 `[[no_unique_address]]` 成员保存。
+- **出处**：卡片 8、15，《Effective Modern C++》条款 18、19
+
+</details>
+
+### 25. 手写 shared_ptr 最容易错在哪？
+
+要点：拷贝构造的参数要写 `const&`；拷贝赋值要能处理自赋值；构造函数里分配计数器失败时，要删掉传进来的指针；多线程下计数要用原子操作；测试要覆盖每个特殊成员函数。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：功能写对不难，难的是边界：`const` 对象能不能拷贝、`a = a` 会不会出事、分配失败会不会泄漏。面试官会一个一个追问。
+- **往下一层**：下面这个朴素版本有两个错误：
+
+  ```cpp
+  template <class T> struct Naive {
+    T* p_; std::size_t* cnt_;
+    explicit Naive(T* p) : p_(p), cnt_(new std::size_t(1)) {}   // new 抛异常时 p 泄漏
+    Naive(const Naive& o) : p_(o.p_), cnt_(o.cnt_) { ++*cnt_; }
+    Naive& operator=(const Naive& o) {                            // 没处理自赋值
+      release(); p_ = o.p_; cnt_ = o.cnt_; ++*cnt_; return *this;
+    }
+    ~Naive() { release(); }
+    void release() { if (--*cnt_ == 0) { delete p_; delete cnt_; } }
+  };
+  ```
+
+  实测结果（clang 和 GCC 16）：
+
+  | 问题 | 怎么触发 | 结果 |
+  | --- | --- | --- |
+  | 构造函数泄漏 | 让第二次 `operator new` 抛 `bad_alloc` | 捕获异常后，被管理的对象还活着 1 个 |
+  | 自赋值 | 计数为 1 时执行 `a = a` | ASan 报 `heap-use-after-free`，位置在 `operator=` |
+  | 拷贝构造参数写成 `Naive&` | `const Naive<int> a(...); Naive<int> b(a);` | 编译错误 `no matching constructor` |
+
+  修正版本：
+
+  ```cpp
+  explicit Fixed(T* p) {
+    std::unique_ptr<T> hold(p);      // 计数器分配成功之前，由 hold 负责 p
+    cnt_ = new std::size_t(1);
+    p_ = hold.release();
+  }
+  Fixed& operator=(Fixed o) noexcept {  // 按值传参，再交换
+    std::swap(p_, o.p_); std::swap(cnt_, o.cnt_); return *this;
+  }
+  ```
+
+  修正后，同样的注入失败下存活对象为 0，`a = a` 正常，计数为 2。
+- **到底层**：标准要求 `shared_ptr(Y* p)` 在分配控制块失败时执行 `delete p` 再抛出异常（[util.smartptr.shared.const]），手写版要满足同样的保证。拷贝再交换写法把“可能失败的拷贝”放在修改 `*this` 之前，自赋值时 `o` 是一份副本，计数先加 1 再减 1，所以安全。自赋值检查要比较地址 `this != &o`，不是比较 `*this == o`。
+- **追问**：
+  - 用 `unique_ptr` 保护传进来的指针，会不会显得奇怪？不会。实现 `shared_ptr` 时用 `unique_ptr` 管理中间状态很正常，只是不能在实现 `unique_ptr` 时这样做。
+  - 测试要测哪些？构造、拷贝构造、拷贝赋值（包括自赋值）、析构各一次，并打印计数或用计数器类型确认对象只析构一次。只编译通过不算测过。
+  - 多线程版本要改什么？计数改成 `std::atomic<std::size_t>`，见卡片 26。
+- **出处**：《Effective Modern C++》条款 19，[util.smartptr.shared.const]
+
+</details>
+
+### 26. shared_ptr 是线程安全的吗？
+
+要点：引用计数的增减是原子的，所以不同线程各自拷贝、销毁同一对象的不同 `shared_ptr` 是安全的；多个线程读写同一个 `shared_ptr` 变量不安全；它指向的对象也不受保护。
+
+<details>
+<summary>展开答案</summary>
+
+- **一句话**：`shared_ptr` 只保证控制块是线程安全的，不保证 `shared_ptr` 变量本身，也不保证它指向的对象。
+- **往下一层**：两个线程各循环 1 万次，用 clang 的 ThreadSanitizer（`-fsanitize=thread`）检查：
+
+  | 操作 | TSan |
+  | --- | --- |
+  | 各自从全局 `g` 拷贝出局部 `shared_ptr` | 没有报告 |
+  | 都给全局 `g` 赋新值 | 报告 data race |
+  | 各自拷贝，再写 `local->v` | 报告 data race |
+
+  第一种只修改控制块里的原子计数；第二种修改的是 `g` 自己的两个指针成员，这不是原子操作；第三种修改的是指向的对象，`shared_ptr` 不管。
+- **到底层**：标准规定，不同 `shared_ptr` 实例即使共享所有权，也可以被不同线程同时修改（[util.smartptr.shared]）；同一个实例的并发修改则和普通对象一样会形成数据竞争。要让多个线程读写同一个 `shared_ptr` 变量，可以加锁，或用 C++20 的 `std::atomic<std::shared_ptr<T>>`。实测 GCC 16 能编译，`is_lock_free()` 返回 0，内部用锁实现；Apple clang 21 自带的 libc++ 还没有这个特化，编译时 `static_assert` 失败。
+- **追问**：
+  - 热路径上 `shared_ptr` 有什么开销？每次拷贝和销毁都是一次原子读改写，多个核同时拷贝同一个对象时，控制块所在的 cache line 会在核之间来回传递；`make_shared` 以外的写法还要多一次分配。只读使用时按 `const&` 传，不要按值传。
+  - C++20 之前怎么原子地读写 `shared_ptr`？用 `std::atomic_load(&sp)`、`std::atomic_store(&sp, v)` 这些自由函数，它们在 C++20 被标为弃用。
+- **出处**：[util.smartptr.shared]、[util.smartptr.atomic]，《C++ Concurrency in Action》第 5 章
 
 </details>
