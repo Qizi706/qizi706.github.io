@@ -536,6 +536,129 @@ w->write() = 2
 
 </SlideCard>
 
+<SlideCard title="第一个基类不是多态类：谁放在偏移 0？">
+
+## 先猜
+
+把 `Stream` 的例子改一下：第一个基类是普通结构体，第二个基类才有虚函数。
+
+```cpp
+struct A { int a = 0; };                     // 非多态
+
+struct B {
+    virtual ~B() = default;
+    virtual int f() { return 1; }
+    int b = 0;
+};
+
+struct D : A, B {
+    int f() override { return 2; }
+    int d = 0;
+};
+```
+
+按声明顺序，`A` 应该在偏移 0，`B` 带着 vptr 排在后面。是这样吗？`D*` 转成 `A*` 和 `B*` 时，哪个要调整地址？
+
+<details>
+<summary>展开答案</summary>
+
+```text
+         0 | struct D
+         0 |   struct B (primary base)
+         0 |     (B vtable pointer)
+         8 |     int b
+        12 |   struct A (base)
+        12 |     int a
+        16 |   int d
+           | [sizeof=24, dsize=20, align=8,
+```
+
+顺序被调换了：`B` 是主基类，放在偏移 0，`A` 被排到了偏移 12。打印转换后的地址也一样：
+
+```text
+A* - &d = 12, B* - &d = 0, pb->f() = 2
+```
+
+</details>
+
+## 主基类只从多态基类里挑
+
+第 5 节说过，Itanium ABI 只从**多态类**里挑选主基类，因为主基类的意义就是让派生类借用它的 vptr。多继承时，规则是：**第一个非虚的多态基类**当主基类，放在偏移 0；其余基类再按声明顺序往后排。`A` 没有 vptr 可借，虽然写在前面，也只能排到后面。
+
+`A` 放在 12 而不是 16，是因为 `B` 的 `dsize` 是 12：`A` 住进了 `B` 末尾的填充里，下一张卡片会专门讲这件事。
+
+## 调整的方向和直觉相反
+
+- `D*` 转 `B*`：地址不变。通过 `B*` 调用 `f()` 也不需要 thunk，`B` 的 vptr 就是 `D` 的 vptr。
+- `D*` 转 `A*`：地址加 12，指针版本还要判空。但 `A` 没有虚函数，所以除了转换时这一次加法，不存在 thunk 那种调用时的 `this` 调整。
+
+所以判断要不要调整，看的不是声明顺序里谁排第一，而是**哪个基类子对象在偏移 0**：
+
+- 不在偏移 0 的基类，转换时要加偏移，指针还要判空。
+- 不在偏移 0、又被覆盖了虚函数的基类，通过它调用虚函数时还要经过 thunk。
+
+</SlideCard>
+
+<SlideCard title="多继承下，编译器怎样把对象压紧">
+
+## 空基类：不同类型可以叠在一起
+
+第 3 节的空基类优化，放到多继承里会更明显：
+
+```cpp
+struct E1 {};
+struct E2 {};
+
+struct M : E1, E2 { int x; };      // 两个不同的空基类
+struct N : E1 { E1 e; int x; };    // 空基类和同类型的成员
+```
+
+```text
+         0 | struct M                       0 | struct N
+         0 |   struct E1 (base) (empty)     0 |   struct E1 (base) (empty)
+         0 |   struct E2 (base) (empty)     1 |   struct E1 e (empty)
+         0 |   int x                        4 |   int x
+           | [sizeof=4, align=4]              | [sizeof=8, align=4]
+```
+
+- `M` 的两个空基类类型不同，都放在偏移 0，和 `x` 共用地址，`M` 只有 4 字节。
+- `N` 的基类和成员 `e` 是同一个类型。C++ 要求同类型的两个不同对象地址不同，`e` 只能挪到偏移 1，再补齐到 `x` 的对齐，`N` 变成 8 字节。
+
+`std::tuple` 这类大量依赖空基类优化的实现，要专门处理“同类型的空对象出现两次”的情况。
+
+## 尾部填充：后一个基类也能住进去
+
+第 5 节讲的是派生类**成员**住进基类的尾部填充。多继承时，**后一个基类子对象**也一样：
+
+```cpp
+struct P { int x; char c; P() {} };    // dsize = 5
+struct Q { char q; Q() {} };
+struct R : P, Q { char r; };
+```
+
+```text
+         0 | struct R
+         0 |   struct P (base)
+         0 |     int x
+         4 |     char c
+         5 |   struct Q (base)
+         5 |     char q
+         6 |   char r
+           | [sizeof=8, dsize=7, align=4,
+```
+
+`Q` 从 `P` 的 `dsize`（5）开始放，而不是从 `sizeof(P)`（8）开始，`R` 只有 8 字节。上一张卡片里 `A` 放在偏移 12，用的也是这条规则。
+
+条件和第 5 节相同：被复用填充的基类不能是“POD for the purpose of layout”。这里给 `P` 和 `Q` 都加了用户提供的构造函数，就是为了让它们不满足这个条件。去掉 `P()`，`Q` 就会退回偏移 8，`R` 变成 12 字节。
+
+## 复用填充的代价
+
+尾部填充被别人占用以后，基类子对象就不能再整块复制了。比如对 `R` 里的 `P` 子对象执行 `std::memcpy(static_cast<P*>(&r), &other_p, sizeof(P))`，会把 8 个字节全写进去，连带覆盖住在偏移 5、6 的 `q` 和 `r`。这正是 ABI 不让 C 风格结构体被复用的原因：这类类型最可能被 `memcpy`。
+
+一般规律是：**对基类子对象只能按 `dsize` 安全地复制，`sizeof` 只对完整对象成立。** 标准层面的说法是，基类子对象是“可能重叠的子对象”，不能对它用 `memcpy` 整块复制，见 [C++20 草案 [basic.types]/2](https://timsong-cpp.github.io/cppwp/n4861/basic.types#2)。
+
+</SlideCard>
+
 ## 7. this 调整：thunk 在中间做了什么
 
 <SlideCard title="第二个 vtable 里的秘密">
@@ -895,6 +1018,13 @@ C++ 要求不同对象有不同的地址，大小为 0 会让数组里的元素�
 
 </details>
 
+<details>
+<summary>Quiz 8：`struct A { int a; }; struct B { virtual void f(); int b; }; struct D : A, B { int d; };` 中，`D*` 转成 `A*` 和 `B*`，哪个要改地址？</summary>
+
+`B` 是第一个多态基类，当主基类放在偏移 0，`D*` 转 `B*` 地址不变。`A` 被排到偏移 12，住进 `B` 的尾部填充，`D*` 转 `A*` 要加 12，指针版本还要判空。`sizeof(D)` 是 24。
+
+</details>
+
 </SlideCard>
 
 ## 11. 一套可以复用的判断方法
@@ -909,7 +1039,9 @@ C++ 要求不同对象有不同的地址，大小为 0 会让数组里的元素�
 | 成员放在哪里？ | 当前位置向上取到对齐值的整数倍 |
 | `sizeof` 是多少？ | 补齐到最大对齐值的整数倍 |
 | 有空基类吗？ | 空基类通常不占空间（EBO） |
-| 派生类成员从哪开始？ | 看基类的 `dsize`，非 C 风格基类的尾部填充可以复用 |
+| 偏移 0 放哪个基类？ | 第一个非虚的多态基类，不一定是声明顺序里的第一个 |
+| 派生类成员、后一个基类从哪开始？ | 看前一个基类的 `dsize`，非 C 风格基类的尾部填充可以复用 |
+| 有几个空基类？ | 不同类型的空基类可以叠在同一个偏移，同类型的空对象必须错开 |
 | 有几个 vptr？ | 每个带虚函数的非主基类各带一个 |
 | 转换指针要调整吗？ | 基类不在偏移 0（非主基类，或没有 vptr 的基类）就要加偏移，指针还要判空 |
 | 能通过基类指针 `delete` 吗？ | 只有基类析构函数是 `virtual` 时才行 |
