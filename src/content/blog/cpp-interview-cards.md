@@ -464,8 +464,9 @@ draft: true
 - **追问**：
   - 一个参数只接收 `std::string`，为什么书里还建议把 `setName` 写成模板 `T&&`，而不是写 `const std::string&` 和 `std::string&&` 两个重载？调用 `w.setName("Adela Novak")` 时，重载版本要先构造一个临时 `std::string`，再移动赋值，最后析构这个临时对象。模板版本把 `const char(&)[12]` 原样转发，直接调用 `string::operator=(const char*)`。参数有 n 个时，重载版本还需要 2^n 个函数。
   - 模板版本的代价是什么？转发引用几乎能精确匹配任何实参，会抢走重载。比如 `Person` 有模板构造函数时，拷贝一个非 `const` 的 `Person`，选中的是模板。C++20 可以用 `requires std::constructible_from<std::string, T>` 约束它。
+  - 加了这个约束就安全了吗？不一定。如果 `Person` 有 `operator std::string() const`，`constructible_from<std::string, Person&>` 也成立，非 `const` 拷贝又会选中模板，而且能编译通过，名字从转换结果构造出来，劫持变成静默的。派生类 `SpecialPerson` 的拷贝构造里写 `: Person(rhs)` 也一样，模板对 `const SpecialPerson&` 是精确匹配，基类拷贝构造需要派生类到基类的转换。再加一条 `!std::derived_from<std::decay_t<T>, Person>` 才能排除这两种情况。用 `decay_t` 是为了去掉引用和 cv，用 `derived_from` 而不是 `is_same` 是为了连派生类一起排除。clang 和 GCC 16 在 `-std=c++20` 下的结果一致。
   - 为什么右值引用参数在函数里要写 `move`，转发引用参数要写 `forward`？右值引用参数一定绑定右值，可以无条件转换；转发引用参数可能绑定调用方的左值，无条件 `move` 会偷走调用方的资源。两者都只在最后一次使用时写。
-- **出处**：[C++ 移动语义 · 第 8 节](/blog/cpp-move-semantics/)，[C++ 类型推导](/blog/cpp-type-deduction/)，《Effective Modern C++》条款 24–26
+- **出处**：[C++ 移动语义 · 第 8 节](/blog/cpp-move-semantics/)，[C++ 类型推导](/blog/cpp-type-deduction/)，《Effective Modern C++》条款 24–27
 
 </details>
 
