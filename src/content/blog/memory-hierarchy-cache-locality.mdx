@@ -1,0 +1,710 @@
+---
+title: '存储器层次与 cache：为什么按列遍历二维数组会慢'
+description: '从按行和按列求和的速度差出发，理解存储器层次、时间与空间局部性、cache 的组相联结构与地址划分、三类缺失，以及循环顺序、数据布局和 false sharing 对 C++ 性能的影响，最后留下一组自己动手测量的局部性实验。'
+pubDate: '2026-11-06T18:00:00+08:00'
+categories:
+  - '体系结构'
+tags:
+  - 'cache'
+  - '局部性'
+  - '存储器层次'
+  - '性能'
+draft: true
+mathjax: true
+---
+
+## 1. 两个循环，做的事一模一样
+
+<SlideCard title="复杂度一样，速度却不一样">
+
+## 先猜，再往下读
+
+下面两个函数都把一个 `N × N` 的 `int` 矩阵求和。加法次数一样，访问的元素也一样，只是两层循环换了个位置：
+
+```cpp
+#include <cstddef>
+#include <vector>
+
+// 矩阵按行优先存放：a[i * n + j] 是第 i 行第 j 列
+long long sum_rows(const std::vector<int>& a, std::size_t n) {
+    long long s = 0;
+    for (std::size_t i = 0; i < n; ++i)
+        for (std::size_t j = 0; j < n; ++j)
+            s += a[i * n + j];      // 内层沿着一行走
+    return s;
+}
+
+long long sum_cols(const std::vector<int>& a, std::size_t n) {
+    long long s = 0;
+    for (std::size_t j = 0; j < n; ++j)
+        for (std::size_t i = 0; i < n; ++i)
+            s += a[i * n + j];      // 内层沿着一列走
+    return s;
+}
+```
+
+N 取 4096 时，矩阵是 64 MiB。两个函数哪个快？如果有差距，大概差几倍？
+
+先在纸上写下你的答案。
+
+<details>
+<summary>展开答案</summary>
+
+`sum_rows` 快，而且通常快好几倍。两者都是 $O(N^2)$，差距完全来自**访问内存的顺序**。
+
+具体差几倍取决于机器、编译选项和 N。本文不给出数字，第 8 节的实验会让你自己测出来。如果你猜两者一样快，说明还缺一个模型：CPU 读内存的成本不是固定的，它取决于数据此刻在存储器层次的哪一层。
+
+</details>
+
+## 本文的位置与阅读方式
+
+这是体系结构系列的第一篇，对应 CS:APP 第 6 章的核心内容。前面的[《C++ 对象内存布局》](/blog/cpp-object-layout/)讲的是一个对象在内存里怎么摆放，这一篇再往下一层：CPU 是怎么把这些字节读进来的。
+
+阅读路线是：**存储器为什么分层 → 局部性 → cache 的组织与地址划分 → 三类缺失 → 怎样写出 cache 友好的代码 → 动手测量**。读完以后，你应该能在不运行程序的情况下，估算一个循环每次迭代大约缺失多少次 cache，并据此决定循环顺序和数据布局。
+
+</SlideCard>
+
+<SlideCard title="先交代实验环境">
+
+## 本机的 cache 参数
+
+- 机器：Apple M5 Pro（arm64），macOS。
+- 编译器：Apple clang 21 和 Homebrew GCC 16.1，`-std=c++20`。
+
+cache 参数用 `sysctl` 读取：
+
+```bash
+sysctl hw.cachelinesize hw.perflevel0.l1dcachesize hw.perflevel0.l2cachesize hw.perflevel0.cpusperl2 hw.perflevel1.l1dcachesize hw.perflevel1.l2cachesize hw.perflevel1.cpusperl2
+```
+
+```text
+hw.cachelinesize: 128
+hw.perflevel0.l1dcachesize: 131072
+hw.perflevel0.l2cachesize: 16777216
+hw.perflevel0.cpusperl2: 6
+hw.perflevel1.l1dcachesize: 65536
+hw.perflevel1.l2cachesize: 8388608
+hw.perflevel1.cpusperl2: 6
+```
+
+这台机器有两类核心，`sysctl` 把 6 个 perflevel0 核心叫作 Super，12 个 perflevel1 核心叫作 Performance。整理一下：
+
+| 参数 | perflevel0（6 核） | perflevel1（12 核） |
+| --- | --- | --- |
+| cache line | 128 字节 | 128 字节 |
+| L1 数据 cache | 每核 128 KiB | 每核 64 KiB |
+| L2 cache | 16 MiB，6 核共享 | 8 MiB，每 6 核共享一个 |
+
+两点要记住：
+
+- **line 是 128 字节**。很多 x86-64 机器是 64 字节，资料里的例子大多按 64 算，搬到这台机器上要换算。
+- **macOS 不通过 `sysctl` 公开相联度**。下文用到相联度时都会注明是假设。
+
+</SlideCard>
+
+## 2. 存储器为什么要分层
+
+<SlideCard title="又大又快又便宜，只能选两个">
+
+## 每一层都是下一层的缓存
+
+理想的存储器又大又快又便宜，但现实中不可兼得：
+
+- 寄存器和 SRAM 很快，但每个比特占的芯片面积大，做不大。
+- DRAM 便宜、容量大，但访问一次要等很久。
+- SSD 容量更大，延迟还要再高几个数量级。
+
+于是计算机把它们叠成一个层次。越靠近 CPU 的一层越小、越快，**每一层都充当下一层的缓存**：
+
+| 层级 | 容量量级 | 访问延迟量级 |
+| --- | --- | --- |
+| 寄存器 | 几十个 | 不到 1 ns |
+| L1 cache | 几十到上百 KiB | 约 1 ns，几个时钟周期 |
+| L2 cache | 几到十几 MiB | 几 ns 到十几 ns |
+| DRAM | 几到几十 GiB | 约 100 ns |
+| SSD | TiB | 几十 µs |
+
+这张表里的延迟是**常见的数量级**，用来建立直觉，不是本机测量值。重点在比例：从 L1 到 DRAM 差了大约两个数量级。如果每次读内存都要去 DRAM，CPU 大部分时间都在等数据。
+
+## 读一个 int 时发生了什么
+
+CPU 要读某个地址上的 4 个字节时：
+
+- 先在 L1 里找。找到了叫**命中**（hit），几个周期就能拿到。
+- 找不到叫**缺失**（miss），去 L2 找；L2 也没有，再往下。多等的这段时间叫**缺失代价**（miss penalty）。
+- 关键在于：从下一层搬上来的**不是这 4 个字节，而是包含它的一整块**，叫一个 **cache line**。在本机上是 128 字节。
+
+所以缺失一次，CPU 拿到的其实是 32 个相邻的 `int`。程序接下来正好要用这 31 个邻居，它们全都会命中；程序只用了这一个就跳到别处，剩下的 124 字节就白搬了。
+
+开头那两个函数的差距，就从这里开始。
+
+</SlideCard>
+
+<SlideCard title="命中率 97%，为什么还会慢好几倍？">
+
+## 平均访问时间
+
+衡量一级 cache 的效果，常用平均访问时间：
+
+$$
+\text{平均访问时间} = \text{命中时间} + \text{缺失率} \times \text{缺失代价}
+$$
+
+先猜一下：命中时间 1 ns、缺失代价 100 ns，缺失率从 1/32（约 3%）变成 1，平均访问时间差多少倍？
+
+<details>
+<summary>展开答案</summary>
+
+- 缺失率 1/32：$1 + 100 / 32 \approx 4.1$ ns。
+- 缺失率 1：$1 + 100 = 101$ ns。
+
+差了大约 25 倍。这里的 1 ns 和 100 ns 是**示意数字**，不是本机测量值。
+
+还有一个更反直觉的地方：即使缺失率只有 3%，平均时间也是命中时间的 4 倍。缺失代价比命中时间大两个数量级，所以**缺失率的一点点变化，会被放大成明显的速度差**。分析 cache 时盯着缺失率，而不是命中率。
+
+实际程序的差距通常没有公式算的那么大，因为硬件预取会提前搬数据，乱序执行也能让几个缺失同时进行。公式适合估算方向，具体数字要测。
+
+</details>
+
+</SlideCard>
+
+## 3. 局部性：让搬上来的数据被用上
+
+<SlideCard title="两种局部性">
+
+## 时间局部性和空间局部性
+
+cache 之所以有用，是因为程序访问内存有规律：
+
+- **时间局部性**：刚访问过的数据，很快还会再访问。
+- **空间局部性**：刚访问过某个地址，很快会访问它附近的地址。
+
+看最简单的求和：
+
+```cpp
+long long s = 0;
+for (std::size_t i = 0; i < n; ++i)
+    s += a[i];
+```
+
+- `s` 每次迭代都读写，时间局部性好，通常一直待在寄存器里。
+- `a[i]` 相邻两次只差 4 字节，空间局部性好。
+- 循环体的指令反复执行同一小段代码，指令 cache 也同时享受两种局部性。
+
+## 步长：衡量空间局部性的尺子
+
+连续两次访问之间相差的元素个数，叫**步长**（stride）。设一个 cache line 能装 L 个元素，数据量又远大于 cache：
+
+| 步长 | 每个 line 用到的元素 | 平均每次访问缺失 |
+| --- | --- | --- |
+| 1 | 全部 L 个 | 1/L |
+| k（k < L） | 约 L/k 个 | 约 k/L |
+| ≥ L | 1 个 | 1 |
+
+本机上 `int` 的 L = 128 / 4 = 32。步长为 1 时每 32 次访问缺失 1 次；步长达到 32 个 `int`，也就是 128 字节以后，每次访问都落在新的 line 上。
+
+</SlideCard>
+
+<SlideCard title="回到开头的两个循环">
+
+## 行优先意味着什么
+
+C 和 C++ 的二维数组是**行优先**存放的：同一行的元素相邻，下一行紧跟在上一行后面。`a[i * n + j]` 的地址是
+
+$$
+\text{addr}(i, j) = \text{base} + (i \cdot N + j) \cdot 4
+$$
+
+- `sum_rows` 的内层让 j 加 1，地址加 4 字节，步长为 1，每 32 次访问缺失 1 次。
+- `sum_cols` 的内层让 i 加 1，地址加 `4N` 字节。N = 4096 时一次跳 16 KiB，每次访问都落在新的 line 上。等这一列走完、回来读下一列时，前面搬上来的那些 line 早就被挤出去了。
+
+按这个模型，`sum_cols` 的缺失次数大约是 `sum_rows` 的 32 倍。实际速度差不到 32 倍，因为硬件预取、乱序执行和多级 cache 会掩盖一部分延迟。差多少，留给第 8 节去测。
+
+## Quiz：只读一个字段
+
+```cpp
+struct Tick {
+    long long ts;       // 8 字节
+    double    price;    // 8 字节
+    int       qty;      // 4 字节
+    int       side;     // 4 字节
+    char      symbol[8];
+};                       // 共 32 字节
+
+double sum_price(const std::vector<Tick>& ticks) {
+    double s = 0;
+    for (const Tick& t : ticks) s += t.price;
+    return s;
+}
+```
+
+这个循环按顺序遍历 `vector`，它的空间局部性好吗？
+
+<details>
+<summary>展开答案</summary>
+
+按**元素**算步长是 1，但按**字节**算，每次跳 32 字节，真正用到的只有其中 8 字节的 `price`。一个 128 字节的 line 装 4 个 `Tick`，搬上来的数据只有 1/4 被用上。
+
+成员布局本身也有讲究，比如 `Tick` 按对齐值从大到小排列，没有填充，这一点在[《C++ 对象内存布局》第 2 节](/blog/cpp-object-layout/)讲过。至于怎么让利用率变成 100%，见第 6 节。
+
+</details>
+
+</SlideCard>
+
+## 4. cache 怎么组织：S、E、B 三个参数
+
+<SlideCard title="组、行、块">
+
+## 三个参数描述一个 cache
+
+要理解数据为什么会被挤出去，以及为什么有时 cache 明明没满却频繁缺失，需要看 cache 的内部结构。一个 cache 可以用三个参数描述：
+
+- **B**：每个 line 的数据块大小（字节）。本机是 128。
+- **E**：每一**组**（set）有几行，叫**相联度**（associativity）。
+- **S**：一共有多少组。
+
+每一行除了 B 字节数据，还带一个**有效位**和一个**标记**（tag），说明这一行现在装的是哪块内存。总容量是
+
+$$
+C = S \times E \times B
+$$
+
+## 地址拆成三段
+
+查找时，硬件把地址拆成三段。设 $B = 2^b$，$S = 2^s$：
+
+| 地址位 | 名字 | 作用 |
+| --- | --- | --- |
+| 最低 b 位 | 块内偏移（block offset） | 在 line 里找第几个字节 |
+| 中间 s 位 | 组索引（set index） | 决定去哪一组找 |
+| 剩下的高位 | 标记（tag） | 和组里每一行的 tag 比较 |
+
+查找分三步：用组索引选组；在组里找有效且 tag 相同的行；找到就用块内偏移取数据，找不到就是缺失，从下一层搬来这一块，放进这一组。组里满了，就按替换策略踢掉一行，通常是近似的 LRU，也就是最久没用的那一行。
+
+</SlideCard>
+
+<SlideCard title="动手拆一个地址">
+
+## 用一个假设的 cache 算一遍
+
+**假设**一个 L1 数据 cache 是 64 KiB、8 路组相联、line 为 128 字节。容量和 line 大小与本机 perflevel1 核心一致，8 路是假设的：
+
+$$
+S = \frac{C}{E \times B} = \frac{65536}{8 \times 128} = 64
+$$
+
+所以 $b = 7$，$s = 6$。拿地址 `0x12345` 来拆，先自己算一下 tag、组索引和偏移。
+
+<details>
+<summary>展开答案</summary>
+
+- 偏移：低 7 位，`0x12345 & 0x7F = 69`。
+- 组索引：右移 7 位后取低 6 位，`(0x12345 >> 7) & 0x3F = 6`。
+- tag：右移 13 位，`0x12345 >> 13 = 9`。
+
+于是硬件去第 6 组，把 8 行的 tag 依次和 9 比较。
+
+</details>
+
+## 让程序替你拆
+
+手算容易出错，后面要拆很多地址，写个小程序。下一张卡片会一直用它：
+
+```cpp
+#include <cstdint>
+#include <cstdio>
+#include <initializer_list>
+
+// 假设的 cache：64 KiB，8 路组相联，line 128 字节
+constexpr std::uint64_t kLine = 128, kWays = 8, kSize = 64 * 1024;
+constexpr std::uint64_t kSets = kSize / (kWays * kLine);   // 64
+
+void split(std::uint64_t addr) {
+    std::uint64_t offset = addr % kLine;
+    std::uint64_t set    = (addr / kLine) % kSets;
+    std::uint64_t tag    = addr / (kLine * kSets);
+    std::printf("addr=0x%06llx  tag=%llu  set=%2llu  offset=%llu\n",
+                (unsigned long long)addr, (unsigned long long)tag,
+                (unsigned long long)set, (unsigned long long)offset);
+}
+
+int main() {
+    split(0x12345);
+}
+```
+
+```text
+addr=0x012345  tag=9  set= 6  offset=69
+```
+
+和手算一致。
+
+## 为什么用中间的位做组索引
+
+如果用最高的几位做组索引，一大段连续内存的高位都一样，会全部挤进同一组，顺序遍历数组时只能用到一组。用中间位，相邻的 line 落在相邻的组里，连续的数据能均匀铺满整个 cache。
+
+## 三种组织方式
+
+| 类型 | 参数 | 特点 |
+| --- | --- | --- |
+| 直接映射 | E = 1 | 每块内存只有一个位置可放，硬件最简单，但映射到同一组的两块会互相踢 |
+| 组相联 | 1 < E < C/B | 每组 E 个位置，现代 CPU 的 L1、L2 都是这种 |
+| 全相联 | S = 1 | 放哪都行，冲突最少，但每次要比较所有行，只适合很小的结构，比如一些 TLB |
+
+E 越大冲突越少，但每次查找要同时比较更多 tag，电路更复杂、功耗更高，命中延迟也可能变长。这是一个工程取舍。
+
+</SlideCard>
+
+<SlideCard title="三类缺失">
+
+## 按原因分类，才知道怎么优化
+
+- **冷缺失**（compulsory miss）：第一次访问某块数据，cache 里必然没有。只能靠预取缓解。
+- **容量缺失**（capacity miss）：程序反复使用的数据，也就是**工作集**，比 cache 大，装不下。解法是缩小工作集，比如分块计算。
+- **冲突缺失**（conflict miss）：cache 整体没满，但好几块数据恰好映射到同一组，超过了 E 行，互相踢。解法是改变数据的地址分布，比如在每行末尾加填充。
+
+冲突缺失最反直觉，下一张卡片用开头的矩阵算一遍。
+
+</SlideCard>
+
+<SlideCard title="N = 4096 时，一整列挤进了同一组">
+
+## 先猜
+
+还是用上面假设的 cache。N = 4096 时，同一列相邻两行的地址相差 `4096 × 4 = 16 KiB`。这一列的元素会分布在哪些组里？
+
+<details>
+<summary>展开答案</summary>
+
+把 `main` 改成依次拆前 4 行同一列的地址：
+
+```cpp
+for (int i = 0; i < 4; ++i) split(std::uint64_t(i) * 4096 * 4);
+```
+
+```text
+addr=0x000000  tag=0  set= 0  offset=0
+addr=0x004000  tag=2  set= 0  offset=0
+addr=0x008000  tag=4  set= 0  offset=0
+addr=0x00c000  tag=6  set= 0  offset=0
+```
+
+全在第 0 组。原因是 $S \times B = 64 \times 128 = 8$ KiB，地址每增加 8 KiB，组索引就绕回原值；16 KiB 是 8 KiB 的整数倍，所以一整列的 4096 个元素**全部落在同一组**。
+
+这一组只有 8 行，按列访问到第 9 个元素就会踢掉第 1 个。整个 64 KiB 的 cache，按列遍历时只用上了 8 行，也就是 1 KiB。
+
+</details>
+
+## 那就把 N 改成 4100？
+
+每行多 4 个 `int`，也就是多 16 字节。直觉上，这样相邻两行就会错开到不同的组。先别急着下结论，跑一下看看：
+
+```cpp
+for (int i : {0, 1, 7, 8, 9}) split(std::uint64_t(i) * 4100 * 4);
+```
+
+```text
+addr=0x000000  tag=0  set= 0  offset=0
+addr=0x004010  tag=2  set= 0  offset=16
+addr=0x01c070  tag=14  set= 0  offset=112
+addr=0x020080  tag=16  set= 1  offset=0
+addr=0x024090  tag=18  set= 1  offset=16
+```
+
+直觉只对了一半。每行多出的 16 字节先体现在**块内偏移**上，要累积 8 行凑满 128 字节，组索引才加 1。所以是**每 8 行换一组**：第 0–7 行在第 0 组，第 8–15 行在第 1 组，以此类推。
+
+这已经比 N = 4096 好得多：一整列现在均匀分布在全部 64 组里，能用上整个 cache，不再只有 8 行。如果想让相邻两行直接落在相邻的组里，每行要多出**一整个 line**，也就是 32 个 `int`，N = 4128：
+
+```text
+addr=0x000000  tag=0  set= 0  offset=0
+addr=0x004080  tag=2  set= 1  offset=0
+addr=0x008100  tag=4  set= 2  offset=0
+```
+
+## 这个推理的边界
+
+这只是对一个假设的 L1 的推理。N 很大时，一整列有 4096 个 line、共 512 KiB，本来就装不进 64 KiB 的 L1，容量缺失也在。但同样的问题会出现在 L2：512 KiB 本来装得进 16 MiB 的 L2，如果因为 2 的幂步长挤在少数几组里，就装不下了。
+
+N = 4096、4100、4128 三种情况下 `sum_cols` 的速度差多少，第 8 节的实验里测一下。
+
+</SlideCard>
+
+<SlideCard title="写操作怎么处理">
+
+## 两个问题，四种策略
+
+- **写命中时，要不要立即写下一层？**
+  - **写直达**（write-through）：每次写都同时写下一层，简单但流量大。
+  - **写回**（write-back）：只改 cache 里的这一行，标记为**脏**（dirty），被替换时才写回。现代 CPU 的数据 cache 基本都这样做。
+- **写缺失时，要不要先把这一块搬上来？**
+  - **写分配**（write-allocate）：先把块搬进 cache，再在 cache 里写，通常和写回搭配。
+  - **非写分配**（no-write-allocate）：直接写到下一层，不进 cache。
+
+写分配意味着，即使你只写不读，写一个数组也会先把它读进 cache。第 6 节的 false sharing 会用到这一点：写一个变量，也要先把它所在的整个 line 拿到手。
+
+</SlideCard>
+
+## 5. 矩阵乘法：同样的乘法，不同的循环顺序
+
+<SlideCard title="6 种循环顺序，缺失次数差 16 倍">
+
+## 用步长规律来估算
+
+计算 $C = A \times B$，三个矩阵都是 `n × n` 的 `double`，按行优先存放。i、j、k 三重循环有 6 种排列，结果完全相同，缺失次数却差很多。
+
+用第 3 节的步长规律估算：本机一个 line 装 L = 128 / 8 = 16 个 `double`，并假设 n 很大，一整列装不进 cache。只看最内层循环，每次迭代平均缺失多少次？先自己填一下，再展开对照。
+
+<details>
+<summary>展开答案</summary>
+
+| 循环顺序 | 内层循环访问 | 每次迭代的缺失 | L = 16 时 |
+| --- | --- | --- | --- |
+| ijk、jik | A 按行（1/L），B 按列（1） | 1 + 1/L | 约 1.06 |
+| jki、kji | A 按列（1），C 按列（1） | 2 | 2 |
+| kij、ikj | B 按行（1/L），C 按行（1/L） | 2/L | 0.125 |
+
+最好和最差差了 16 倍。这是**模型估算**，没有考虑预取和多级 cache，但足以说明方向。
+
+</details>
+
+## ikj 的写法
+
+```cpp
+// C 先清零；内层沿着 B 和 C 的同一行走，步长都是 1
+for (std::size_t i = 0; i < n; ++i)
+    for (std::size_t k = 0; k < n; ++k) {
+        const double r = A[i * n + k];          // 内层循环里不变，放进寄存器
+        for (std::size_t j = 0; j < n; ++j)
+            C[i * n + j] += r * B[k * n + j];
+    }
+```
+
+只是换了循环顺序，内层每次迭代的缺失就从约 1 次降到 0.125 次。再进一步是**分块**（blocking）：把矩阵切成能装进 cache 的小块，在一块上算完再换下一块，让时间局部性也用足。分块留到后续文章。
+
+</SlideCard>
+
+## 6. 数据布局与 false sharing
+
+<SlideCard title="AoS 还是 SoA：跟着热点循环走">
+
+## 把 price 单独存一列
+
+第 3 节 Quiz 里的 `std::vector<Tick>` 叫 **AoS**（array of structs），一个对象的所有字段挨在一起。如果热点循环只读 `price`，可以改成 **SoA**（struct of arrays）：
+
+```cpp
+struct Ticks {
+    std::vector<long long> ts;
+    std::vector<double>    price;
+    std::vector<int>       qty;
+    // ...
+};
+
+double sum_price(const Ticks& t) {
+    double s = 0;
+    for (double p : t.price) s += p;   // 每个 line 里的 16 个 double 全部用上
+    return s;
+}
+```
+
+现在搬上来的每个 line 全是 `price`，利用率从 1/4 变成 100%，连续的 `double` 也更容易被编译器向量化。
+
+## 没有哪种布局永远更好
+
+反过来，如果每次处理一个 tick 都要用到大部分字段，AoS 更好，因为一次缺失就把需要的字段都搬上来了。**看热点循环实际读哪些字段，再决定布局。**
+
+</SlideCard>
+
+<SlideCard title="false sharing：两个线程没共享数据，却互相拖慢">
+
+## 一致性以 line 为单位
+
+多线程时还有一个陷阱。cache 一致性协议以 **line 为单位**跟踪数据：一个核要写某个 line，必须先让其他核里这个 line 的副本失效。
+
+```cpp
+struct Counters {
+    std::atomic<long long> a;   // 线程 1 一直在加
+    std::atomic<long long> b;   // 线程 2 一直在加
+};
+```
+
+`a` 和 `b` 逻辑上没有任何共享，但它们挨在一起，落在同一个 line 里。两个核会不停地让对方的副本失效，这个 line 在两个核之间来回搬。这就是 **false sharing**，可能让本该并行的代码比单线程还慢。
+
+## 让它们落在不同的 line 上
+
+```cpp
+struct Counters {
+    alignas(128) std::atomic<long long> a;
+    alignas(128) std::atomic<long long> b;
+};
+```
+
+这里写 128，是因为本机的 line 是 128 字节。[《C++ 对象内存布局》的 alignas 一节](/blog/cpp-object-layout/)已经提到过：写死 64 在这台机器上不够；`std::hardware_destructive_interference_size` 是编译期常量，在本机的 Apple clang 21 和 GCC 16 下都是 256，比实际的 128 大，能保证隔开，代价是多占空间。
+
+false sharing 在低延迟系统里很常见，比如各线程分别更新的统计计数器、SPSC 队列的 head 和 tail。后面讲缓存一致性协议时，会专门做实验测它的代价。
+
+</SlideCard>
+
+## 7. 存储器山：把局部性画成一张图
+
+<SlideCard title="工作集和步长，两个维度一起看">
+
+## 实验怎么设计
+
+反复读一个数组，改变两个变量，测读取吞吐量：
+
+- **工作集大小**：数组有多大，决定数据能待在哪一级 cache 里，对应时间局部性。
+- **步长**：每次跳多少个元素，对应空间局部性。
+
+把吞吐量画成这两个变量的曲面，就得到**存储器山**（memory mountain）。
+
+## 先推测它的形状
+
+不用测量，从前面的知识就能推出大致形状：
+
+- 沿工作集方向会看到几级台阶：装得进 L1 时最高，超过 L1 掉一级，超过 L2 再掉一级，最后落到 DRAM 的水平。台阶的位置大致对应各级 cache 的容量。
+- 沿步长方向，吞吐量随步长增大而下降，步长达到一个 line 之后每次都缺失，曲线变平。
+- 步长为 1 时，即使工作集远大于 cache，吞吐量也比大步长高不少。这是硬件**预取**的功劳：它发现你在顺序读，就提前把后面的 line 搬上来。
+
+这台机器上的台阶具体在哪里，是不是对得上 `sysctl` 报出的 128 KiB 和 16 MiB，要测了才知道。它是第 8 节实验的扩展题。
+
+</SlideCard>
+
+## 8. 动手测量：按行与按列
+
+<SlideCard title="先写预测，再写代码">
+
+## 实验要求
+
+代码自己写，下面只给要求。在 `~/Programming/tmp/locality/` 下写 `rowcol.cpp`：
+
+- 用 `std::vector<int>` 存 `N × N` 矩阵，下标用 `i * N + j`，N 从命令行参数读入。
+- 实现第 1 节的 `sum_rows` 和 `sum_cols`。
+- 用 `std::chrono::steady_clock` 分别计时，每个函数跑 5 次取最小值。
+- **把求和结果打印出来**。否则编译器发现结果没用，可能把循环整个删掉。
+- 输出两者的耗时和比值。
+
+```bash
+clang++ -std=c++20 -O2 rowcol.cpp -o rowcol
+```
+
+```bash
+./rowcol 4096 && ./rowcol 4100 && ./rowcol 4128
+```
+
+## 运行前先填这张表
+
+| 问题 | 我的预测 | 实测 |
+| --- | --- | --- |
+| N = 4096 时，`sum_cols` 比 `sum_rows` 慢几倍？ | | |
+| N 改成 4100，`sum_rows` 的耗时会变吗？ | | |
+| N 改成 4100 和 4128，`sum_cols` 会变快多少？ | | |
+| N = 256（矩阵 256 KiB），差距变大还是变小？ | | |
+| `-O2` 换成 `-O0`，差距变大还是变小？ | | |
+
+测完把实测填进去。和预测对不上的格子最有价值：回到对应的小节，找出是哪一步推理漏了东西，再把更正写在旁边。
+
+## 扩展
+
+- **步长实验**：对一个 64 MiB 的数组，分别以步长 1、2、4、8、16、32、64 求和，画出每个元素的平均耗时，看看曲线在哪里变平，是否和 128 字节的 line 对得上。
+- **工作集实验**：步长固定为 1，数组从 16 KiB 增大到 256 MiB，看耗时的台阶出现在哪里。
+- **矩阵乘法**：n = 1024，比较 ijk 和 ikj 的耗时，看是否符合第 5 节的估算方向。
+
+记录实验时交代清楚机器、编译器版本和编译选项，性能结论离开这些信息就没有意义。
+
+</SlideCard>
+
+## 9. 检验：合上文章答一遍
+
+<SlideCard title="每题先自己回答，再展开对照">
+
+<details>
+<summary>Quiz 1：一次 cache 缺失，从下一层搬上来多少数据？这对顺序遍历意味着什么？</summary>
+
+搬上来一整个 cache line，本机是 128 字节。顺序遍历时，一次缺失之后同一个 line 里剩下的数据全部命中，`int` 数组每 32 次访问才缺失 1 次。
+
+</details>
+
+<details>
+<summary>Quiz 2：命中率从 97% 提高到 99%，听起来只提高了 2 个百分点，为什么可能快很多？</summary>
+
+平均访问时间 = 命中时间 + 缺失率 × 缺失代价。缺失代价比命中时间大两个数量级，所以要看缺失率：从 3% 降到 1%，缺失项变成原来的三分之一。按命中 1 ns、缺失代价 100 ns 的示意数字，平均时间从 4 ns 降到 2 ns。
+
+</details>
+
+<details>
+<summary>Quiz 3：已知容量 C、相联度 E、line 大小 B，怎么算组数？地址的三段分别做什么？</summary>
+
+$S = C / (E \times B)$。最低 $\log_2 B$ 位是块内偏移，中间 $\log_2 S$ 位是组索引，剩下的高位是 tag。组索引选组，tag 判断是否命中，偏移在 line 里取数据。
+
+</details>
+
+<details>
+<summary>Quiz 4：为什么用地址的中间位做组索引，而不是最高位？</summary>
+
+连续内存的高位相同，用高位做索引会让一大段连续数据挤进同一组。用中间位，相邻的 line 落在相邻的组里，顺序访问能铺满整个 cache。
+
+</details>
+
+<details>
+<summary>Quiz 5：冷缺失、容量缺失、冲突缺失分别怎么缓解？</summary>
+
+冷缺失靠预取；容量缺失靠缩小工作集，比如分块；冲突缺失靠改变地址分布，比如给每行加填充，避免 2 的幂步长。
+
+</details>
+
+<details>
+<summary>Quiz 6：N = 4096 的 int 矩阵按列遍历，为什么会出现严重的冲突缺失？N 改成 4100 解决了多少？</summary>
+
+在 S × B = 8 KiB 的假设下，行长 16 KiB 是 8 KiB 的整数倍，一整列全落在同一组，只能用上 E 行。N = 4100 时每行多 16 字节，要 8 行才让组索引加 1，一列均匀分布到全部组里，不再只用一组；N = 4128 每行多一整个 line，相邻行直接落在相邻的组。
+
+</details>
+
+<details>
+<summary>Quiz 7（面试题）：矩阵乘法的 6 种循环顺序里哪类最好？为什么？</summary>
+
+ikj 和 kij 最好。内层循环沿着 B 和 C 的同一行走，两者步长都是 1，每次迭代约缺失 2/L 次；ijk 有一个按列访问，约 1 + 1/L 次；jki 两个都按列，约 2 次。
+
+</details>
+
+<details>
+<summary>Quiz 8（面试题）：什么是 false sharing？怎样避免？</summary>
+
+两个线程写的是不同变量，但变量落在同一个 cache line 上，一致性协议以 line 为单位失效，导致这个 line 在核之间来回搬。用 `alignas` 把它们隔到不同的 line 上，间隔按目标机器的 line 大小确定；`std::hardware_destructive_interference_size` 是保守的编译期常量，不一定等于实际值。
+
+</details>
+
+</SlideCard>
+
+## 10. 一套可以复用的判断方法
+
+<SlideCard title="拿到一个循环，按顺序问这几个问题">
+
+## 从步长到线程
+
+| 要回答的问题 | 怎么判断 |
+| --- | --- |
+| 内层循环的步长是多少？ | 步长为 1 时每 L 次访问缺失约 1 次，达到一个 line 后每次都缺失 |
+| 工作集装得进哪一级 cache？ | 和 `sysctl` 报出的 L1、L2 容量比较，装不下就考虑分块 |
+| 步长是不是 2 的较大次幂？ | 是的话警惕冲突缺失，用填充错开 |
+| 热点循环读了结构体的哪些字段？ | 只读少数字段考虑 SoA，读大部分字段保持 AoS |
+| 有没有多个线程各自写相邻的变量？ | 有就检查 false sharing，按 line 大小对齐隔开 |
+
+## 几个值得留下的判断
+
+- 复杂度相同的两段代码，访问顺序不同就可能差好几倍。分析性能时，先看访问模式，再看指令数。
+- 讨论 cache 时先说清楚机器参数：本机 line 是 128 字节，不是很多资料默认的 64。
+- 估算可以指明方向，但实际差距要测：预取、乱序执行和多级 cache 都会改变结果。
+
+</SlideCard>
+
+## 延伸阅读
+
+<Note title="需要更多细节时，从这里查">
+
+- 《深入理解计算机系统》（CS:APP）第 6 章：本文的主线和它一致，书里有更完整的存储技术介绍和存储器山的实测图。
+- Ulrich Drepper，[What Every Programmer Should Know About Memory](https://people.freebsd.org/~lstewart/articles/cpumemory.pdf)：从 DRAM 原理讲到 cache、TLB、NUMA 和多线程。计划里 W9 会读第 3、6 节。
+- [cppreference：hardware_destructive_interference_size](https://en.cppreference.com/w/cpp/thread/hardware_destructive_interference_size)：false sharing 相关常量的定义。
+
+下一步可以沿三个方向继续：一是分块矩阵乘法，把时间局部性也用足；二是虚拟内存和 TLB，本机的页大小是 16 KiB（`sysctl hw.pagesize`），大步长访问还会引发 TLB 缺失；三是缓存一致性协议 MESI，它解释了 false sharing 背后 line 是怎样在核之间传递的。
+
+</Note>
