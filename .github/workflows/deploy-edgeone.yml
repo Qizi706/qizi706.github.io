@@ -55,7 +55,7 @@ jobs:
           npm exec --yes edgeone@1.7.0 -- makers deploy dist \
             --name qizi706-blog \
             --env production \
-            --site china
+            --site china \
             --area global \
             --token "${EDGEONE_CHINA_API_TOKEN}" \
             --json
