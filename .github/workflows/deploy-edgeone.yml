@@ -101,10 +101,9 @@ jobs:
         env:
           EDGEONE_CHINA_API_TOKEN: ${{ secrets.EDGEONE_CHINA_API_TOKEN }}
         run: |
-          npm exec --yes edgeone@1.7.0 -- makers deploy dist \
+          npm exec --yes edgeone@1.6.28 -- makers deploy dist \
             --name qizi706-blog \
             --env production \
-            --site china \
             --area global \
             --token "${EDGEONE_CHINA_API_TOKEN}" \
             --json
