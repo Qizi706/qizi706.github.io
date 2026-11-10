@@ -98,9 +98,9 @@ smart:
 
 <Note title="示例约定">
 
-全文以 **C++20** 为基线。示例省略了 `<memory>`、`<cstdio>`、`<stdexcept>`、`<vector>` 等头文件。文中的输出和编译错误都在 Apple clang 21（libc++）与 GCC 16（libstdc++）上核对过，两者结果相同的地方不再分别列出。第 7 节的测量另行说明环境。
+全文以 **C++20** 为基线。示例省略了 `<memory>`、`<cstdio>`、`<stdexcept>`、`<vector>` 等头文件。文中的输出和编译错误都在 Apple clang 21（libc++）与 GCC 16（libstdc++）上核对过，两者结果相同的地方不再分别列出。第 7 节的测量另行说明环境，其中 ThreadSanitizer 的实验只在 clang 上运行。
 
-这是[现代 C++ 长期学习计划](/blog/modern-cpp-mastery-roadmap/)中的一篇。`unique_ptr` 只能移动、不能拷贝，如果对移动语义还不熟，先读[移动语义](/blog/cpp-move-semantics/)。和本文配套的面试题在 [C++ 八股卡片](/blog/cpp-interview-cards/)的卡片 15、23–26，里面有更多实测细节。
+这是[现代 C++ 长期学习计划](/blog/modern-cpp-mastery-roadmap/)中的一篇。`unique_ptr` 只能移动、不能拷贝，如果对移动语义还不熟，先读[移动语义](/blog/cpp-move-semantics/)。
 
 </Note>
 
@@ -155,7 +155,17 @@ std::unique_ptr<Widget> u = s;                 // 编译错误
 
 默认删除器和无捕获 lambda 都是空类。空类单独存在时 `sizeof` 是 1，但标准库把删除器作为基类，或者用 C++20 的 `[[no_unique_address]]` 保存，让它不占空间，这就是[对象布局文章](/blog/cpp-object-layout/)第 3 节讲的空基类优化。函数指针删除器要保存一个地址，加上对齐就是 16 字节。
 
-所以 `unique_ptr` 的“零开销”指的是：默认删除器下，大小和裸指针相同，解引用生成的指令也相同。按值传参时还有调用约定上的差别，见卡片 15。
+所以 `unique_ptr` 的“零开销”指的是：默认删除器下，大小和裸指针相同，解引用生成的指令也相同。
+
+按值传参是个例外。Linux 和 macOS 使用的 [Itanium C++ ABI](https://itanium-cxx-abi.github.io/cxx-abi/abi.html#non-trivial-parameters) 规定：类型有非平凡的析构函数时，参数不能放在寄存器里传，调用方要先在自己的栈上放一个临时对象，再把它的地址传进去；参数的析构也由调用方在调用返回后执行。`unique_ptr` 的析构函数要 `delete`，正好属于这种情况。用 `-O2` 编译 `int take(std::unique_ptr<int> p) { return *p; }`，arm64 上 clang 生成的函数体是（GCC 16 只是用了不同的寄存器）：
+
+```text
+ldr x8, [x0]
+ldr w0, [x8]
+ret
+```
+
+`x0` 里是调用方那个 `unique_ptr` 对象的地址，第一条指令从对象里读出指针，第二条才读到 `int`，而且 `take` 里没有 `delete`。换成 `int take(int* p)`，指针直接在 `x0` 里，函数体只剩 `ldr w0, [x0]` 和 `ret`，少读一次内存。这点差别通常可以忽略，但它说明“零开销”说的是大小和访问，不包括按值传参。
 
 </SlideCard>
 
@@ -432,7 +442,17 @@ Widget& Widget::operator=(Widget&&) noexcept = default;
 
 两个实现的做法相同。控制块有一个带虚函数的基类；`shared_ptr` 的构造函数是模板，构造时知道删除器和对象的具体类型，就创建一个“知道这些类型”的派生类控制块。`shared_ptr` 只保存指向基类的指针，销毁对象时调用虚函数，转到派生类里执行真正的删除。这种“创建时知道具体类型，之后只通过统一接口使用”的做法叫**类型擦除**，`std::function` 也是这样实现的。
 
-这就是上一节 Pimpl 能用 `shared_ptr` 的原因：删除方式在创建时就装进了控制块。也是删除器不进入 `shared_ptr` 类型的原因：`shared_ptr<FILE>` 无论用什么删除器都是同一个类型，可以放进同一个容器，见卡片 24。
+这就是上一节 Pimpl 能用 `shared_ptr` 的原因：删除方式在创建时就装进了控制块。也是删除器不进入 `shared_ptr` 类型的原因：删除器存在控制块里，`shared_ptr` 对象本身只有两个指针。
+
+```cpp
+auto close_a = [](std::FILE* f) { std::fclose(f); };
+auto close_b = [](std::FILE* f) { std::fclose(f); };
+std::shared_ptr<std::FILE> a(std::fopen("/dev/null", "r"), close_a);
+std::shared_ptr<std::FILE> b(std::fopen("/dev/null", "r"), close_b);
+std::vector<std::shared_ptr<std::FILE>> files{a, b};   // 能编译
+```
+
+两个 lambda 是不同的类型，但 `a` 和 `b` 都是 `shared_ptr<FILE>`，`sizeof` 都是 16，可以放进同一个 `vector`。换成第 2 节的 `unique_ptr<FILE, decltype(close_a)>` 和 `unique_ptr<FILE, decltype(close_b)>`，就是两个不同的类型。`shared_ptr` 换来统一的类型，代价是销毁时多一次虚函数调用。
 
 同一个机制还有一个副作用：控制块记住的是**创建时的真实类型**。`Base` 的析构函数不是 `virtual` 时：
 
@@ -622,7 +642,20 @@ scope end
 
 回到第 4 节的图：`std::shared_ptr<Widget>(new Widget)` 先 `new` 一个对象，构造函数再分配一个控制块，一共两次。`std::make_shared<Widget>()` 一次分配一块内存，前面是计数，后面就是对象。
 
-卡片 23 用替换的全局 `operator new` 计数，确认了这一点：前者 2 次分配，后者 1 次。少一次分配，也意味着计数和对象挨在一起，访问时局部性更好。
+可以数一下分配次数。程序里可以自己定义全局的 `operator new` 和 `operator delete`，替换掉标准库的版本，`new` 表达式和标准库内部的分配都会走到这里。在里面加一个计数，再调用 `malloc` / `free`：
+
+```cpp
+int g_news = 0, g_deletes = 0;
+void* operator new(std::size_t n) {
+  ++g_news;
+  if (void* p = std::malloc(n)) return p;
+  throw std::bad_alloc{};
+}
+void operator delete(void* p) noexcept { if (p) ++g_deletes; std::free(p); }
+void operator delete(void* p, std::size_t) noexcept { if (p) ++g_deletes; std::free(p); }
+```
+
+用一个 1000 字节的 `Big` 分别执行两种写法，clang 和 GCC 16 的结果相同：`shared_ptr<Big>(new Big)` 调用了 2 次 `operator new`，`make_shared<Big>()` 只调用了 1 次。少一次分配，也意味着计数和对象挨在一起，访问时局部性更好。
 
 | | `shared_ptr<T>(new T)` | `make_shared<T>()` |
 | --- | --- | --- |
@@ -640,7 +673,14 @@ scope end
 
 最后一行要结合上一节来看。强引用计数归零时，对象会被析构；但只要还有 `weak_ptr`，它就要读控制块里的计数来判断对象还在不在，所以控制块不能释放。
 
-用 `make_shared` 时，对象和控制块是同一块内存，控制块不能还，对象那部分也只能一起等着。对象很大、`weak_ptr` 又活得很久时（比如缓存里留着大量弱引用），这块内存就会被占住。这种情况下用 `shared_ptr<T>(new T)` 反而更合适。
+用 `make_shared` 时，对象和控制块是同一块内存，控制块不能还，对象那部分也只能一起等着。用上一张卡片的计数器可以看到这一点：先让一个 `weak_ptr` 指向 `Big`，再依次释放最后一个 `shared_ptr` 和这个 `weak_ptr`，数每一步调用了几次 `operator delete`：
+
+| 写法 | 最后一个 `shared_ptr` 释放时 | `weak_ptr` 释放时 |
+| --- | --- | --- |
+| `shared_ptr<Big>(new Big)` | `~Big` 执行，释放 1 块（对象） | 释放 1 块（控制块） |
+| `make_shared<Big>()` | `~Big` 执行，释放 0 块 | 释放 1 块（对象和控制块一起） |
+
+两种写法里 `~Big` 都按时执行了，差别只在内存什么时候还。对象很大、`weak_ptr` 又活得很久时（比如缓存里留着大量弱引用），这块内存就会被占住。这种情况下用 `shared_ptr<T>(new T)` 反而更合适。
 
 </SlideCard>
 
@@ -761,7 +801,31 @@ GCC 的数字更高，两种库的实现细节不同（比如本节开头看到�
 | 多个线程同时给同一个 `shared_ptr` 变量赋值，或一边赋值一边读 | 不安全，变量里的两个指针不是原子更新的 |
 | 多个线程通过各自的 `shared_ptr` 修改它指向的对象 | 不安全，`shared_ptr` 不管对象本身 |
 
-卡片 26 用 ThreadSanitizer 验证了这三种情况。多个线程要读写同一个 `shared_ptr` 变量，可以加锁，或者用 C++20 的 `std::atomic<std::shared_ptr<T>>`，但卡片里也记录了它在 GCC 16 上不是无锁实现，而本机 clang 带的 libc++ 还没有提供它。
+这三种情况可以用 ThreadSanitizer（TSan）检查。TSan 是编译器自带的数据竞争检测工具，加上 `-fsanitize=thread` 编译，程序运行时如果两个线程不加同步地访问同一块内存、且至少有一个在写，它就打印 `WARNING: ThreadSanitizer: data race`。下面三个函数分别对应表里的三行：
+
+```cpp
+struct Cfg { int v = 0; };
+std::shared_ptr<Cfg> g = std::make_shared<Cfg>();
+
+void copy_only()       { std::shared_ptr<Cfg> local = g; }                // 第 1 行
+void assign()          { g = std::make_shared<Cfg>(); }                   // 第 2 行
+void write_obj(int id) { std::shared_ptr<Cfg> local = g; local->v = id; } // 第 3 行
+```
+
+每次实验开两个线程，都循环调用同一个函数 1 万次。用 Apple clang 21 编译运行的结果：
+
+| 函数 | TSan |
+| --- | --- |
+| `copy_only` | 没有报告 |
+| `assign` | 报告 data race |
+| `write_obj` | 报告 data race |
+
+`copy_only` 只修改控制块里的原子计数；`assign` 修改的是 `g` 自己的两个指针成员，两个线程同时写，不是原子操作；`write_obj` 的计数操作没问题，竞争发生在 `local->v` 上，`shared_ptr` 不管它指向的对象。Homebrew 的 GCC 16 在这台 Mac 上链接不了 TSan 运行时，这组实验只在 clang 上跑过。
+
+多个线程要读写同一个 `shared_ptr` 变量，可以加锁，或者用 C++20 的 `std::atomic<std::shared_ptr<T>>`，它的 `load` 和 `store` 是原子的。但它不一定是无锁的，把上面的 `g` 换成 `std::atomic<std::shared_ptr<Cfg>>` 实测：
+
+- GCC 16 能编译运行，`g.is_lock_free()` 返回 `false`。libstdc++ 把控制块指针的最低位当作一个自旋锁，读写前先抢这个位。
+- Apple clang 21 自带的 libc++ 还没有实现这个特化，`std::atomic<std::shared_ptr<Cfg>>` 落到通用的 `std::atomic<T>` 模板上，编译失败，报错是 `std::atomic<T> requires that 'T' be a trivially copyable type`。
 
 </SlideCard>
 
@@ -821,7 +885,7 @@ render(*pinned);
 
 ## 一个合格的简化版要满足这些
 
-手写 `shared_ptr` 是常见的面试题，也是本周的练习。下面只列要求，不给完整代码，写完后用卡片 25 对照：
+手写 `shared_ptr` 是常见的面试题，也是本周的练习。下面只列要求，不给完整代码：
 
 - **控制块**：至少有一个原子的强引用计数。要支持 `weak_ptr`，再加一个弱引用计数，按“强计数归零析构对象、弱计数归零释放控制块”分开处理。
 - **用裸指针构造**：分配控制块可能抛 `bad_alloc`，这时要 `delete` 传进来的指针再把异常抛出去，否则会泄漏。可以先用一个局部的 `unique_ptr` 接住它。
@@ -830,6 +894,16 @@ render(*pinned);
 - **移动构造和移动赋值**：直接偷走两个指针，把来源置空，标 `noexcept`。
 - **析构**：强引用计数减 1，如果减到 0，析构对象。不支持 `weak_ptr` 时同时释放控制块；支持时，控制块要等弱引用计数也归零再释放。
 - **测试**：构造、拷贝、拷贝赋值（包括自赋值）、移动、析构各测一次，用一个会打印或计数的类型确认对象只析构一次；再开两个线程同时拷贝和销毁，用 `-fsanitize=thread` 检查。
+
+第 2 到第 4 条要求最容易漏，而且漏掉之后普通的功能测试发现不了。下面用故意写错的简化版本来测，每个测试对应一种错法：构造函数直接在初始化列表里 `new` 计数器；拷贝赋值先释放自己，再拷贝对方；拷贝构造的参数写成非 `const` 引用。clang 和 GCC 16 的结果相同：
+
+| 测试 | 怎么触发 | 写错时的结果 |
+| --- | --- | --- |
+| 分配失败 | 用第 6 节的 `operator new` 计数器，让分配计数器的那一次抛 `bad_alloc` | 捕获异常后，传进来的对象没有被析构，泄漏 |
+| 自赋值 | 计数为 1 时执行 `a = a` | `-fsanitize=address` 报 `heap-use-after-free`，位置在 `operator=` |
+| 拷贝 `const` 对象 | `const SharedPtr<int> a(...); SharedPtr<int> b(a);` | 编译失败，clang 报 `no matching constructor`，GCC 报 `discards qualifiers` |
+
+自赋值出错的过程是：`a` 先把计数减到 0，删掉对象和计数器；参数 `o` 就是 `a` 自己，接着从 `o` 拿到的正是刚删掉的计数器，再对它加 1。按上面的要求改完后，同样的分配失败下对象被正确析构，`a = a` 之后计数仍然正常。你的实现应该三项都通过。
 
 </SlideCard>
 
