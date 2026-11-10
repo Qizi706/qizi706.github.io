@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="620" viewBox="0 0 720 620" role="img" aria-labelledby="title desc">
+  <title id="title">shared_ptr 的两种内存布局</title>
+  <desc id="desc">shared_ptr 对象保存对象指针和控制块指针。用 new 构造时，对象和控制块是两次分配；用 make_shared 时，控制块和对象在同一块内存里。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#426a94"/>
+    </marker>
+  </defs>
+  <rect width="720" height="620" rx="12" fill="#fff"/>
+  <g font-family="system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif" fill="#243549">
+    <text x="360" y="35" text-anchor="middle" font-size="23" font-weight="700">shared_ptr 里只有两个指针，计数在控制块里</text>
+
+    <rect x="22" y="56" width="676" height="270" rx="12" fill="#f0f5fa" stroke="#a9bfd5"/>
+    <text x="44" y="86" font-size="19" font-weight="700">shared_ptr&lt;Widget&gt;(new Widget)：两次分配</text>
+    <text x="48" y="110" font-size="15" fill="#4d5f73">shared_ptr 对象（16 字节）</text>
+    <rect x="48" y="118" width="170" height="44" rx="6" fill="#fff" stroke="#426a94" stroke-width="2"/>
+    <text x="133" y="146" text-anchor="middle" font-size="17">对象指针</text>
+    <rect x="48" y="162" width="170" height="44" rx="6" fill="#fff" stroke="#426a94" stroke-width="2"/>
+    <text x="133" y="190" text-anchor="middle" font-size="17">控制块指针</text>
+
+    <rect x="420" y="104" width="250" height="50" rx="8" fill="#fff" stroke="#6fa38f" stroke-width="2"/>
+    <text x="545" y="135" text-anchor="middle" font-size="17">Widget 对象（第 1 次分配）</text>
+
+    <rect x="420" y="172" width="250" height="130" rx="8" fill="#fff" stroke="#c58b4b" stroke-width="2"/>
+    <text x="545" y="193" text-anchor="middle" font-size="16" font-weight="600">控制块（第 2 次分配）</text>
+    <line x1="420" y1="200" x2="670" y2="200" stroke="#e2c9a8"/>
+    <text x="545" y="221" text-anchor="middle" font-size="16">虚函数表指针</text>
+    <text x="545" y="247" text-anchor="middle" font-size="16">强引用计数</text>
+    <text x="545" y="273" text-anchor="middle" font-size="16">弱引用计数</text>
+    <text x="545" y="297" text-anchor="middle" font-size="16">删除器、分配器</text>
+
+    <line x1="218" y1="140" x2="414" y2="130" stroke="#426a94" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="218" y1="184" x2="414" y2="190" stroke="#426a94" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <rect x="22" y="346" width="676" height="230" rx="12" fill="#f0f5fa" stroke="#a9bfd5"/>
+    <text x="44" y="376" font-size="19" font-weight="700">make_shared&lt;Widget&gt;()：一次分配</text>
+    <text x="48" y="400" font-size="15" fill="#4d5f73">shared_ptr 对象（16 字节）</text>
+    <rect x="48" y="408" width="170" height="44" rx="6" fill="#fff" stroke="#426a94" stroke-width="2"/>
+    <text x="133" y="436" text-anchor="middle" font-size="17">对象指针</text>
+    <rect x="48" y="452" width="170" height="44" rx="6" fill="#fff" stroke="#426a94" stroke-width="2"/>
+    <text x="133" y="480" text-anchor="middle" font-size="17">控制块指针</text>
+
+    <rect x="420" y="394" width="250" height="168" rx="8" fill="#fff" stroke="#c58b4b" stroke-width="2"/>
+    <text x="545" y="415" text-anchor="middle" font-size="16" font-weight="600">一块内存（只分配一次）</text>
+    <line x1="420" y1="422" x2="670" y2="422" stroke="#e2c9a8"/>
+    <text x="545" y="443" text-anchor="middle" font-size="16">虚函数表指针</text>
+    <text x="545" y="469" text-anchor="middle" font-size="16">强引用计数</text>
+    <text x="545" y="495" text-anchor="middle" font-size="16">弱引用计数</text>
+    <rect x="434" y="510" width="222" height="40" rx="6" fill="#eef7f2" stroke="#6fa38f" stroke-width="2"/>
+    <text x="545" y="536" text-anchor="middle" font-size="16">Widget 对象</text>
+
+    <line x1="218" y1="430" x2="428" y2="526" stroke="#426a94" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="218" y1="474" x2="414" y2="410" stroke="#426a94" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <text x="360" y="604" text-anchor="middle" font-size="16" fill="#4d5f73">强引用计数归零时析构 Widget；弱引用计数也归零后，控制块所在的内存才释放。</text>
+  </g>
+</svg>

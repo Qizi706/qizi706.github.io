@@ -1,0 +1,846 @@
+---
+title: 'C++ 智能指针：谁拥有这块内存'
+description: '从一个 new 出来却没人负责释放的对象出发，用所有权理解 unique_ptr、shared_ptr 和 weak_ptr：零开销的独占、Pimpl 的不完整类型、控制块与引用计数、循环引用、make_shared 的一次分配，最后实测引用计数在热路径和多线程下的代价，并整理参数该怎么传。'
+pubDate: '2026-11-10T20:00:00+08:00'
+readingOrder: 8
+readingNote: '资源管理：用所有权理解三种智能指针和引用计数的代价'
+categories:
+  - 'C/C++'
+tags:
+  - 'C++特性'
+  - '智能指针'
+  - 'RAII'
+  - '现代C++'
+draft: true
+mathjax: false
+---
+
+import ArticleImage from '../../components/ArticleImage.astro';
+import SharedPtrLayout from '../../assets/cpp-smart-pointers/shared-ptr-layout.svg';
+
+## 1. 这个对象，谁负责 delete？
+
+<SlideCard title="一个 new 引出的问题">
+
+## 先看一个返回裸指针的工厂
+
+```cpp
+Widget* make_widget(int id);
+```
+
+只看这一行，回答不了下面几个问题：
+
+- 调用方用完以后要不要 `delete`？还是工厂内部有个对象池，调用方不能删？
+- 能不能把这个指针交给另一个对象长期保存？
+- 删的时候用 `delete` 还是 `delete[]`，还是要调用某个 `destroy_widget`？
+
+这些问题合起来叫**所有权**：谁负责在合适的时候释放这块资源。裸指针的类型里没有这部分信息，只能靠注释和约定，约定一旦没守住，就是泄漏或重复释放。
+
+</SlideCard>
+
+<SlideCard title="异常让约定更难守住">
+
+## 中间抛异常，delete 就被跳过了
+
+即使所有人都记得 `delete`，提前返回和异常也会绕过它：
+
+```cpp
+struct Widget {
+    int id;
+    explicit Widget(int i) : id(i) { std::printf("  Widget(%d)\n", id); }
+    ~Widget() { std::printf("  ~Widget(%d)\n", id); }
+};
+
+void use(Widget&) { throw std::runtime_error("fail"); }
+
+void raw()   { Widget* w = new Widget(1); use(*w); delete w; }
+void smart() { auto w = std::make_unique<Widget>(2); use(*w); }
+```
+
+分别调用两个函数并捕获异常，输出是：
+
+```text
+raw:
+  Widget(1)
+  caught
+smart:
+  Widget(2)
+  ~Widget(2)
+  caught
+```
+
+`raw` 里的 `Widget(1)` 再也没有析构，泄漏了。`smart` 里的 `w` 是局部对象，异常离开函数时要做栈展开，沿途的局部对象都会被析构，`w` 的析构函数再去 `delete`。
+
+这就是 **RAII**：把资源交给一个对象管理，对象析构时释放资源。智能指针是通过指针管理资源的 RAII 类型，最常见的资源是堆上的对象。标准库的三种智能指针对应三种所有权：
+
+| 类型 | 所有权 | 一句话 |
+| --- | --- | --- |
+| `std::unique_ptr<T>` | 独占 | 只有一个主人，可以转让，不能复制 |
+| `std::shared_ptr<T>` | 共享 | 多个主人，最后一个离开时释放 |
+| `std::weak_ptr<T>` | 不拥有 | 能查到对象还在不在，需要时临时变成主人 |
+
+</SlideCard>
+
+<SlideCard title="先猜，再往下读">
+
+## 四个问题
+
+先写下你的答案，读到对应的小节再对照：
+
+- `sizeof(std::unique_ptr<int>)` 和 `sizeof(std::shared_ptr<int>)` 各是多少字节？（第 2、4 节）
+- 两个对象互相用 `shared_ptr` 指向对方，离开作用域后它们会被析构吗？（第 5 节）
+- `std::make_shared<Widget>()` 分配几次内存？`std::shared_ptr<Widget>(new Widget)` 呢？（第 6 节）
+- 8 个线程同时拷贝同一个 `shared_ptr`，每次拷贝比单线程慢几倍？（第 7 节）
+
+最后一题最难凭直觉答对。它的答案决定了 `shared_ptr` 该不该出现在热路径上，也是第 8 节参数写法的依据。
+
+</SlideCard>
+
+<Note title="示例约定">
+
+全文以 **C++20** 为基线。示例省略了 `<memory>`、`<cstdio>`、`<stdexcept>`、`<vector>` 等头文件。文中的输出和编译错误都在 Apple clang 21（libc++）与 GCC 16（libstdc++）上核对过，两者结果相同的地方不再分别列出。第 7 节的测量另行说明环境。
+
+这是[现代 C++ 长期学习计划](/blog/modern-cpp-mastery-roadmap/)中的一篇。`unique_ptr` 只能移动、不能拷贝，如果对移动语义还不熟，先读[移动语义](/blog/cpp-move-semantics/)。和本文配套的面试题在 [C++ 八股卡片](/blog/cpp-interview-cards/)的卡片 15、23–26，里面有更多实测细节。
+
+</Note>
+
+## 2. unique_ptr：只有一个主人
+
+<SlideCard title="独占意味着不能复制">
+
+## 拷贝是编译错误，转让要写 move
+
+```cpp
+auto a = std::make_unique<Widget>(1);
+auto b = a;              // 编译错误
+auto c = std::move(a);   // 可以：所有权转给 c，a 变成空
+```
+
+clang 报 `call to implicitly-deleted copy constructor of 'unique_ptr<Widget>'`，GCC 报 `use of deleted function`。如果允许拷贝，就会有两个 `unique_ptr` 都以为自己该负责 `delete`，所以拷贝构造和拷贝赋值被删除了，只留下移动。
+
+转让后的 `a` 是空的，`a.get()` 返回 `nullptr`。这和移动语义文章里“被移动后的对象处于有效但未指定的状态”不同：标准明确规定 `unique_ptr` 被移动后为空。
+
+</SlideCard>
+
+<SlideCard title="工厂函数该返回什么">
+
+## 返回 unique_ptr，调用方想共享时再转
+
+```cpp
+std::unique_ptr<Widget> make_widget(int id);
+
+std::shared_ptr<Widget> s = make_widget(1);   // 可以：unique_ptr 右值转成 shared_ptr
+std::unique_ptr<Widget> u = s;                 // 编译错误
+```
+
+工厂不知道调用方要独占还是共享。返回 `unique_ptr` 时两种需求都能满足：要独占就直接用，要共享就转成 `shared_ptr`。反过来不行，`shared_ptr` 无法确认没有别的主人，所以不能交出独占权。
+
+另一个原因是开销：`unique_ptr` 没有控制块，和裸指针一样大，下面马上会看到；`shared_ptr` 要多一次分配和原子计数。大部分对象不需要共享，不该为此付费。
+
+</SlideCard>
+
+<SlideCard title="零开销从哪来">
+
+## 删除器是类型的一部分
+
+`unique_ptr` 的完整声明是 `template <class T, class D = std::default_delete<T>> class unique_ptr;`，第二个参数是**删除器**，负责释放资源。它要保存一个指针和一个删除器，大小取决于删除器有没有状态：
+
+| 类型 | `sizeof` |
+| --- | --- |
+| `int*` | 8 |
+| `unique_ptr<int>` | 8 |
+| `unique_ptr<int, 无捕获 lambda>` | 8 |
+| `unique_ptr<int, void(*)(int*)>` | 16 |
+| `unique_ptr<int, std::function<void(int*)>>` | 40 |
+
+默认删除器和无捕获 lambda 都是空类。空类单独存在时 `sizeof` 是 1，但标准库把删除器作为基类，或者用 C++20 的 `[[no_unique_address]]` 保存，让它不占空间，这就是[对象布局文章](/blog/cpp-object-layout/)第 3 节讲的空基类优化。函数指针删除器要保存一个地址，加上对齐就是 16 字节。
+
+所以 `unique_ptr` 的“零开销”指的是：默认删除器下，大小和裸指针相同，解引用生成的指令也相同。按值传参时还有调用约定上的差别，见卡片 15。
+
+</SlideCard>
+
+<SlideCard title="管理的不一定是内存">
+
+## 自定义删除器：用 fclose 关闭文件
+
+`fopen` 得到的 `FILE*` 要用 `fclose` 释放，不能 `delete`。把释放方式写进删除器：
+
+```cpp
+auto close_file = [](std::FILE* f) { std::fclose(f); };
+std::unique_ptr<std::FILE, decltype(close_file)> f(std::fopen("data.txt", "r"), close_file);
+```
+
+C++20 起无捕获 lambda 可以默认构造，也可以直接写在类型里：
+
+```cpp
+using File = std::unique_ptr<std::FILE, decltype([](std::FILE* f) { std::fclose(f); })>;
+File f(std::fopen("data.txt", "r"));   // 8 字节
+```
+
+这里优先用无捕获 lambda，而不是 `&std::fclose` 这样的函数指针，有两个原因：
+
+- 大小：前者 8 字节，后者 16 字节，见上一张表。
+- 可移植性：C++20 规定，除了少数被指定为可取地址的函数，对标准库函数取地址的行为是未指定的，可能编译不过（[namespace.std]）。`fclose` 不在这个名单里，包一层 lambda 就没有这个问题。
+
+还有一个细节：`fopen` 失败时返回空指针，而 `fclose(nullptr)` 是未定义行为。`unique_ptr` 析构时只在指针非空的情况下调用删除器，所以上面的写法在打开失败时也是安全的，但使用前仍要检查 `if (!f)`。
+
+</SlideCard>
+
+<SlideCard title="几个容易用错的接口">
+
+## get、release、reset
+
+| 调用 | 作用 | 容易错在哪 |
+| --- | --- | --- |
+| `p.get()` | 返回裸指针，所有权不变 | 不要用它构造另一个智能指针，也不要 `delete` 它 |
+| `p.release()` | 返回裸指针，放弃所有权，`p` 变空 | **不会释放资源**，返回值要接住并交给新的主人，否则泄漏 |
+| `p.reset(q)` | 释放旧资源，改为管理 `q` | 旧资源立即释放，之后别再用旧的裸指针 |
+
+数组要写成 `std::unique_ptr<int[]>`，它会用 `delete[]` 释放，并提供 `operator[]`。创建时用 `std::make_unique<int[]>(n)`。不过大多数时候 `std::vector<int>` 更合适。
+
+</SlideCard>
+
+## 3. Pimpl：unique_ptr 遇到不完整类型
+
+<SlideCard title="头文件里只有一个前置声明">
+
+## 一个合法的写法，编译却失败
+
+**Pimpl**（pointer to implementation）是一种隐藏实现的写法：头文件只前置声明 `Impl`，具体成员放在 `.cpp` 里，改实现时不用重新编译所有包含头文件的代码。
+
+```cpp
+// widget.h
+class Widget {
+public:
+    Widget();
+    int value() const;
+private:
+    struct Impl;                    // 只有声明，这里 Impl 是不完整类型
+    std::unique_ptr<Impl> impl_;
+};
+
+// widget.cpp
+struct Widget::Impl { std::string name; std::vector<int> data{1, 2, 3}; };
+Widget::Widget() : impl_(std::make_unique<Impl>()) {}
+int Widget::value() const { return static_cast<int>(impl_->data.size()); }
+
+// main.cpp
+int main() { Widget w; }
+```
+
+编译 `main.cpp` 时，两个编译器都报错：
+
+```text
+clang: unique_ptr.h: error: invalid application of 'sizeof' to an incomplete type 'Widget::Impl'
+GCC:   unique_ptr.h: error: invalid application of 'sizeof' to incomplete type 'Widget::Impl'
+```
+
+</SlideCard>
+
+<SlideCard title="错误发生在哪个文件">
+
+## 析构函数在头文件里被隐式定义
+
+`Widget` 没有声明析构函数，编译器会隐式生成一个，而且它是内联的：哪个文件销毁了 `Widget`，就在哪个文件里生成。`main.cpp` 里的 `w` 离开作用域时，要析构 `impl_`，也就是调用 `default_delete<Impl>` 去 `delete` 一个 `Impl`。
+
+`delete` 一个不完整类型时，编译器不知道它有没有析构函数。如果它实际上有非平凡的析构函数，结果是未定义行为。所以两个标准库都在 `default_delete` 里用 `static_assert` 检查 `sizeof(T)`，对不完整类型取 `sizeof` 本身就是错误，于是提前得到一个编译错误。报错里的 `sizeof` 就来自这里。
+
+修复的思路是：让析构函数在 `Impl` 已经完整的 `.cpp` 里生成。
+
+```cpp
+// widget.h
+class Widget {
+public:
+    Widget();
+    ~Widget();                                // 只声明
+    Widget(Widget&&) noexcept;                // 声明了析构函数，移动不再隐式生成，要补上
+    Widget& operator=(Widget&&) noexcept;
+    int value() const;
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+// widget.cpp，在 Impl 的定义之后
+Widget::~Widget() = default;
+Widget::Widget(Widget&&) noexcept = default;
+Widget& Widget::operator=(Widget&&) noexcept = default;
+```
+
+改完后两个编译器都能编译运行。
+
+只把析构函数挪走还不够。下面三种写法，`main.cpp` 都会报同样的错误：
+
+| 留在头文件里的写法 | 为什么需要 `Impl` 的析构 |
+| --- | --- |
+| `Widget() {}` | 构造函数中途抛异常时，要析构已经构造好的成员 |
+| `Widget(Widget&&) noexcept = default;` | 同上，移动构造也是构造函数 |
+| `Widget& operator=(Widget&&) noexcept = default;` | 要释放 `*this` 原来的 `Impl` |
+
+所以规则是：**凡是可能析构 `impl_` 的成员函数，包括构造函数，都在 `.cpp` 里、`Impl` 的定义之后再定义。** 头文件里只留声明。
+
+</SlideCard>
+
+<SlideCard title="shared_ptr 为什么没有这个问题">
+
+## 删除器在构造时就确定了
+
+把 `impl_` 换成 `std::shared_ptr<Impl>`，不声明析构函数，原来的 `main.cpp` 也能编译通过。
+
+区别还是在删除器。`unique_ptr` 的删除器是类型的一部分，析构的时候才去实例化 `delete`，那时必须看到完整类型。`shared_ptr` 在构造时（也就是在 `widget.cpp` 里调用 `make_shared<Impl>()` 时）就把“怎样销毁 `Impl`”记进控制块，之后析构只是通过控制块调用它，不需要再看 `Impl` 的定义。
+
+这条差别来自同一个设计取舍，下一节讲控制块时会看到它的完整样子。Pimpl 一般仍然选 `unique_ptr`：实现对象只属于这个 `Widget`，没有共享的需要。
+
+</SlideCard>
+
+## 4. shared_ptr：计数放在控制块里
+
+<SlideCard title="16 字节里装了什么">
+
+## 两个指针
+
+`sizeof(std::shared_ptr<int>)` 是 16：一个指针指向对象，另一个指向**控制块**。引用计数不在 `shared_ptr` 对象里，因为所有共享同一个对象的 `shared_ptr` 必须看到同一个计数，它只能放在堆上的公共位置。
+
+<ArticleImage
+	src={SharedPtrLayout}
+	alt="shared_ptr 对象保存对象指针和控制块指针。用 new 构造时，Widget 对象和控制块分两次分配；用 make_shared 时，控制块和 Widget 对象在同一块内存里。"
+	width={688}
+	caption="控制块里有强引用计数、弱引用计数和删除器。虚函数表指针是 libc++ 和 libstdc++ 的实现方式，标准没有规定。"
+/>
+
+控制块里主要有：
+
+- **强引用计数**：有多少个 `shared_ptr` 共享这个对象。降到 0 时调用删除器，析构对象。
+- **弱引用计数**：和 `weak_ptr` 有关，第 5 节再讲。它也降到 0 时，控制块本身才释放。
+- **删除器和分配器**：构造时传入的，类型被擦除后存在这里。
+
+两个实现都让控制块继承一个带虚函数的基类，销毁对象时通过虚函数调用到“知道真实类型和删除器”的那段代码。这就是上一节 Pimpl 能用 `shared_ptr` 的原因，也是删除器不进入 `shared_ptr` 类型的原因：`shared_ptr<FILE>` 无论用什么删除器都是同一个类型，可以放进同一个容器，见卡片 24。
+
+同一个机制还有一个副作用：控制块记住的是**创建时的真实类型**。`Base` 的析构函数不是 `virtual` 时：
+
+```cpp
+{ std::shared_ptr<Base> p = std::make_shared<Derived>(); }   // 输出 ~Derived、~Base
+{ std::unique_ptr<Base> p = std::make_unique<Derived>(); }   // 只输出 ~Base，未定义行为
+```
+
+两个编译器开 `-Wall` 都没有警告，因为这两个类没有虚函数。不要依赖 `shared_ptr` 的这个行为：只要有人改用 `unique_ptr` 或裸指针，就会出错。要通过基类指针销毁对象，基类析构函数就写成 `virtual`。
+
+</SlideCard>
+
+<SlideCard title="控制块什么时候创建">
+
+## 三种情况会新建，从 shared_ptr 或 weak_ptr 构造不会
+
+| 写法 | 新建控制块？ |
+| --- | --- |
+| `std::make_shared<T>(...)` | 是 |
+| 用裸指针构造：`std::shared_ptr<T>(new T)` | 是 |
+| 用 `unique_ptr` 构造：`std::shared_ptr<T>(std::move(u))` | 是（`u` 非空时） |
+| 用 `shared_ptr` 拷贝或移动构造 | 否，共用原来的 |
+| 用 `weak_ptr` 构造或 `w.lock()` | 否，共用原来的 |
+
+前三种的共同点是：传进来的东西还没有控制块，`shared_ptr` 只能新建一个。这也带来一个规则：**一个对象只能有一个控制块**。
+
+</SlideCard>
+
+<SlideCard title="同一个裸指针，两个控制块">
+
+## 两套计数各自归零，对象就被删两次
+
+```cpp
+Widget* raw = new Widget;
+std::shared_ptr<Widget> a(raw);
+std::shared_ptr<Widget> b(raw);   // 又建了一个控制块
+std::printf("a.use_count() = %ld, b.use_count() = %ld\n", a.use_count(), b.use_count());
+```
+
+用 `-fsanitize=address` 编译运行：
+
+```text
+a.use_count() = 1, b.use_count() = 1
+~Widget
+~Widget
+ERROR: AddressSanitizer: attempting double-free
+```
+
+`a` 和 `b` 都以为自己是唯一的主人，计数都是 1，各自析构时都去 `delete raw`。不开 ASan 时，macOS 上进程被 `malloc` 的检查直接终止。重复释放是未定义行为，不保证一定崩溃，所以更危险。
+
+避免的方法很简单：`new` 出来的指针立刻交给 `shared_ptr`，或者直接用 `make_shared`，不让裸指针在外面停留。之后要共享，就拷贝 `shared_ptr`，不要再用 `get()` 拿到的裸指针去构造。
+
+</SlideCard>
+
+<SlideCard title="对象想把自己交出去">
+
+## enable_shared_from_this
+
+有一种情况很难避开裸指针：成员函数里只有 `this`，却要把自己的 `shared_ptr` 交出去，比如把当前会话登记到一个活跃列表里。写成 `std::shared_ptr<Session>(this)` 就是上一张卡片的错误：又建了一个控制块。
+
+正确的写法是继承 `std::enable_shared_from_this`：
+
+```cpp
+struct Session;
+std::vector<std::shared_ptr<Session>> active;
+
+struct Session : std::enable_shared_from_this<Session> {
+    void start() { active.push_back(shared_from_this()); }
+};
+
+auto s = std::make_shared<Session>();
+s->start();
+std::printf("use_count = %ld\n", s.use_count());   // 2：s 和 active 里的一份
+
+Session local;
+local.start();   // 抛出 std::bad_weak_ptr
+```
+
+原理是：基类里藏着一个 `weak_ptr`。`make_shared` 或 `shared_ptr` 的构造函数在为这个对象建控制块时，会顺手把这个 `weak_ptr` 指向控制块。`shared_from_this()` 就是用它构造一个 `shared_ptr`，共用已有的控制块。
+
+所以它有一个前提：**调用时对象必须已经被某个 `shared_ptr` 持有**。栈上的 `local` 没有控制块，C++17 起会抛 `std::bad_weak_ptr`。在构造函数里调用也一样会抛，因为那时控制块还没和对象关联上。实践中常把构造函数设为 `private`，只提供返回 `shared_ptr` 的静态工厂，让对象没法在栈上创建。
+
+</SlideCard>
+
+## 5. weak_ptr：观察，但不拥有
+
+<SlideCard title="不增加强引用计数">
+
+## 先问对象还在不在，再临时成为主人
+
+`weak_ptr` 指向一个由 `shared_ptr` 管理的对象，但不让对象多活一秒。它不能直接解引用，要先调用 `lock()`：对象还在，就得到一个 `shared_ptr`；已经销毁，就得到空的 `shared_ptr`。
+
+```cpp
+std::weak_ptr<int> w;
+{
+    auto sp = std::make_shared<int>(42);
+    w = sp;
+    std::printf("use_count = %ld, expired = %d\n", w.use_count(), w.expired());
+    if (auto p = w.lock()) std::printf("lock -> %d\n", *p);
+}
+std::printf("use_count = %ld, expired = %d\n", w.use_count(), w.expired());
+std::printf("lock -> %s\n", w.lock() ? "non-null" : "nullptr");
+```
+
+```text
+use_count = 1, expired = 0
+lock -> 42
+use_count = 0, expired = 1
+lock -> nullptr
+```
+
+`w = sp` 之后强引用计数仍是 1，`weak_ptr` 只增加弱引用计数。`sp` 离开作用域，对象被析构，`w` 还能安全地报告“已经过期”，因为控制块还在，这正是弱引用计数存在的原因。
+
+</SlideCard>
+
+<SlideCard title="lock 是一个原子的动作">
+
+## 不要先 expired 再 lock
+
+```cpp
+if (!w.expired()) {
+    w.lock()->update();   // 多线程下可能拿到空指针
+}
+```
+
+`expired()` 返回 `false` 之后、`lock()` 之前，另一个线程可能释放了最后一个 `shared_ptr`。`lock()` 把“检查是否还在”和“增加强引用计数”合成一个原子操作，所以只用它的返回值判断：
+
+```cpp
+if (auto p = w.lock()) {
+    p->update();          // p 活着的这段时间，对象一定不会被析构
+}
+```
+
+`expired()` 只适合“已经过期就不用再管”的场景，比如清理缓存里失效的条目。
+
+</SlideCard>
+
+<SlideCard title="两个对象互相持有">
+
+## 循环引用：计数永远到不了 0
+
+```cpp
+struct Child;
+struct Parent {
+    std::shared_ptr<Child> child;
+    ~Parent() { std::puts("~Parent"); }
+};
+struct Child {
+    std::shared_ptr<Parent> parent;
+    ~Child() { std::puts("~Child"); }
+};
+
+{
+    auto p = std::make_shared<Parent>();
+    p->child = std::make_shared<Child>();
+    p->child->parent = p;
+    std::printf("parent use_count = %ld\n", p.use_count());
+}
+std::puts("scope end");
+```
+
+```text
+parent use_count = 2
+scope end
+```
+
+两个析构函数都没有执行。离开作用域时，局部变量 `p` 析构，`Parent` 的计数从 2 降到 1，剩下的那 1 来自 `Child::parent`；而 `Child` 的计数来自 `Parent::child`。两个对象互相让对方的计数停在 1，都不会被释放。
+
+把 `Child::parent` 改成 `std::weak_ptr<Parent>` 后：
+
+```text
+parent use_count = 1
+~Parent
+~Child
+scope end
+```
+
+判断哪一边用 `weak_ptr`，看谁拥有谁：父节点拥有子节点，子节点只是需要找到父节点。观察者模式、缓存、回调里保存的对象，也是同样的判断。
+
+</SlideCard>
+
+## 6. make_shared 与 make_unique
+
+<SlideCard title="一次分配还是两次">
+
+## make_shared 把对象放进控制块
+
+回到第 4 节的图：`std::shared_ptr<Widget>(new Widget)` 先 `new` 一个对象，构造函数再分配一个控制块，一共两次。`std::make_shared<Widget>()` 一次分配一块内存，前面是计数，后面就是对象。
+
+卡片 23 用替换的全局 `operator new` 计数，确认了这一点：前者 2 次分配，后者 1 次。少一次分配，也意味着计数和对象挨在一起，访问时局部性更好。
+
+| | `shared_ptr<T>(new T)` | `make_shared<T>()` |
+| --- | --- | --- |
+| 分配次数 | 2 | 1 |
+| 自定义删除器 | 可以 | 不可以 |
+| 调用 `private` 构造函数 | 可以（在类内部 `new`） | 不可以 |
+| 花括号初始化 | 可以 | 不可以，内部用圆括号 |
+| 有 `weak_ptr` 存活时 | 对象的内存可以先还 | 对象析构了，整块内存要等 `weak_ptr` 也销毁 |
+
+</SlideCard>
+
+<SlideCard title="一次分配的代价">
+
+## 对象析构了，内存还占着
+
+最后一行要结合上一节来看。强引用计数归零时，对象会被析构；但只要还有 `weak_ptr`，它就要读控制块里的计数来判断对象还在不在，所以控制块不能释放。
+
+用 `make_shared` 时，对象和控制块是同一块内存，控制块不能还，对象那部分也只能一起等着。对象很大、`weak_ptr` 又活得很久时（比如缓存里留着大量弱引用），这块内存就会被占住。这种情况下用 `shared_ptr<T>(new T)` 反而更合适。
+
+</SlideCard>
+
+<SlideCard title="异常安全的那条老理由">
+
+## C++17 之后它已经不成立
+
+以前推荐 `make_shared` 还有一个理由：
+
+```cpp
+process(std::shared_ptr<Widget>(new Widget), compute_priority());
+```
+
+C++17 之前，编译器可以先执行 `new Widget`，再执行 `compute_priority()`，最后才构造 `shared_ptr`。如果 `compute_priority()` 抛异常，`Widget` 就泄漏了。
+
+C++17 规定，一个参数的初始化完成之前，不会穿插另一个参数的求值，这个问题已经消失。现在推荐 `make_shared` 的理由是少一次分配，以及不出现裸的 `new`。
+
+`make_unique` 是 C++14 才补上的。`unique_ptr` 没有控制块，它省不了分配，好处只剩不写 `new`，并且和 `make_shared` 写法一致。
+
+</SlideCard>
+
+## 7. 引用计数的代价
+
+<SlideCard title="为什么必须是原子的">
+
+## 两个线程同时拷贝，计数不能丢
+
+不同线程可以各自持有同一个对象的 `shared_ptr`，它们会同时修改同一个计数。如果计数只是普通的 `++`，两个线程同时读到 1、各自写回 2，就少算了一次，之后会提前 `delete`。所以控制块里的计数增减都是原子操作。
+
+在 arm64 上编译一次拷贝和一次 `reset`，看生成的指令：
+
+| 库 | 计数加 1 | 计数减 1 |
+| --- | --- | --- |
+| libc++（clang） | `ldadd`，relaxed | `ldaddal`，acquire + release |
+| libstdc++（GCC 16） | `ldaddal` | `ldaddal` |
+
+x86 上对应的是带 `lock` 前缀的指令。它们都是读改写一步完成的原子指令。
+
+libc++ 的做法说明了需要多强的内存序：加 1 时，调用方手里已经有一个 `shared_ptr`，对象不可能在这时被释放，只要计数本身不出错就行，relaxed 足够。减 1 时，如果这次让计数归零，就要析构对象，必须保证别的线程在释放各自的 `shared_ptr` 之前对对象做的写入，在析构时都能看到，所以要 acquire 和 release。内存序的细节留到并发和内存模型的文章再展开。
+
+</SlideCard>
+
+<SlideCard title="先猜，再看数据">
+
+## 实验设计
+
+下面两组测量回答两个问题。读之前先猜一下数量级：
+
+- 单线程下，按值传 `shared_ptr` 比按 `const&` 传慢多少？
+- 8 个线程同时拷贝同一个 `shared_ptr`，每次拷贝会变慢几倍？
+
+第一组：一个 `noinline` 函数分别以三种方式接收参数，循环调用 1 亿次：
+
+```cpp
+[[gnu::noinline]] int by_value(std::shared_ptr<Payload> p);        // 拷贝：计数加 1，返回时减 1
+[[gnu::noinline]] int by_cref(const std::shared_ptr<Payload>& p);  // 只传地址
+[[gnu::noinline]] int by_ref(const Payload& p);                    // 不经过 shared_ptr
+```
+
+第二组：开 1、2、4、8 个线程，每个线程循环 1000 万次“拷贝一个 `shared_ptr` 再销毁”。一种是所有线程拷贝**同一个** `shared_ptr`，另一种是每个线程拷贝**自己的** `shared_ptr`。`Payload` 有 256 字节，保证各线程的控制块不在同一条 cache line 上。
+
+两组都先预热，再取 5 次中的最小值，并用 `asm volatile` 屏障防止编译器把循环优化掉，做法和 [cache 文章](/blog/memory-hierarchy-cache-locality/)第 8 节相同。
+
+</SlideCard>
+
+<SlideCard title="单线程：按值传参">
+
+## 拷贝一次 shared_ptr 约 3 ns
+
+环境：Apple M5 Pro，macOS，`-std=c++20 -O2`，没有绑核。
+
+| 参数 | clang | GCC 16 |
+| --- | --- | --- |
+| `shared_ptr<Payload>`（按值） | 3.17 ns | 3.14 ns |
+| `const shared_ptr<Payload>&` | 0.44 ns | 0.44 ns |
+| `const Payload&` | 0.44 ns | 0.44 ns |
+
+按 `const&` 传和直接传对象引用一样快，只是一次函数调用。按值传多出来的约 2.7 ns 是一次原子加和一次原子减，平均每次原子操作约 1.4 ns（推算值）。
+
+单看 3 ns 不大，但它出现在每一次调用上。一个每秒处理几百万条消息的循环，如果每条消息都按值传几次 `shared_ptr`，这部分开销就会出现在火焰图里。
+
+</SlideCard>
+
+<SlideCard title="多线程：争抢同一个计数">
+
+## 8 个线程，慢了 30 倍以上
+
+每个线程循环 1000 万次，用总耗时除以 1000 万，得到“一个线程完成一次拷贝加销毁”的平均耗时：
+
+| 线程数 | 同一个对象（clang） | 各自的对象（clang） | 同一个对象（GCC 16） | 各自的对象（GCC 16） |
+| --- | --- | --- | --- | --- |
+| 1 | 3.46 ns | 3.42 ns | 3.09 ns | 3.10 ns |
+| 2 | 24.84 ns | 3.54 ns | 53.27 ns | 3.18 ns |
+| 4 | 51.73 ns | 3.71 ns | 116.79 ns | 3.41 ns |
+| 8 | 114.75 ns | 3.71 ns | 249.89 ns | 3.49 ns |
+
+clang 版本重复运行一次，同一个对象的三行依次是 25.87、54.27、117.65 ns，和上表一致。
+
+各线程拷贝自己的对象时，耗时几乎不随线程数变化。拷贝同一个对象时，2 个线程就慢了 7 倍以上，8 个线程慢了 30 倍以上（clang），而且线程越多越慢。两种情况执行的指令完全一样，差别只在于**原子操作的目标是不是同一条 cache line**。
+
+这和 cache 文章第 6 节的 false sharing 是同一个机制：一条 cache line 同一时刻只能在一个核里处于可写状态。每次原子加减都要把这条 line 抢到自己的核上，其他核里的副本随之失效，下一次轮到别的核时再抢回去。false sharing 是不同变量恰好挤在一条 line 上，这里是所有线程真的在改同一个计数，没法靠调整布局解决，只能减少拷贝。
+
+GCC 的数字更高，两种库的实现细节不同（比如本节开头看到的内存序），本文没有进一步测量差异来自哪里。具体数字会随机器变化，但“共享同一个计数时随线程数上升、各自计数时不变”的形状不依赖于这台机器。
+
+</SlideCard>
+
+<SlideCard title="线程安全到底保证了什么">
+
+## 只保证控制块
+
+“`shared_ptr` 是线程安全的”这句话只对了一部分：
+
+| 操作 | 安全吗 |
+| --- | --- |
+| 不同线程各自拷贝、销毁指向同一对象的不同 `shared_ptr` | 安全，计数是原子的 |
+| 多个线程同时给同一个 `shared_ptr` 变量赋值，或一边赋值一边读 | 不安全，变量里的两个指针不是原子更新的 |
+| 多个线程通过各自的 `shared_ptr` 修改它指向的对象 | 不安全，`shared_ptr` 不管对象本身 |
+
+卡片 26 用 ThreadSanitizer 验证了这三种情况。多个线程要读写同一个 `shared_ptr` 变量，可以加锁，或者用 C++20 的 `std::atomic<std::shared_ptr<T>>`，但卡片里也记录了它在 GCC 16 上不是无锁实现，而本机 clang 带的 libc++ 还没有提供它。
+
+</SlideCard>
+
+## 8. 参数该怎么写
+
+<SlideCard title="按函数要对所有权做什么来选">
+
+## 不涉及所有权，就别传智能指针
+
+上一节的数据给出了直接的结论：函数只是使用对象，就不要让它经过 `shared_ptr` 的拷贝。更一般地，参数类型应该表达函数对所有权的意图：
+
+| 函数要做什么 | 参数写法 |
+| --- | --- |
+| 只使用对象，不关心它归谁管 | `Widget&` 或 `const Widget&`；可能为空时用 `Widget*` |
+| 接管所有权 | `std::unique_ptr<Widget>`，按值传，调用方写 `std::move` |
+| 可能让调用方的指针指向另一个对象 | `std::unique_ptr<Widget>&` |
+| 要保存一份，和调用方共享所有权 | `std::shared_ptr<Widget>`，按值传，函数里 `std::move` 进成员 |
+| 也许保存、也许不保存 | `const std::shared_ptr<Widget>&`，需要保存时再拷贝 |
+
+第一行最常用。一个计算订单簿价差的函数，参数写 `const OrderBook&` 就够了：它既能接受栈上的对象，也能接受 `*sp` 和 `*up`，不把调用方绑定到某种智能指针上。
+
+第四行按值传、再移动进成员，调用方传右值时一次拷贝都没有，传左值时恰好拷贝一次，这是“要保存一份”时最省的写法。
+
+</SlideCard>
+
+<SlideCard title="按引用传也有一个坑">
+
+## 引用的那个 shared_ptr 在调用中途被改了
+
+```cpp
+std::shared_ptr<Widget> g_current;
+
+void refresh() { g_current = std::make_shared<Widget>(2); }
+
+void render(const Widget& w) {
+    refresh();          // 旧的 Widget 被释放
+    std::printf("%d\n", w.id);   // w 已经悬空
+}
+
+render(*g_current);
+```
+
+`render` 拿到的是对象的引用，没有任何主人保证它活到函数结束。如果函数调用链里可能替换掉这个全局或成员 `shared_ptr`，就在调用链的最上层先拷贝一份局部的 `shared_ptr`，用它“固定”住对象：
+
+```cpp
+auto pinned = g_current;   // 计数加 1，对象至少活到这一行所在的作用域结束
+render(*pinned);
+```
+
+这次拷贝只在入口处发生一次，比每层都按值传便宜得多。
+
+</SlideCard>
+
+## 9. 手写 shared_ptr 之前
+
+<SlideCard title="先把规格列清楚">
+
+## 一个合格的简化版要满足这些
+
+手写 `shared_ptr` 是常见的面试题，也是本周的练习。下面只列要求，不给完整代码，写完后用卡片 25 对照：
+
+- **控制块**：至少有一个原子的强引用计数。要支持 `weak_ptr`，再加一个弱引用计数，按“强计数归零析构对象、弱计数归零释放控制块”分开处理。
+- **用裸指针构造**：分配控制块可能抛 `bad_alloc`，这时要 `delete` 传进来的指针再把异常抛出去，否则会泄漏。可以先用一个局部的 `unique_ptr` 接住它。
+- **拷贝构造**：参数是 `const SharedPtr&`，否则 `const` 对象没法拷贝。
+- **拷贝赋值**：`a = a` 不能出错。用“按值传参再交换”，自赋值时计数先加 1 再减 1，自然安全。
+- **移动构造和移动赋值**：直接偷走两个指针，把来源置空，标 `noexcept`。
+- **析构**：强引用计数减 1，如果减到 0，析构对象。不支持 `weak_ptr` 时同时释放控制块；支持时，控制块要等弱引用计数也归零再释放。
+- **测试**：构造、拷贝、拷贝赋值（包括自赋值）、移动、析构各测一次，用一个会打印或计数的类型确认对象只析构一次；再开两个线程同时拷贝和销毁，用 `-fsanitize=thread` 检查。
+
+</SlideCard>
+
+## 10. 检验：合上文章答一遍
+
+<SlideCard title="先说结论，再说为什么">
+
+## 每题先口述，再展开对照
+
+<details>
+<summary>Quiz 1：`sizeof(std::unique_ptr<int, void(*)(int*)>)` 是多少？怎样让自定义删除器不增加大小？</summary>
+
+16。函数指针删除器要保存一个地址，再加上对象指针，按 8 字节对齐就是 16。改用无捕获 lambda 或无状态的函数对象，它们是空类，通过空基类优化或 `[[no_unique_address]]` 不占空间，大小回到 8。
+
+</details>
+
+<details>
+<summary>Quiz 2：工厂函数为什么返回 `unique_ptr` 而不是 `shared_ptr`？</summary>
+
+调用方要独占还是共享，工厂不知道。`unique_ptr` 可以转成 `shared_ptr`，反过来不行；而且不需要共享的对象不该承担控制块的分配和原子计数。
+
+</details>
+
+<details>
+<summary>Quiz 3：Pimpl 用 `unique_ptr<Impl>` 时为什么必须在 `.cpp` 里定义析构函数？换成 `shared_ptr` 为什么不用？</summary>
+
+隐式析构函数是内联的，会在销毁 `Widget` 的文件里生成，那里 `Impl` 不完整，`default_delete` 的 `static_assert(sizeof(T) > 0)` 会报错。把析构函数声明在头文件、在 `.cpp` 里 `= default`，它就在 `Impl` 完整的地方生成；声明析构函数后移动操作不再隐式生成，要一起补上。构造函数和移动操作同样可能析构 `impl_`，也要定义在 `.cpp` 里，头文件里只留声明。
+
+`shared_ptr` 在构造时就把销毁方式记进控制块，析构时只通过控制块调用，不需要看到 `Impl` 的定义。
+
+</details>
+
+<details>
+<summary>Quiz 4：`Widget* raw = new Widget; std::shared_ptr<Widget> a(raw), b(raw);` 会发生什么？</summary>
+
+两个 `shared_ptr` 各建了一个控制块，计数都是 1，各自析构时都 `delete raw`，重复释放，是未定义行为。ASan 会报 `attempting double-free`。用 `make_shared`，或者让 `b` 从 `a` 拷贝。
+
+</details>
+
+<details>
+<summary>Quiz 5：在 `enable_shared_from_this` 派生类的构造函数里调用 `shared_from_this()` 会怎样？</summary>
+
+C++17 起抛 `std::bad_weak_ptr`。基类里的 `weak_ptr` 要等 `make_shared` 或 `shared_ptr` 的构造函数为对象建好控制块后才会被设置，构造函数执行时还没有。需要在创建后立刻登记自己时，把这一步放进静态工厂函数，在 `make_shared` 返回之后调用。
+
+</details>
+
+<details>
+<summary>Quiz 6：`Base` 的析构函数不是 `virtual`，`std::shared_ptr<Base> p = std::make_shared<Derived>();` 和换成 `unique_ptr` 的同样写法，离开作用域时分别调用哪些析构函数？</summary>
+
+`shared_ptr` 调用 `~Derived` 和 `~Base`：控制块是为 `Derived` 创建的，记住了真实类型。`unique_ptr` 只调用 `~Base`，通过基类指针 `delete` 一个派生类对象而基类析构不是虚函数，是未定义行为。结论仍然是：要通过基类指针销毁对象，就把基类析构函数写成 `virtual`，不要依赖 `shared_ptr` 的这个副作用。
+
+</details>
+
+<details>
+<summary>Quiz 7：`if (!w.expired()) w.lock()->update();` 有什么问题？</summary>
+
+检查和使用之间，另一个线程可能释放了最后一个 `shared_ptr`，`lock()` 返回空指针，解引用就崩了。直接写 `if (auto p = w.lock()) p->update();`，`lock()` 把检查和加计数合成一个原子操作，`p` 存活期间对象不会被析构。
+
+</details>
+
+<details>
+<summary>Quiz 8：父子节点互相用 `shared_ptr` 指向对方，为什么泄漏？怎样修？</summary>
+
+外部的 `shared_ptr` 销毁后，父节点的计数还有子节点那一份，子节点的计数还有父节点那一份，两个计数都停在 1。把不拥有的那一边，也就是子节点指向父节点的指针，改成 `weak_ptr`。
+
+</details>
+
+<details>
+<summary>Quiz 9：什么时候不该用 `make_shared`？</summary>
+
+需要自定义删除器；构造函数是 `private`；需要花括号初始化；对象很大而且 `weak_ptr` 会比所有 `shared_ptr` 活得久很多，这时一次分配会让对象的内存一直等到 `weak_ptr` 销毁才释放。
+
+</details>
+
+<details>
+<summary>Quiz 10（面试题）：`shared_ptr` 在热路径上有哪些性能问题？</summary>
+
+- 每次拷贝和销毁都是原子读改写。本文的环境里，按值传一次约多出 2.7 ns，按 `const&` 传则没有。
+- 多个线程拷贝同一个 `shared_ptr` 时，计数所在的 cache line 在核之间来回传递。8 个线程时每次拷贝从 3.5 ns 变成 100 ns 以上。
+- 不用 `make_shared` 时多一次堆分配，计数和对象也不在一起。
+
+改法：只使用对象的函数传 `const T&`；需要转交时用 `std::move`；在调用链入口拷贝一次固定对象，往下传引用。
+
+</details>
+
+<details>
+<summary>Quiz 11（面试题）：引用计数加 1 为什么可以用 relaxed，减 1 却要 acquire + release？</summary>
+
+加 1 时，调用方已经持有一个 `shared_ptr`，对象不可能在这时被释放，只需要计数本身原子地更新。减 1 可能让计数归零并析构对象：release 保证本线程之前对对象的写入在减计数之前完成，acquire 保证归零的那个线程在析构前能看到其他线程的这些写入。
+
+</details>
+
+<details>
+<summary>Quiz 12（面试题）：多个线程同时读写同一个全局 `shared_ptr` 变量安全吗？</summary>
+
+不安全。`shared_ptr` 只保证控制块里的计数是原子的，变量本身的两个指针不是原子更新的，并发赋值和读取会形成数据竞争。要加锁，或用 C++20 的 `std::atomic<std::shared_ptr<T>>`。各线程拷贝出自己的局部 `shared_ptr` 后再使用，则是安全的，但指向的对象仍需要自己同步。
+
+</details>
+
+</SlideCard>
+
+## 11. 一套可以复用的判断方法
+
+<SlideCard title="遇到一个指针，先问这几件事">
+
+## 从所有权到热路径
+
+- **谁负责释放？** 只有一个主人用 `unique_ptr`，确实有多个主人才用 `shared_ptr`。默认先选 `unique_ptr`，以后需要共享再转。
+- **有没有只是“想知道它还在不在”的一方？** 那一方用 `weak_ptr`，尤其是会形成环的地方：子指向父、观察者、缓存、回调。
+- **函数真的需要所有权吗？** 不需要就传 `T&` 或 `T*`，智能指针只出现在所有权发生变化的地方。
+- **热路径上有没有 `shared_ptr` 的拷贝？** 每次拷贝是两次原子操作；多个线程拷贝同一个对象时，代价会随线程数上升。
+- **一个对象只能有一个控制块。** 裸指针一出现就立刻交给智能指针，要从 `this` 得到 `shared_ptr` 就用 `enable_shared_from_this`。
+
+</SlideCard>
+
+## 延伸阅读
+
+<Note title="C++20 标准条款">
+
+- [`unique_ptr` [unique.ptr]](https://timsong-cpp.github.io/cppwp/n4861/unique.ptr)：核对被移动后为空、`default_delete` 对不完整类型的要求。
+- [可取地址的函数 [namespace.std]](https://timsong-cpp.github.io/cppwp/n4861/namespace.std)：第 6 段规定了对标准库函数取地址的限制。
+- [`shared_ptr` [util.smartptr.shared]](https://timsong-cpp.github.io/cppwp/n4861/util.smartptr.shared)：开头一段规定了不同实例可以被不同线程同时修改。
+- [`make_shared` [util.smartptr.shared.create]](https://timsong-cpp.github.io/cppwp/n4861/util.smartptr.shared.create)：确认一次分配是推荐的实现方式。
+- [`weak_ptr` [util.smartptr.weak]](https://timsong-cpp.github.io/cppwp/n4861/util.smartptr.weak) 和 [`enable_shared_from_this` [util.smartptr.enab]](https://timsong-cpp.github.io/cppwp/n4861/util.smartptr.enab)：核对 `lock()` 的原子性和 `bad_weak_ptr` 的抛出条件。
+
+</Note>
+
+<Note title="书籍与文章">
+
+- 《Effective Modern C++》条款 18–22：条款 18 对应第 2 节，19 对应第 4 节，20 对应第 5 节，21 对应第 6 节，22 对应第 3 节。书以 C++14 为背景，第 6 节提到的参数求值顺序在 C++17 已有变化。
+- Herb Sutter，[GotW #91: Smart Pointer Parameters](https://herbsutter.com/2013/06/05/gotw-91-solution-smart-pointer-parameters/)：第 8 节参数写法的出处，包括在入口处固定对象的做法。
+- [C++ Core Guidelines：资源管理](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#S-resource)：R.20 – R.37 是智能指针的使用规则，可以和第 8 节的表格对照。
+
+</Note>
