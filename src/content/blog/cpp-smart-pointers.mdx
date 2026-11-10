@@ -202,50 +202,161 @@ File f(std::fopen("data.txt", "r"));   // 8 字节
 
 ## 3. Pimpl：unique_ptr 遇到不完整类型
 
-<SlideCard title="头文件里只有一个前置声明">
+<SlideCard title="改一个私有成员，为什么要重新编译一大片">
 
-## 一个合法的写法，编译却失败
+## Pimpl 想解决的问题
 
-**Pimpl**（pointer to implementation）是一种隐藏实现的写法：头文件只前置声明 `Impl`，具体成员放在 `.cpp` 里，改实现时不用重新编译所有包含头文件的代码。
+假设 `Widget` 的私有成员直接写在头文件里：
 
 ```cpp
 // widget.h
+#include <string>
+#include <vector>
+class Widget {
+public:
+    int value() const;
+private:
+    std::string name_;
+    std::vector<int> data_;
+};
+```
+
+所有 `#include "widget.h"` 的文件，都能看到这两个私有成员，也都跟着包含了 `<string>` 和 `<vector>`。哪天给 `Widget` 加一个私有成员，哪怕外部代码根本用不到它，这些文件也全部要重新编译。
+
+**Pimpl**（pointer to implementation）的做法是：把私有成员挪进一个只在 `.cpp` 里定义的 `Impl` 结构体，头文件里只留一个指向它的指针。
+
+```cpp
+// widget.h
+#include <memory>
 class Widget {
 public:
     Widget();
     int value() const;
 private:
-    struct Impl;                    // 只有声明，这里 Impl 是不完整类型
-    std::unique_ptr<Impl> impl_;
+    struct Impl;                    // 只说“有这么一个类型”
+    std::unique_ptr<Impl> impl_;    // 头文件里只有一个指针
 };
 
 // widget.cpp
-struct Widget::Impl { std::string name; std::vector<int> data{1, 2, 3}; };
+#include "widget.h"
+#include <string>
+#include <vector>
+struct Widget::Impl {               // Impl 的成员只在这里出现
+    std::string name;
+    std::vector<int> data{1, 2, 3};
+};
 Widget::Widget() : impl_(std::make_unique<Impl>()) {}
 int Widget::value() const { return static_cast<int>(impl_->data.size()); }
 
 // main.cpp
+#include "widget.h"
 int main() { Widget w; }
 ```
 
-编译 `main.cpp` 时，两个编译器都报错：
+以后改 `Impl` 的成员，只需要重新编译 `widget.cpp`。这个写法看起来没有问题，但编译 `main.cpp` 时，两个编译器都报错：
 
 ```text
 clang: unique_ptr.h: error: invalid application of 'sizeof' to an incomplete type 'Widget::Impl'
 GCC:   unique_ptr.h: error: invalid application of 'sizeof' to incomplete type 'Widget::Impl'
 ```
 
+要看懂这个错误，先要知道什么是不完整类型。
+
 </SlideCard>
 
-<SlideCard title="错误发生在哪个文件">
+<SlideCard title="编译器知道多少">
 
-## 析构函数在头文件里被隐式定义
+## 完整类型和不完整类型
 
-`Widget` 没有声明析构函数，编译器会隐式生成一个，而且它是内联的：哪个文件销毁了 `Widget`，就在哪个文件里生成。`main.cpp` 里的 `w` 离开作用域时，要析构 `impl_`，也就是调用 `default_delete<Impl>` 去 `delete` 一个 `Impl`。
+```cpp
+struct Impl;                     // 前置声明
+```
 
-`delete` 一个不完整类型时，编译器不知道它有没有析构函数。如果它实际上有非平凡的析构函数，结果是未定义行为。所以两个标准库都在 `default_delete` 里用 `static_assert` 检查 `sizeof(T)`，对不完整类型取 `sizeof` 本身就是错误，于是提前得到一个编译错误。报错里的 `sizeof` 就来自这里。
+这一行只告诉编译器“有一个类型叫 `Impl`”，没说它有哪些成员、占多少字节、析构时要做什么。从这里开始，到编译器读到它的定义之前，`Impl` 是**不完整类型**。
 
-修复的思路是：让析构函数在 `Impl` 已经完整的 `.cpp` 里生成。
+```cpp
+struct Impl {                    // 定义
+    std::vector<int> data;
+};
+```
+
+读到定义之后，编译器知道了 `Impl` 的全部信息，从这里往后它是**完整类型**。
+
+完整还是不完整，取决于**编译器在某个文件的某个位置有没有见过定义**，不是类型本身的属性。同一个 `Widget::Impl`，在 `widget.cpp` 里定义之后是完整的；在只包含了 `widget.h` 的 `main.cpp` 里，从头到尾都是不完整的。每个 `.cpp` 是单独编译的，`main.cpp` 看不到 `widget.cpp` 里写了什么。
+
+对一个不完整类型，能做和不能做的事：
+
+| 操作 | 可以吗 | 原因 |
+| --- | --- | --- |
+| 声明指针 `Impl* p;` | 可以 | 指针的大小是固定的，不需要知道 `Impl` 多大 |
+| 创建对象 `Impl x;` | 不行 | 不知道要分配多少字节 |
+| 访问成员 `p->data` | 不行 | 不知道有哪些成员 |
+| `sizeof(Impl)` | 不行 | 不知道大小 |
+| `delete p` | 能编译，但很危险 | 不知道析构时要做什么，下一张卡片演示 |
+
+Pimpl 依靠的正是第一行：头文件里只需要一个指针，所以 `Impl` 可以一直不完整。
+
+</SlideCard>
+
+<SlideCard title="直接 delete 会发生什么">
+
+## 析构函数被悄悄跳过了
+
+下面这段代码在 `Impl` 还不完整的位置 `delete` 它，`Impl` 的定义写在后面：
+
+```cpp
+struct Impl;                                  // 从这里起 Impl 不完整
+
+void destroy(Impl* p) { delete p; }           // 在不完整的位置 delete
+
+struct Impl {                                 // 从这里起 Impl 完整
+    std::vector<int> data{1, 2, 3};
+    ~Impl() { std::puts("~Impl"); }
+};
+
+int main() {
+    destroy(new Impl);
+    std::puts("done");
+}
+```
+
+两个编译器都只给出警告，没有报错：
+
+```text
+clang: warning: deleting pointer to incomplete type 'Impl' is incompatible with C++2c and may cause undefined behavior [-Wdelete-incomplete]
+GCC:   warning: possible problem detected in invocation of 'operator delete' [-Wdelete-incomplete]
+```
+
+运行输出只有一行：
+
+```text
+done
+```
+
+`~Impl` 没有打印。编译 `destroy` 时，编译器不知道 `Impl` 有析构函数，只能释放这块内存，析构函数没有被调用，`data` 里的 `vector` 申请的内存也就泄漏了。标准规定，被删除的类型如果有非平凡的析构函数，这样做是未定义行为。clang 的警告里提到的 C++2c 就是 C++26，新标准直接把这种写法改成了编译错误。
+
+</SlideCard>
+
+<SlideCard title="unique_ptr 提前拦住了它">
+
+## 报错里的 sizeof 从哪来
+
+`unique_ptr` 的默认删除器不想让你掉进上一张卡片的坑。两个标准库都在 `default_delete` 的 `delete` 之前加了一个 `static_assert`，检查 `sizeof(T)`：类型完整时，检查通过；类型不完整时，`sizeof` 本身就是编译错误。原本会悄悄发生的泄漏，就变成了一个编译错误。
+
+所以开头那个报错是在保护你。剩下的问题是：`main.cpp` 里明明没有写 `delete`，为什么会走到这个检查？按顺序看一遍：
+
+- `main.cpp` 只包含了 `widget.h`，在这个文件里 `Impl` 一直不完整。
+- `main` 结束时，`w` 要被销毁，需要 `Widget` 的析构函数。
+- `Widget` 没有声明析构函数，编译器就隐式生成一个。隐式生成的析构函数是内联的，**哪个文件用到它，就在哪个文件里生成**，这里就是 `main.cpp`。
+- 生成的析构函数要逐个销毁成员，于是要执行 `impl_` 的析构函数，也就是 `default_delete<Impl>`，里面的检查在 `Impl` 不完整的 `main.cpp` 里展开，报错。
+
+</SlideCard>
+
+<SlideCard title="让 widget.cpp 来动手">
+
+## 修复：头文件只声明，函数体放进 .cpp
+
+问题出在“需要 `Impl` 完整的代码”被生成到了 `main.cpp` 里。修复的办法是只在头文件里**声明**析构函数，在 `widget.cpp` 里 `Impl` 的定义之后再**定义**它：
 
 ```cpp
 // widget.h
@@ -261,35 +372,38 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-// widget.cpp，在 Impl 的定义之后
+// widget.cpp，写在 Impl 的定义之后
 Widget::~Widget() = default;
 Widget::Widget(Widget&&) noexcept = default;
 Widget& Widget::operator=(Widget&&) noexcept = default;
 ```
 
-改完后两个编译器都能编译运行。
+现在 `main.cpp` 只看到 `~Widget()` 的声明，销毁 `w` 时只生成一条“调用 `Widget::~Widget`”的指令，不再生成函数体。函数体在 `widget.cpp` 里生成，那里 `Impl` 是完整的，检查能通过。两个编译器都能编译运行。
 
 只把析构函数挪走还不够。下面三种写法，`main.cpp` 都会报同样的错误：
 
 | 留在头文件里的写法 | 为什么需要 `Impl` 的析构 |
 | --- | --- |
-| `Widget() {}` | 构造函数中途抛异常时，要析构已经构造好的成员 |
+| `Widget() {}` | 构造函数中途抛异常时，要销毁已经构造好的成员 |
 | `Widget(Widget&&) noexcept = default;` | 同上，移动构造也是构造函数 |
 | `Widget& operator=(Widget&&) noexcept = default;` | 要释放 `*this` 原来的 `Impl` |
 
-所以规则是：**凡是可能析构 `impl_` 的成员函数，包括构造函数，都在 `.cpp` 里、`Impl` 的定义之后再定义。** 头文件里只留声明。
+所以规则是：**凡是可能销毁 `impl_` 的成员函数，包括构造函数，都只在头文件里声明，在 `.cpp` 里 `Impl` 的定义之后再定义。**
 
 </SlideCard>
 
 <SlideCard title="shared_ptr 为什么没有这个问题">
 
-## 删除器在构造时就确定了
+## 删除方式在创建时就确定了
 
 把 `impl_` 换成 `std::shared_ptr<Impl>`，不声明析构函数，原来的 `main.cpp` 也能编译通过。
 
-区别还是在删除器。`unique_ptr` 的删除器是类型的一部分，析构的时候才去实例化 `delete`，那时必须看到完整类型。`shared_ptr` 在构造时（也就是在 `widget.cpp` 里调用 `make_shared<Impl>()` 时）就把“怎样销毁 `Impl`”记进控制块，之后析构只是通过控制块调用它，不需要再看 `Impl` 的定义。
+区别在于什么时候决定“怎样删除 `Impl`”：
 
-这条差别来自同一个设计取舍，下一节讲控制块时会看到它的完整样子。Pimpl 一般仍然选 `unique_ptr`：实现对象只属于这个 `Widget`，没有共享的需要。
+- `unique_ptr` 在**析构的地方**才生成 `delete` 的代码，所以析构发生在哪个文件，哪个文件就必须看得到 `Impl` 的定义。
+- `shared_ptr` 在**创建的地方**就把删除方式记进控制块。创建发生在 `widget.cpp` 的 `make_shared<Impl>()` 里，那里 `Impl` 是完整的。之后在 `main.cpp` 里销毁时，它只把计数减 1，再调用控制块里记好的删除函数，不需要知道 `Impl` 长什么样。
+
+下一节讲控制块时会看到这个机制的完整样子。Pimpl 一般仍然选 `unique_ptr`：实现对象只属于这一个 `Widget`，没有共享的需要，不值得付控制块和原子计数的开销。
 
 </SlideCard>
 
@@ -312,9 +426,13 @@ Widget& Widget::operator=(Widget&&) noexcept = default;
 
 - **强引用计数**：有多少个 `shared_ptr` 共享这个对象。降到 0 时调用删除器，析构对象。
 - **弱引用计数**：和 `weak_ptr` 有关，第 5 节再讲。它也降到 0 时，控制块本身才释放。
-- **删除器和分配器**：构造时传入的，类型被擦除后存在这里。
+- **删除器和分配器**：构造 `shared_ptr` 时传入的，没有传就用默认的 `delete`。
 
-两个实现都让控制块继承一个带虚函数的基类，销毁对象时通过虚函数调用到“知道真实类型和删除器”的那段代码。这就是上一节 Pimpl 能用 `shared_ptr` 的原因，也是删除器不进入 `shared_ptr` 类型的原因：`shared_ptr<FILE>` 无论用什么删除器都是同一个类型，可以放进同一个容器，见卡片 24。
+这里有一个问题：`shared_ptr<T>` 的类型里只有 `T`，删除器可以是任何类型，它怎么知道该调用什么？
+
+两个实现的做法相同。控制块有一个带虚函数的基类；`shared_ptr` 的构造函数是模板，构造时知道删除器和对象的具体类型，就创建一个“知道这些类型”的派生类控制块。`shared_ptr` 只保存指向基类的指针，销毁对象时调用虚函数，转到派生类里执行真正的删除。这种“创建时知道具体类型，之后只通过统一接口使用”的做法叫**类型擦除**，`std::function` 也是这样实现的。
+
+这就是上一节 Pimpl 能用 `shared_ptr` 的原因：删除方式在创建时就装进了控制块。也是删除器不进入 `shared_ptr` 类型的原因：`shared_ptr<FILE>` 无论用什么删除器都是同一个类型，可以放进同一个容器，见卡片 24。
 
 同一个机制还有一个副作用：控制块记住的是**创建时的真实类型**。`Base` 的析构函数不是 `virtual` 时：
 
@@ -561,6 +679,8 @@ C++17 规定，一个参数的初始化完成之前，不会穿插另一个参�
 
 x86 上对应的是带 `lock` 前缀的指令。它们都是读改写一步完成的原子指令。
 
+表里的 relaxed、acquire、release 是**内存序**。relaxed 只保证这一次读改写本身是原子的；release 还保证本线程在它之前的写入不会被挪到它之后，acquire 保证本线程在它之后的读取能看到对方 release 之前的写入。
+
 libc++ 的做法说明了需要多强的内存序：加 1 时，调用方手里已经有一个 `shared_ptr`，对象不可能在这时被释放，只要计数本身不出错就行，relaxed 足够。减 1 时，如果这次让计数归零，就要析构对象，必须保证别的线程在释放各自的 `shared_ptr` 之前对对象做的写入，在析构时都能看到，所以要 acquire 和 release。内存序的细节留到并发和内存模型的文章再展开。
 
 </SlideCard>
@@ -736,56 +856,65 @@ render(*pinned);
 <details>
 <summary>Quiz 3：Pimpl 用 `unique_ptr<Impl>` 时为什么必须在 `.cpp` 里定义析构函数？换成 `shared_ptr` 为什么不用？</summary>
 
-隐式析构函数是内联的，会在销毁 `Widget` 的文件里生成，那里 `Impl` 不完整，`default_delete` 的 `static_assert(sizeof(T) > 0)` 会报错。把析构函数声明在头文件、在 `.cpp` 里 `= default`，它就在 `Impl` 完整的地方生成；声明析构函数后移动操作不再隐式生成，要一起补上。构造函数和移动操作同样可能析构 `impl_`，也要定义在 `.cpp` 里，头文件里只留声明。
+直接 `delete` 不完整类型会跳过它的析构函数，所以 `default_delete` 先用 `static_assert` 检查 `sizeof(T)`，类型不完整就编译失败。隐式析构函数是内联的，会在销毁 `Widget` 的文件里生成，那里 `Impl` 不完整，于是报错。把析构函数声明在头文件、在 `.cpp` 里 `= default`，它就在 `Impl` 完整的地方生成；声明析构函数后移动操作不再隐式生成，要一起补上。构造函数和移动操作同样可能析构 `impl_`，也要定义在 `.cpp` 里，头文件里只留声明。
 
 `shared_ptr` 在构造时就把销毁方式记进控制块，析构时只通过控制块调用，不需要看到 `Impl` 的定义。
 
 </details>
 
 <details>
-<summary>Quiz 4：`Widget* raw = new Widget; std::shared_ptr<Widget> a(raw), b(raw);` 会发生什么？</summary>
+<summary>Quiz 4：既然 `main.cpp` 看不到 `Impl` 的定义，在它开头写一行 `#include "widget.cpp"` 能解决吗？</summary>
+
+编译 `main.cpp` 能通过，但和 `widget.cpp` 一起链接时失败，两个编译器都报 `duplicate symbol 'Widget::Widget()'`。`#include` 只是把文件内容原样复制进来，`Widget::Widget()` 和 `Widget::value()` 的函数体就在两个文件里各编译了一份，而一个普通函数在整个程序里只能有一个定义（ODR，单一定义规则）。
+
+就算不再单独编译 `widget.cpp` 来绕过链接错误，`main.cpp` 也看到了 `Impl` 的定义，改 `Impl` 时它又要重新编译，Pimpl 就白做了。正确的方向是反过来：不让 `main.cpp` 去生成需要 `Impl` 完整的代码，这些函数只在 `widget.cpp` 里定义。
+
+</details>
+
+<details>
+<summary>Quiz 5：`Widget* raw = new Widget; std::shared_ptr<Widget> a(raw), b(raw);` 会发生什么？</summary>
 
 两个 `shared_ptr` 各建了一个控制块，计数都是 1，各自析构时都 `delete raw`，重复释放，是未定义行为。ASan 会报 `attempting double-free`。用 `make_shared`，或者让 `b` 从 `a` 拷贝。
 
 </details>
 
 <details>
-<summary>Quiz 5：在 `enable_shared_from_this` 派生类的构造函数里调用 `shared_from_this()` 会怎样？</summary>
+<summary>Quiz 6：在 `enable_shared_from_this` 派生类的构造函数里调用 `shared_from_this()` 会怎样？</summary>
 
 C++17 起抛 `std::bad_weak_ptr`。基类里的 `weak_ptr` 要等 `make_shared` 或 `shared_ptr` 的构造函数为对象建好控制块后才会被设置，构造函数执行时还没有。需要在创建后立刻登记自己时，把这一步放进静态工厂函数，在 `make_shared` 返回之后调用。
 
 </details>
 
 <details>
-<summary>Quiz 6：`Base` 的析构函数不是 `virtual`，`std::shared_ptr<Base> p = std::make_shared<Derived>();` 和换成 `unique_ptr` 的同样写法，离开作用域时分别调用哪些析构函数？</summary>
+<summary>Quiz 7：`Base` 的析构函数不是 `virtual`，`std::shared_ptr<Base> p = std::make_shared<Derived>();` 和换成 `unique_ptr` 的同样写法，离开作用域时分别调用哪些析构函数？</summary>
 
 `shared_ptr` 调用 `~Derived` 和 `~Base`：控制块是为 `Derived` 创建的，记住了真实类型。`unique_ptr` 只调用 `~Base`，通过基类指针 `delete` 一个派生类对象而基类析构不是虚函数，是未定义行为。结论仍然是：要通过基类指针销毁对象，就把基类析构函数写成 `virtual`，不要依赖 `shared_ptr` 的这个副作用。
 
 </details>
 
 <details>
-<summary>Quiz 7：`if (!w.expired()) w.lock()->update();` 有什么问题？</summary>
+<summary>Quiz 8：`if (!w.expired()) w.lock()->update();` 有什么问题？</summary>
 
 检查和使用之间，另一个线程可能释放了最后一个 `shared_ptr`，`lock()` 返回空指针，解引用就崩了。直接写 `if (auto p = w.lock()) p->update();`，`lock()` 把检查和加计数合成一个原子操作，`p` 存活期间对象不会被析构。
 
 </details>
 
 <details>
-<summary>Quiz 8：父子节点互相用 `shared_ptr` 指向对方，为什么泄漏？怎样修？</summary>
+<summary>Quiz 9：父子节点互相用 `shared_ptr` 指向对方，为什么泄漏？怎样修？</summary>
 
 外部的 `shared_ptr` 销毁后，父节点的计数还有子节点那一份，子节点的计数还有父节点那一份，两个计数都停在 1。把不拥有的那一边，也就是子节点指向父节点的指针，改成 `weak_ptr`。
 
 </details>
 
 <details>
-<summary>Quiz 9：什么时候不该用 `make_shared`？</summary>
+<summary>Quiz 10：什么时候不该用 `make_shared`？</summary>
 
 需要自定义删除器；构造函数是 `private`；需要花括号初始化；对象很大而且 `weak_ptr` 会比所有 `shared_ptr` 活得久很多，这时一次分配会让对象的内存一直等到 `weak_ptr` 销毁才释放。
 
 </details>
 
 <details>
-<summary>Quiz 10（面试题）：`shared_ptr` 在热路径上有哪些性能问题？</summary>
+<summary>Quiz 11（面试题）：`shared_ptr` 在热路径上有哪些性能问题？</summary>
 
 - 每次拷贝和销毁都是原子读改写。本文的环境里，按值传一次约多出 2.7 ns，按 `const&` 传则没有。
 - 多个线程拷贝同一个 `shared_ptr` 时，计数所在的 cache line 在核之间来回传递。8 个线程时每次拷贝从 3.5 ns 变成 100 ns 以上。
@@ -796,14 +925,14 @@ C++17 起抛 `std::bad_weak_ptr`。基类里的 `weak_ptr` 要等 `make_shared` 
 </details>
 
 <details>
-<summary>Quiz 11（面试题）：引用计数加 1 为什么可以用 relaxed，减 1 却要 acquire + release？</summary>
+<summary>Quiz 12（面试题）：引用计数加 1 为什么可以用 relaxed，减 1 却要 acquire + release？</summary>
 
 加 1 时，调用方已经持有一个 `shared_ptr`，对象不可能在这时被释放，只需要计数本身原子地更新。减 1 可能让计数归零并析构对象：release 保证本线程之前对对象的写入在减计数之前完成，acquire 保证归零的那个线程在析构前能看到其他线程的这些写入。
 
 </details>
 
 <details>
-<summary>Quiz 12（面试题）：多个线程同时读写同一个全局 `shared_ptr` 变量安全吗？</summary>
+<summary>Quiz 13（面试题）：多个线程同时读写同一个全局 `shared_ptr` 变量安全吗？</summary>
 
 不安全。`shared_ptr` 只保证控制块里的计数是原子的，变量本身的两个指针不是原子更新的，并发赋值和读取会形成数据竞争。要加锁，或用 C++20 的 `std::atomic<std::shared_ptr<T>>`。各线程拷贝出自己的局部 `shared_ptr` 后再使用，则是安全的，但指向的对象仍需要自己同步。
 
